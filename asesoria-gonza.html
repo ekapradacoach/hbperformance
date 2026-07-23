@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Asesoría Personalizada — Gonza Gonda · HB Performance</title>
+<meta name="description" content="Asesoría personalizada con Gonza Gonda, coach de alto rendimiento. Programación avanzada de CrossFit, Hyrox y preparación física competitiva.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Playfair+Display:ital,wght@1,400;1,600;1,700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0A0A0A;
+    --bg-alt: #1A1A1A;
+    --bg-footer: #0D0D0D;
+    --placeholder: #2A2A2A;
+    --placeholder-text: #666666;
+    --accent: #F5A800;
+    --text: #FFFFFF;
+    --text-secondary: #AAAAAA;
+    --font-display: 'Inter', sans-serif;
+    --font-body: 'Inter', sans-serif;
+    --font-accent: 'Playfair Display', serif;
+    --maxw: 1200px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 80px; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font-body); line-height: 1.6; overflow-x: hidden; }
+  h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 800; line-height: 1.04; letter-spacing: -1px; }
+  .accent { font-family: var(--font-accent); font-style: italic; font-weight: 600; color: var(--accent); letter-spacing: 0; }
+  a { color: inherit; text-decoration: none; }
+  img { max-width: 100%; display: block; }
+  .container { width: 100%; max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
+  .container.narrow { max-width: 780px; }
+
+  /* ---------- Buttons ---------- */
+  .btn { display: inline-block; font-family: var(--font-display); text-transform: uppercase; font-weight: 700; letter-spacing: 1px; font-size: 1.05rem; padding: 14px 28px; border-radius: 4px; cursor: pointer; transition: transform .2s ease, background .2s ease, color .2s ease, box-shadow .2s ease; border: 2px solid var(--accent); background: transparent; color: var(--accent); }
+  .btn-filled { background: var(--accent); color: #0A0A0A; }
+  .btn-filled:hover { box-shadow: 0 0 22px rgba(245,168,0,0.45); transform: translateY(-2px); }
+  .btn-outline:hover { background: var(--accent); color: #0A0A0A; transform: translateY(-2px); }
+
+  /* ---------- Logo ---------- */
+  .logo { font-family: var(--font-display); color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; line-height: 1; }
+  .logo .logo-accent { font-family: var(--font-accent); font-style: italic; font-weight: 600; text-transform: none; letter-spacing: 0; }
+  .logo-img { display: block; height: 54px; width: auto; object-fit: contain; }
+  .logo-img--footer { height: 110px; margin: 0 auto; }
+  .logo-lockup { display: flex; align-items: center; gap: 10px; }
+  .logo-lockup .logo-hb   { height: 48px; width: auto; display: block; }
+  .logo-lockup .logo-perf { height: 20px; width: auto; display: block; }
+  .logo-lockup .logo-text { display: none; }
+  .logo-lockup.logo--fallback .logo-hb,
+  .logo-lockup.logo--fallback .logo-perf { display: none; }
+  .logo-lockup.logo--fallback .logo-text { display: inline; }
+
+  /* ---------- Navbar ---------- */
+  .navbar { position: fixed; top: 0; left: 0; right: 0; z-index: 1000; background: rgba(10,10,10,0.92); backdrop-filter: blur(8px); border-bottom: 1px solid rgba(245,168,0,0.15); }
+  .nav-inner { display: flex; align-items: center; justify-content: space-between; height: 72px; }
+  .nav-links { display: flex; gap: 32px; list-style: none; }
+  .nav-links a { font-family: var(--font-display); text-transform: uppercase; font-weight: 600; letter-spacing: 1px; font-size: 1.05rem; color: var(--text); transition: color .2s ease; }
+  .nav-links a:hover { color: var(--accent); }
+  .hamburger { display: none; flex-direction: column; gap: 5px; background: none; border: none; cursor: pointer; padding: 6px; }
+  .hamburger span { width: 26px; height: 3px; background: var(--accent); border-radius: 2px; transition: transform .3s ease, opacity .3s ease; }
+  .hamburger.open span:nth-child(1) { transform: translateY(8px) rotate(45deg); }
+  .hamburger.open span:nth-child(2) { opacity: 0; }
+  .hamburger.open span:nth-child(3) { transform: translateY(-8px) rotate(-45deg); }
+
+  /* ---------- Coach hero (foto + overlay) ---------- */
+  .coach-hero { position: relative; min-height: 74vh; display: flex; align-items: flex-end; padding: 120px 0 56px; overflow: hidden; background: var(--bg); }
+  .coach-hero-bg { position: absolute; inset: 0; background-repeat: no-repeat; background-size: cover; }
+  .coach-hero-overlay { position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(10,10,10,0.60) 0%, rgba(10,10,10,0.35) 38%, rgba(10,10,10,0.95) 100%); }
+  .coach-hero .container { position: relative; z-index: 2; }
+  .back-link { display: inline-flex; align-items: center; gap: 8px; color: var(--text-secondary); font-size: 0.85rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 22px; transition: color .2s ease, gap .2s ease; }
+  .back-link:hover { color: var(--accent); gap: 12px; }
+  .badge { display: inline-block; font-weight: 600; font-size: 0.78rem; letter-spacing: 1.5px; text-transform: uppercase; color: var(--accent); background: rgba(245,168,0,0.10); border: 1px solid rgba(245,168,0,0.40); border-radius: 999px; padding: 8px 18px; }
+  .coach-hero h1 { color: var(--text); font-weight: 800; font-size: clamp(2.6rem, 7vw, 4.6rem); margin: 18px 0 14px; }
+  .coach-hero .subhead { color: var(--text-secondary); font-size: clamp(1.05rem, 2.2vw, 1.4rem); font-weight: 500; max-width: 620px; }
+
+  /* ---------- Contenido ---------- */
+  .coach-main { padding: 72px 0 40px; }
+  .intro-lead { color: var(--text-secondary); font-size: 1.2rem; max-width: 720px; }
+  .eyebrow { display: block; color: var(--accent); font-size: 0.8rem; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; margin: 44px 0 16px; }
+
+  .feature-list { list-style: none; display: grid; gap: 13px; }
+  .feature-list li { display: flex; gap: 12px; align-items: flex-start; color: var(--text-secondary); font-size: 1.02rem; }
+  .feature-list .fi { color: var(--accent); font-weight: 800; flex-shrink: 0; line-height: 1.5; }
+
+  /* ---------- Acordeón ---------- */
+  .accordion { display: grid; gap: 14px; }
+  .acc-item { background: var(--bg-alt); border: 1px solid rgba(245,168,0,0.18); border-radius: 10px; overflow: hidden; transition: border-color .25s ease; }
+  .acc-item.open { border-color: rgba(245,168,0,0.45); }
+  .acc-header { width: 100%; text-align: left; background: none; border: none; cursor: pointer; padding: 22px 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; color: var(--text); font-family: var(--font-display); font-weight: 700; font-size: 1.12rem; letter-spacing: -0.3px; text-transform: uppercase; }
+  .acc-header .acc-icon { color: var(--accent); font-size: 1.7rem; line-height: 1; font-weight: 400; transition: transform .3s ease; flex-shrink: 0; }
+  .acc-item.open .acc-header .acc-icon { transform: rotate(45deg); }
+  .acc-body { max-height: 0; overflow: hidden; transition: max-height .35s ease; }
+  .acc-body-inner { padding: 0 24px 24px; }
+  .acc-intro { color: var(--text); font-family: var(--font-accent); font-style: italic; font-size: 1.05rem; margin-bottom: 16px; }
+
+  /* ---------- Precio ---------- */
+  .price-box { border: 1px solid var(--accent); border-radius: 10px; padding: 28px; background: rgba(245,168,0,0.05); }
+  .price-box .price { font-family: var(--font-display); font-weight: 800; font-size: 2.2rem; color: var(--text); letter-spacing: -1px; }
+  .price-box .price .per { color: var(--text-secondary); font-size: 1rem; font-weight: 500; }
+  .price-box .price-note { color: var(--text-secondary); font-size: 0.98rem; margin-top: 8px; }
+  .price-box .price-fine { color: var(--placeholder-text); font-size: 0.82rem; margin-top: 6px; }
+
+  .coach-cta { margin-top: 30px; }
+  .coach-cta .btn { width: 100%; text-align: center; font-size: 1.1rem; padding: 18px 28px; }
+
+  /* ---------- Footer ---------- */
+  footer { background: var(--bg-footer); padding: 64px 0 32px; text-align: center; border-top: 1px solid rgba(245,168,0,0.12); }
+  footer .logo { font-size: 2rem; margin-bottom: 28px; }
+  .notice-box { border: 1px solid var(--accent); border-radius: 8px; padding: 18px 24px; max-width: 640px; margin: 0 auto 32px; color: var(--text-secondary); font-size: 0.9rem; background: rgba(245,168,0,0.04); }
+  .notice-box a { color: var(--accent); }
+  .social-row { display: flex; justify-content: center; gap: 18px; margin-bottom: 28px; }
+  .social-row a { width: 44px; height: 44px; border: 1px solid rgba(255,255,255,0.15); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: var(--text-secondary); font-family: var(--font-display); font-weight: 700; font-size: 0.8rem; transition: border-color .2s ease, color .2s ease, transform .2s ease; }
+  .social-row a:hover { border-color: var(--accent); color: var(--accent); transform: translateY(-3px); }
+  .copyright { color: var(--placeholder-text); font-size: 0.85rem; }
+
+  /* ---------- Fade-in ---------- */
+  .fade-in { opacity: 0; transform: translateY(28px); transition: opacity .7s ease, transform .7s ease; }
+  .fade-in.visible { opacity: 1; transform: translateY(0); }
+
+  /* ---------- Responsive ---------- */
+  @media (max-width: 768px) {
+    .hamburger { display: flex; }
+    .nav-links { position: absolute; top: 72px; left: 0; right: 0; flex-direction: column; gap: 0; background: rgba(10,10,10,0.98); border-bottom: 1px solid rgba(245,168,0,0.15); max-height: 0; overflow: hidden; transition: max-height .35s ease; }
+    .nav-links.open { max-height: 320px; }
+    .nav-links li { width: 100%; text-align: center; }
+    .nav-links a { display: block; padding: 18px 0; border-top: 1px solid rgba(255,255,255,0.05); }
+    .coach-hero { min-height: 64vh; }
+    .acc-header { font-size: 1rem; padding: 18px 18px; }
+    .acc-body-inner { padding: 0 18px 20px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ NAVBAR ============ -->
+<header class="navbar">
+  <div class="container nav-inner">
+    <a href="index.html" class="logo logo-lockup" aria-label="HB Performance — inicio">
+      <img class="logo-hb" src="logo-hb.png" alt="" onerror="this.parentNode.classList.add('logo--fallback');">
+      <img class="logo-perf" src="logo-perf.png" alt="HB Performance">
+      <span class="logo-text">HB <span class="logo-accent">Performance</span></span>
+    </a>
+    <nav aria-label="Navegación principal">
+      <ul class="nav-links" id="navLinks">
+        <li><a href="index.html#programas">Programas</a></li>
+        <li><a href="index.html#asesorias">Asesorías</a></li>
+        <li><a href="index.html#testimonios">Testimonios</a></li>
+      </ul>
+    </nav>
+    <button class="hamburger" id="hamburger" aria-label="Abrir menú" aria-expanded="false" aria-controls="navLinks">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+</header>
+
+<main>
+
+  <!-- ============ HERO ============ -->
+  <section class="coach-hero">
+    <div class="coach-hero-bg" style="background-image: url('images/coach-gonza.png'); background-size: auto 85%; background-position: center 55%;"></div>
+    <div class="coach-hero-overlay"></div>
+    <div class="container">
+      <a href="index.html" class="back-link">← Volver</a>
+      <div>
+        <span class="badge">Gonza Gonda — Coach de alto rendimiento</span>
+        <h1>Asesoría <span class="accent">personalizada</span></h1>
+        <p class="subhead">Entrenamiento de alto rendimiento. Para atletas que quieren competir.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CONTENIDO ============ -->
+  <section class="coach-main">
+    <div class="container narrow">
+
+      <p class="intro-lead fade-in">Trabajás directamente conmigo. Programación avanzada orientada a resultados competitivos reales.</p>
+
+      <!-- ESPECIALIDADES (acordeón) -->
+      <div class="fade-in">
+        <span class="eyebrow">Especialidades</span>
+        <div class="accordion">
+
+          <div class="acc-item">
+            <button class="acc-header" aria-expanded="false">
+              <span>CrossFit</span>
+              <span class="acc-icon" aria-hidden="true">+</span>
+            </button>
+            <div class="acc-body">
+              <div class="acc-body-inner">
+                <p class="acc-intro">Para atletas que quieren mejorar en el deporte más completo.</p>
+                <ul class="feature-list">
+                  <li><span class="fi">✓</span> Programación avanzada de CrossFit orientada a competencia</li>
+                  <li><span class="fi">✓</span> Desarrollo de los tres pilares: gimnásticos, olímpico y metabólico</li>
+                  <li><span class="fi">✓</span> Análisis y preparación para WODs de competencia específicos</li>
+                  <li><span class="fi">✓</span> Periodización con peaks de forma para fechas clave</li>
+                  <li><span class="fi">✓</span> Seguimiento de marcas y métricas de rendimiento</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <div class="acc-item">
+            <button class="acc-header" aria-expanded="false">
+              <span>Hyrox</span>
+              <span class="acc-icon" aria-hidden="true">+</span>
+            </button>
+            <div class="acc-body">
+              <div class="acc-body-inner">
+                <p class="acc-intro">Preparación específica para competir en Hyrox.</p>
+                <ul class="feature-list">
+                  <li><span class="fi">✓</span> Programación específica para el formato de carrera + estaciones</li>
+                  <li><span class="fi">✓</span> Desarrollo de resistencia funcional de alto nivel</li>
+                  <li><span class="fi">✓</span> Estrategia de pace y manejo de energía en competencia</li>
+                  <li><span class="fi">✓</span> Trabajo de fuerza orientado a los 8 ejercicios del evento</li>
+                  <li><span class="fi">✓</span> Simulaciones de competencia y análisis de tiempos</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          <div class="acc-item">
+            <button class="acc-header" aria-expanded="false">
+              <span>Preparación física de alto rendimiento</span>
+              <span class="acc-icon" aria-hidden="true">+</span>
+            </button>
+            <div class="acc-body">
+              <div class="acc-body-inner">
+                <p class="acc-intro">Para atletas que quieren llevar su rendimiento al límite.</p>
+                <ul class="feature-list">
+                  <li><span class="fi">✓</span> Periodización de alto rendimiento para deportistas competitivos</li>
+                  <li><span class="fi">✓</span> Preparación para competencias específicas con peaks de forma planificados</li>
+                  <li><span class="fi">✓</span> Desarrollo de potencia, velocidad y capacidad de trabajo</li>
+                  <li><span class="fi">✓</span> Análisis de video y corrección técnica avanzada</li>
+                  <li><span class="fi">✓</span> Seguimiento intensivo de métricas y progresión</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- QUÉ INCLUYE -->
+      <div class="fade-in">
+        <span class="eyebrow">Qué incluye</span>
+        <ul class="feature-list">
+          <li><span class="fi">📞</span> 1 videollamada mensual de seguimiento</li>
+          <li><span class="fi">💬</span> Chat directo vía WhatsApp</li>
+          <li><span class="fi">🎥</span> Correcciones de técnica por video</li>
+          <li><span class="fi">📋</span> Ajuste semanal del plan según tu evolución</li>
+          <li><span class="fi">📊</span> Seguimiento de métricas y rendimiento</li>
+          <li><span class="fi">🔄</span> Periodización individualizada orientada a competencia</li>
+        </ul>
+      </div>
+
+      <!-- PRECIO -->
+      <div class="fade-in">
+        <span class="eyebrow">Precio</span>
+        <div class="price-box">
+          <div class="price">USD 150 <span class="per">/ mes</span></div>
+          <p class="price-note">Equivalente a $225.000 ARS aprox. · Pago vía PayPal o Mercado Pago</p>
+          <p class="price-fine">El tipo de cambio se actualiza mensualmente</p>
+        </div>
+
+        <div class="coach-cta">
+          <a href="https://wa.me/5491122895924?text=Hola%20Gonza%2C%20me%20interesa%20la%20asesor%C3%ADa%20personalizada" target="_blank" rel="noopener" class="btn btn-filled">Quiero mi asesoría — Hablemos</a>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+</main>
+
+<!-- ============ FOOTER ============ -->
+<footer>
+  <div class="container">
+    <div class="logo">
+      <img class="logo-img logo-img--footer" src="logo.png" alt="HB Performance"
+           onerror="this.style.display='none';this.nextElementSibling.style.display='inline';">
+      <span class="logo-text" style="display:none;">HB <span class="logo-accent">Performance</span></span>
+    </div>
+    <div class="notice-box">
+      📱 Nuestros programas se gestionan a través de WodUp. La app está disponible en iOS. Si usás Android, podés acceder desde tu navegador en <a href="https://app.wodup.com" target="_blank" rel="noopener">app.wodup.com</a>
+    </div>
+    <div class="social-row">
+      <a href="#" aria-label="Instagram">IG</a>
+      <a href="#" aria-label="YouTube">YT</a>
+    </div>
+    <p class="copyright">© 2025 HB Performance. Todos los derechos reservados.</p>
+  </div>
+</footer>
+
+<script>
+  // ---------- Hamburger menu ----------
+  (function () {
+    var hamburger = document.getElementById('hamburger');
+    var navLinks = document.getElementById('navLinks');
+    hamburger.addEventListener('click', function () {
+      var open = navLinks.classList.toggle('open');
+      hamburger.classList.toggle('open', open);
+      hamburger.setAttribute('aria-expanded', String(open));
+      hamburger.setAttribute('aria-label', open ? 'Cerrar menú' : 'Abrir menú');
+    });
+    navLinks.querySelectorAll('a').forEach(function (link) {
+      link.addEventListener('click', function () {
+        navLinks.classList.remove('open');
+        hamburger.classList.remove('open');
+        hamburger.setAttribute('aria-expanded', 'false');
+        hamburger.setAttribute('aria-label', 'Abrir menú');
+      });
+    });
+  })();
+
+  // ---------- Acordeón (uno abierto a la vez, animación suave) ----------
+  (function () {
+    document.querySelectorAll('.accordion').forEach(function (acc) {
+      var headers = acc.querySelectorAll('.acc-header');
+      headers.forEach(function (h) {
+        h.addEventListener('click', function () {
+          var item = h.closest('.acc-item');
+          var body = item.querySelector('.acc-body');
+          var isOpen = item.classList.contains('open');
+          acc.querySelectorAll('.acc-item').forEach(function (it) {
+            it.classList.remove('open');
+            it.querySelector('.acc-body').style.maxHeight = null;
+            it.querySelector('.acc-header').setAttribute('aria-expanded', 'false');
+          });
+          if (!isOpen) {
+            item.classList.add('open');
+            body.style.maxHeight = body.scrollHeight + 'px';
+            h.setAttribute('aria-expanded', 'true');
+          }
+        });
+      });
+    });
+  })();
+
+  // ---------- Fade-in on scroll ----------
+  (function () {
+    var elements = document.querySelectorAll('.fade-in');
+    if (!('IntersectionObserver' in window)) {
+      elements.forEach(function (el) { el.classList.add('visible'); });
+      return;
+    }
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
+    elements.forEach(function (el) { observer.observe(el); });
+  })();
+</script>
+
+</body>
+</html>

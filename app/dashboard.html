@@ -1,0 +1,2853 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mi portal — HB Performance</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Playfair+Display:ital,wght@1,400;1,600;1,700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0A0A0A;
+    --bg-alt: #1A1A1A;
+    --bg-top: #0D0D0D;
+    --bg-nav: #111111;
+    --bg-input: #0F0F0F;
+    --accent: #F5A800;
+    --text: #FFFFFF;
+    --text-secondary: #AAAAAA;
+    --border: #262626;
+    --ok: #3BBE5E;
+    --font-display: 'Inter', sans-serif;
+    --font-body: 'Inter', sans-serif;
+    --font-accent: 'Playfair Display', serif;
+    --topbar-h: 56px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+  a { color: inherit; text-decoration: none; }
+  img { max-width: 100%; display: block; }
+
+  .accent { font-family: var(--font-accent); font-style: italic; font-weight: 600; color: var(--accent); }
+
+  /* ================= Topbar ================= */
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    height: var(--topbar-h);
+    background: var(--bg-top);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 16px;
+  }
+  .topbar-logo img { height: 30px; }
+  .topbar-logo .logo-text { font-family: var(--font-display); font-weight: 800; font-size: 1.1rem; letter-spacing: -1px; }
+  .topbar-user {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    background: none;
+    border: none;
+    color: var(--text);
+    font-family: var(--font-body);
+  }
+  .topbar-user .u-name { font-size: 0.9rem; font-weight: 600; }
+  .u-avatar {
+    width: 34px; height: 34px; border-radius: 50%;
+    background: var(--accent); color: #0A0A0A;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.8rem; font-weight: 800; flex-shrink: 0;
+  }
+  .topbar-right { display: flex; align-items: center; gap: 12px; }
+
+  /* ================= Notificaciones (campana + dropdown) ================= */
+  .notif-wrap { position: relative; display: flex; }
+  .notif-bell {
+    position: relative;
+    background: none; border: none; cursor: pointer;
+    color: var(--text); font-size: 1.3rem; line-height: 1;
+    padding: 4px; border-radius: 8px;
+    transition: transform .15s ease;
+  }
+  .notif-bell:hover { transform: scale(1.08); }
+  .notif-badge {
+    position: absolute; top: -3px; right: -4px;
+    min-width: 17px; height: 17px; padding: 0 4px;
+    border-radius: 9px; background: #E23B3B; color: #fff;
+    font-size: 0.66rem; font-weight: 800; font-family: var(--font-body);
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 0 0 2px var(--bg-top);
+  }
+  .notif-badge.hidden { display: none; }
+  .notif-dd {
+    position: absolute; top: calc(100% + 10px); right: 0;
+    width: 320px; max-height: 400px; overflow-y: auto;
+    background: #1A1A1A; border: 1px solid #333; border-radius: 12px;
+    box-shadow: 0 16px 44px rgba(0,0,0,0.55);
+    z-index: 100; display: none;
+  }
+  .notif-dd.open { display: block; }
+  .notif-head {
+    position: sticky; top: 0; z-index: 1;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; padding: 12px 14px;
+    background: #1A1A1A; border-bottom: 1px solid #333;
+  }
+  .notif-head .nh-title { font-weight: 700; font-size: 0.92rem; }
+  .notif-markall {
+    background: none; border: none; cursor: pointer;
+    color: var(--accent); font-size: 0.76rem; font-weight: 600;
+    font-family: var(--font-body); padding: 0;
+  }
+  .notif-markall:disabled { color: #555; cursor: default; }
+  .notif-item {
+    display: flex; gap: 11px; padding: 12px 14px;
+    border-bottom: 1px solid #242424; cursor: pointer;
+    transition: background .12s ease;
+  }
+  .notif-item:last-child { border-bottom: none; }
+  .notif-item:hover { background: #242424; }
+  .notif-item.unread { background: #222; }
+  .notif-item.unread:hover { background: #262626; }
+  .notif-ico { font-size: 1.15rem; line-height: 1.2; flex-shrink: 0; }
+  .notif-body-wrap { min-width: 0; flex: 1; }
+  .notif-c-title { font-size: 0.85rem; font-weight: 600; line-height: 1.3; }
+  .notif-c-body {
+    font-size: 0.8rem; color: var(--text-secondary); line-height: 1.35;
+    margin-top: 2px; word-break: break-word;
+  }
+  .notif-c-time { font-size: 0.72rem; color: #777; margin-top: 3px; }
+  .notif-empty { padding: 30px 16px; text-align: center; color: var(--text-secondary); font-size: 0.88rem; }
+  @keyframes notifPop { 0% { transform: scale(1); } 40% { transform: scale(1.3); } 100% { transform: scale(1); } }
+  .notif-badge.pop { animation: notifPop .4s ease; }
+
+  /* ================= Tabbar ================= */
+  .tabbar {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    z-index: 50;
+    background: var(--bg-nav);
+    border-top: 1px solid var(--border);
+  }
+  .tabbar-inner { display: flex; width: 100%; }
+  .tabbar a {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    padding: 9px 4px;
+    color: var(--text-secondary);
+    font-size: 0.66rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: color .15s ease;
+  }
+  .tabbar a .tico { font-size: 1.3rem; line-height: 1; }
+  .tabbar a.active { color: var(--accent); }
+
+  /* ================= Main / views ================= */
+  main { padding: 20px 16px 96px; max-width: 640px; margin: 0 auto; }
+  .view { display: none; }
+  .view.active { display: block; }
+
+  .greeting {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 1.7rem;
+    letter-spacing: -1px;
+    margin-bottom: 20px;
+    line-height: 1.1;
+  }
+
+  /* ================= Cards ================= */
+  .card {
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 16px;
+  }
+  .card-h {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+
+  /* Card HOY (destacada) */
+  .card-today {
+    border-left: 3px solid var(--accent);
+    padding: 22px;
+  }
+  .today-date { color: var(--text-secondary); font-size: 0.9rem; text-transform: capitalize; }
+  .today-prog { font-family: var(--font-display); font-weight: 800; font-size: 1.4rem; letter-spacing: -0.5px; margin: 4px 0 8px; }
+  .today-blocks { font-size: 1rem; color: var(--text); margin-bottom: 16px; }
+  .today-blocks b { color: var(--accent); }
+  .today-none { color: var(--text-secondary); font-size: 0.98rem; margin-bottom: 16px; }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 0.92rem;
+    letter-spacing: 0.3px;
+    padding: 11px 18px;
+    border-radius: 8px;
+    border: 2px solid var(--accent);
+    cursor: pointer;
+    transition: transform .18s ease, box-shadow .18s ease, background .18s ease, color .18s ease;
+  }
+  .btn-filled { background: var(--accent); color: #0A0A0A; }
+  .btn-filled:hover { box-shadow: 0 0 18px rgba(245,168,0,0.4); transform: translateY(-2px); }
+  .btn-outline { background: transparent; color: var(--accent); }
+  .btn-outline:hover { background: var(--accent); color: #0A0A0A; }
+
+  /* Semana */
+  .week-row { display: flex; justify-content: space-between; gap: 4px; }
+  .wk { display: flex; flex-direction: column; align-items: center; gap: 7px; flex: 1; }
+  .wk-circle {
+    width: 36px; height: 36px; border-radius: 50%;
+    border: 2px solid #333;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.95rem; font-weight: 800; color: transparent;
+    transition: background .15s ease, border-color .15s ease;
+  }
+  .wk-circle.done { background: var(--accent); border-color: var(--accent); color: #0A0A0A; }
+  .wk-circle.today { border-style: dashed; border-color: var(--accent); }
+  .wk-lbl { font-size: 0.72rem; color: var(--text-secondary); font-weight: 600; }
+  .wk.is-today .wk-lbl { color: var(--accent); }
+
+  /* Próximos días */
+  .up-list { display: flex; flex-direction: column; gap: 10px; }
+  .up-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 14px;
+  }
+  .up-date { font-weight: 600; font-size: 0.95rem; text-transform: capitalize; }
+  .up-count { font-size: 0.85rem; color: var(--text-secondary); }
+  .up-count b { color: var(--accent); }
+
+  /* Comunidad */
+  .comm-post {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    margin-bottom: 14px;
+  }
+  .comm-meta { font-size: 0.78rem; color: var(--text-secondary); margin-bottom: 6px; }
+  .comm-text { font-size: 0.94rem; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+
+  .muted { color: var(--text-secondary); font-size: 0.94rem; }
+  .placeholder-view {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 40vh;
+    color: var(--text-secondary);
+    font-size: 1rem;
+    text-align: center;
+  }
+
+  /* ================= Mi programa ================= */
+  .prog-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; }
+  .view-toggle { display: inline-flex; background: var(--bg-alt); border: 1px solid var(--border); border-radius: 10px; padding: 4px; gap: 4px; }
+  .vt-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: transparent; border: none; color: var(--text-secondary);
+    font-family: var(--font-body); font-weight: 600; font-size: 0.88rem;
+    padding: 8px 14px; border-radius: 7px; cursor: pointer;
+    transition: background .18s ease, color .18s ease;
+  }
+  .vt-btn.active { background: rgba(245,168,0,0.14); color: var(--accent); }
+  .vt-btn:hover:not(.active) { color: var(--text); }
+
+  /* Barra de día */
+  .day-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
+  .day-nav {
+    background: var(--bg-alt); border: 1px solid var(--border); color: var(--text);
+    width: 40px; height: 40px; border-radius: 10px; cursor: pointer; font-size: 1.1rem; flex-shrink: 0;
+    transition: border-color .18s ease, color .18s ease;
+  }
+  .day-nav:hover { border-color: var(--accent); color: var(--accent); }
+  .day-label { flex: 1; text-align: center; font-weight: 700; font-size: 0.98rem; text-transform: capitalize; }
+  .btn-hoy {
+    background: transparent; border: 1px solid var(--accent); color: var(--accent);
+    border-radius: 8px; padding: 8px 14px; font-weight: 700; font-size: 0.85rem; cursor: pointer; flex-shrink: 0;
+    font-family: var(--font-body); transition: background .18s ease, color .18s ease;
+  }
+  .btn-hoy:hover { background: var(--accent); color: #0A0A0A; }
+
+  .pb-empty {
+    text-align: center; color: var(--text-secondary); padding: 44px 20px; font-size: 1rem;
+    background: var(--bg-alt); border: 1px dashed var(--border); border-radius: 12px;
+  }
+
+  /* Bloque */
+  .pb-card {
+    background: var(--bg-alt); border: 1px solid var(--border); border-left: 4px solid var(--accent);
+    border-radius: 12px; padding: 16px 18px; margin-bottom: 14px; transition: opacity .2s ease;
+  }
+  .pb-card.done { opacity: 0.7; }
+  .pb-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+  .pb-title { font-family: var(--font-display); font-weight: 700; font-size: 1.1rem; letter-spacing: -0.3px; color: var(--accent); min-width: 0; word-break: break-word; }
+  .pb-card.done .pb-title { text-decoration: line-through; text-decoration-color: rgba(245,168,0,0.5); }
+
+  /* Checkbox personalizado */
+  .pb-check { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; flex-shrink: 0; padding: 2px; }
+  .pb-check input { position: absolute; opacity: 0; width: 0; height: 0; }
+  .pb-check-box {
+    width: 26px; height: 26px; border-radius: 50%; border: 2px solid #444;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.9rem; font-weight: 800; color: transparent;
+    transition: background .2s ease, border-color .2s ease, color .2s ease; flex-shrink: 0;
+  }
+  .pb-check input:checked + .pb-check-box { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .pb-check-lbl { font-size: 0.82rem; font-weight: 600; color: var(--text-secondary); transition: color .2s ease; white-space: nowrap; }
+  .pb-check input:checked ~ .pb-check-lbl { color: var(--accent); }
+
+  .pb-content { font-size: 0.95rem; line-height: 1.55; white-space: pre-line; color: var(--text); word-break: break-word; }
+
+  /* Ejercicios */
+  .pb-ex { border-top: 1px solid var(--border); padding-top: 12px; margin-top: 14px; }
+  .pb-ex-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; color: var(--text-secondary); margin-bottom: 8px; }
+  .pb-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .pb-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--bg-input); border: 1px solid var(--border); border-radius: 999px;
+    padding: 6px 13px; font-size: 0.88rem; cursor: pointer; transition: border-color .18s ease, transform .1s ease;
+  }
+  .pb-chip:hover { border-color: var(--accent); }
+  .pb-chip:active { transform: scale(0.97); }
+
+  /* Comentario */
+  .pb-comment { border-top: 1px solid var(--border); padding-top: 12px; margin-top: 14px; }
+  .cmt-text {
+    font-size: 0.9rem; color: var(--text); background: var(--bg-input);
+    border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin-bottom: 8px;
+    white-space: pre-line; word-break: break-word;
+  }
+  .cmt-btn { background: transparent; border: none; color: var(--accent); font-weight: 600; font-size: 0.85rem; cursor: pointer; padding: 2px 0; font-family: var(--font-body); }
+  .cmt-btn:hover { text-decoration: underline; }
+  .cmt-ta {
+    width: 100%; background: var(--bg-input); border: 1px solid #333; border-radius: 8px;
+    padding: 10px 12px; color: var(--text); font-family: var(--font-body); font-size: 0.92rem;
+    resize: vertical; min-height: 64px; line-height: 1.5;
+  }
+  .cmt-ta:focus { outline: none; border-color: var(--accent); }
+  .cmt-actions { display: flex; gap: 8px; margin-top: 8px; }
+  .btn-sm {
+    font-family: var(--font-body); font-weight: 600; font-size: 0.85rem;
+    padding: 7px 14px; border-radius: 8px; border: 1px solid var(--border);
+    background: transparent; color: var(--text); cursor: pointer; transition: border-color .18s ease, color .18s ease;
+  }
+  .btn-sm:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-sm.primary { background: var(--accent); color: #0A0A0A; border-color: var(--accent); }
+  .btn-sm.primary:hover { color: #0A0A0A; }
+
+  /* ================= Calendario (vista mes) ================= */
+  .cal-header { display: flex; align-items: center; justify-content: center; gap: 16px; margin-bottom: 14px; }
+  .cal-title { font-family: var(--font-display); font-weight: 800; font-size: 1.15rem; min-width: 150px; text-align: center; text-transform: capitalize; }
+  .cal-nav {
+    background: var(--bg-alt); border: 1px solid var(--border); color: var(--text);
+    width: 38px; height: 38px; border-radius: 10px; cursor: pointer; font-size: 1.05rem;
+    transition: border-color .18s ease, color .18s ease;
+  }
+  .cal-nav:hover { border-color: var(--accent); color: var(--accent); }
+  .cal-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-bottom: 6px; }
+  .cal-weekdays span { text-align: center; font-size: 0.66rem; font-weight: 700; text-transform: uppercase; color: var(--text-secondary); }
+  .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+  .cal-cell {
+    position: relative; aspect-ratio: 1 / 1;
+    background: var(--bg-alt); border: 1px solid var(--border); border-radius: 10px;
+    padding: 6px; cursor: pointer; transition: border-color .2s ease, background .2s ease;
+  }
+  .cal-cell.empty { background: transparent; border: none; cursor: default; }
+  .cal-cell:not(.empty):hover { border-color: var(--accent); }
+  .cal-day { font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); }
+  .cal-cell.has-plan .cal-day { color: var(--text); }
+  .cal-cell.full { background: #1a3a1a; }
+  .cal-cell.partial { background: #3a3a1a; }
+  .cal-cell.today { border: 2px dashed var(--accent); }
+  .cal-dot { position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%); width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
+  .cal-legend { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; margin-top: 16px; font-size: 0.76rem; color: var(--text-secondary); }
+  .cal-legend .lg { display: inline-flex; align-items: center; gap: 6px; }
+  .cal-legend .sw { width: 13px; height: 13px; border-radius: 4px; border: 1px solid var(--border); }
+  .cal-legend .sw.full { background: #1a3a1a; }
+  .cal-legend .sw.partial { background: #3a3a1a; }
+  .cal-legend .sw.dot { background: var(--accent); border-radius: 50%; width: 8px; height: 8px; }
+
+  /* ================= Modal de video ================= */
+  .pv-modal {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.78);
+    z-index: 100; align-items: center; justify-content: center; padding: 20px;
+  }
+  .pv-modal.show { display: flex; }
+  .pv-inner { width: 100%; max-width: 760px; }
+  .pv-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+  .pv-title { font-family: var(--font-display); font-weight: 700; font-size: 1.05rem; color: #fff; word-break: break-word; }
+  .pv-close { background: transparent; border: none; color: #fff; font-size: 1.5rem; cursor: pointer; line-height: 1; flex-shrink: 0; }
+  .pv-frame { position: relative; width: 100%; aspect-ratio: 16 / 9; background: #000; border-radius: 12px; overflow: hidden; }
+  .pv-frame iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+  .pv-empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; text-align: center; padding: 20px; color: var(--text-secondary); }
+
+  /* ================= Fotos (comentarios de bloque + posts) ================= */
+  /* Botón "Agregar fotos" + preview de miniaturas antes de subir */
+  .photo-add-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: transparent; border: 1px dashed #444; border-radius: 8px;
+    color: var(--text-secondary); font-family: var(--font-body); font-weight: 600;
+    font-size: 0.82rem; padding: 8px 12px; cursor: pointer; transition: border-color .18s ease, color .18s ease;
+  }
+  .photo-add-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .photo-prev { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 0; }
+  .photo-prev-item { position: relative; width: 80px; height: 80px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); }
+  .photo-prev-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .photo-prev-x {
+    position: absolute; top: 3px; right: 3px; width: 20px; height: 20px; border-radius: 50%;
+    background: rgba(0,0,0,0.7); color: #fff; border: none; cursor: pointer;
+    font-size: 0.9rem; line-height: 1; display: flex; align-items: center; justify-content: center;
+  }
+  .photo-prev-x:hover { background: var(--error); }
+
+  /* Galería de imágenes ya subidas en un bloque */
+  .pb-imgs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+  .pb-imgs:empty { display: none; }
+  .cmt-photos { margin-top: 10px; }
+  .pb-img { position: relative; width: 84px; height: 84px; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); cursor: pointer; }
+  .pb-img img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .2s ease; }
+  .pb-img:hover img { transform: scale(1.05); }
+  .pb-img-x {
+    position: absolute; top: 3px; right: 3px; width: 20px; height: 20px; border-radius: 50%;
+    background: rgba(0,0,0,0.7); color: #fff; border: none; cursor: pointer;
+    font-size: 0.9rem; line-height: 1; display: flex; align-items: center; justify-content: center; z-index: 2;
+  }
+  .pb-img-x:hover { background: var(--error); }
+
+  /* Imágenes en posts de comunidad (grilla máx 3 columnas) */
+  .com-imgs { display: grid; gap: 6px; margin-top: 10px; }
+  .com-img { position: relative; border-radius: 10px; overflow: hidden; cursor: pointer; aspect-ratio: 1 / 1; border: 1px solid var(--border); }
+  .com-img img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .2s ease; }
+  .com-img:hover img { transform: scale(1.04); }
+
+  /* Modal de imagen (compartido) */
+  .img-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.88); z-index: 130; align-items: center; justify-content: center; padding: 20px; }
+  .img-modal.show { display: flex; }
+  .img-modal img { max-width: 100%; max-height: 88vh; border-radius: 12px; display: block; }
+  .img-modal-close { position: absolute; top: 16px; right: 20px; background: transparent; border: none; color: #fff; font-size: 1.8rem; cursor: pointer; line-height: 1; }
+
+  @media (max-width: 400px) {
+    .cal-grid, .cal-weekdays { gap: 4px; }
+    .cal-cell { padding: 4px; border-radius: 8px; }
+    .cal-day { font-size: 0.76rem; }
+    .cal-dot { bottom: 4px; width: 6px; height: 6px; }
+  }
+
+  /* ================= Estadísticas ================= */
+  .stats-header { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-bottom: 20px; }
+  .stats-title { font-family: var(--font-display); font-weight: 800; font-size: 1.5rem; letter-spacing: -0.5px; }
+  .period-seg { display: inline-flex; background: var(--bg-alt); border: 1px solid var(--border); border-radius: 10px; padding: 4px; gap: 4px; flex-wrap: wrap; }
+  .seg-btn {
+    background: transparent; border: none; color: var(--text-secondary);
+    font-family: var(--font-body); font-weight: 600; font-size: 0.82rem;
+    padding: 7px 12px; border-radius: 7px; cursor: pointer; transition: background .18s ease, color .18s ease;
+  }
+  .seg-btn.active { background: rgba(245,168,0,0.14); color: var(--accent); }
+  .seg-btn:hover:not(.active) { color: var(--text); }
+
+  .stats-cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 16px; }
+  .stat { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
+  .stat-label { font-size: 0.74rem; color: var(--text-secondary); font-weight: 600; display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+  .stat-val { font-family: var(--font-display); font-weight: 800; font-size: 1.9rem; letter-spacing: -1px; line-height: 1; color: var(--accent); }
+  .stat-sub { font-size: 0.74rem; color: var(--text-secondary); margin-top: 4px; }
+
+  /* Adherencia semanal (barras verticales) */
+  .adh-row { display: flex; justify-content: space-between; gap: 6px; align-items: flex-end; }
+  .adh-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .adh-pct { font-size: 0.7rem; font-weight: 700; color: var(--text-secondary); }
+  .adh-track { width: 70%; max-width: 30px; height: 120px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 6px; display: flex; align-items: flex-end; overflow: hidden; }
+  .adh-fill { width: 100%; background: var(--accent); height: 0; transition: height .5s ease; }
+  .adh-lbl { font-size: 0.7rem; color: var(--text-secondary); font-weight: 600; }
+  .adh-col.today .adh-lbl { color: var(--accent); }
+  .adh-col.today .adh-track { border-color: var(--accent); }
+
+  /* Historial */
+  .hist-list { display: flex; flex-direction: column; }
+  .hist-item { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+  .hist-item:first-child { padding-top: 0; }
+  .hist-item:last-child { border-bottom: none; padding-bottom: 0; }
+  .hist-icon { font-size: 1.2rem; flex-shrink: 0; width: 24px; text-align: center; }
+  .hist-main { flex: 1; min-width: 0; }
+  .hist-date { font-weight: 600; font-size: 0.92rem; }
+  .hist-name { font-size: 0.78rem; color: var(--text-secondary); }
+  .hist-prog { text-align: right; flex-shrink: 0; min-width: 100px; }
+  .hist-count { font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 5px; }
+  .hist-count b { color: var(--accent); }
+  .hist-bar { height: 6px; background: var(--bg-input); border-radius: 999px; overflow: hidden; }
+  .hist-bar > div { height: 100%; background: var(--accent); border-radius: 999px; transition: width .5s ease; }
+
+  /* Logros */
+  .ach-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .ach { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+  .ach-circle {
+    width: 64px; height: 64px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; font-size: 1.8rem;
+    position: relative; border: 2px solid #333; background: #1c1c1c;
+    filter: grayscale(1); opacity: 0.55; transition: all .3s ease;
+  }
+  .ach.unlocked .ach-circle {
+    border-color: var(--accent); background: rgba(245,168,0,0.14);
+    filter: none; opacity: 1; box-shadow: 0 0 16px rgba(245,168,0,0.22);
+  }
+  .ach-lock { position: absolute; bottom: -2px; right: -2px; font-size: 0.85rem; background: #0D0D0D; border-radius: 50%; padding: 1px; }
+  .ach.unlocked .ach-lock { display: none; }
+  .ach-name { font-size: 0.72rem; font-weight: 600; color: var(--text-secondary); line-height: 1.2; }
+  .ach.unlocked .ach-name { color: var(--text); }
+
+  @media (min-width: 520px) { .stats-cards { grid-template-columns: repeat(4, 1fr); } }
+  @media (max-width: 400px) {
+    .ach-circle { width: 56px; height: 56px; font-size: 1.5rem; }
+    .ach-grid { gap: 8px; }
+    .ach-name { font-size: 0.66rem; }
+    .adh-track { max-width: 24px; height: 100px; }
+  }
+
+  /* ================= Mensajes (chat del atleta) ================= */
+  /* La vista ocupa el alto entre topbar y tabbar; los mensajes scrollean adentro */
+  #view-mensajes.active {
+    display: flex; flex-direction: column;
+    position: fixed;
+    top: var(--topbar-h);
+    left: 0; right: 0; bottom: 64px;
+    max-width: 820px; margin: 0 auto;
+    z-index: 10; background: var(--bg);
+  }
+  .chat-head { flex-shrink: 0; padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--bg-top); }
+  .chat-title { font-family: var(--font-display); font-weight: 800; font-size: 1.1rem; letter-spacing: -0.3px; }
+  .chat-sub { font-size: 0.8rem; color: var(--text-secondary); margin-top: 1px; }
+  .chat-msgs { flex: 1; min-height: 0; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  .chat-input-bar { flex-shrink: 0; display: flex; gap: 10px; padding: 12px 14px; border-top: 1px solid var(--border); background: var(--bg-nav); }
+  .chat-input-bar input {
+    flex: 1; min-width: 0;
+    background: var(--bg-alt); border: 1px solid #333; border-radius: 10px;
+    padding: 12px 14px; color: var(--text); font-family: var(--font-body); font-size: 0.95rem;
+  }
+  .chat-input-bar input:focus { outline: none; border-color: var(--accent); }
+  .chat-input-bar input::placeholder { color: #555; }
+  .chat-send {
+    background: var(--accent); color: #0A0A0A; border: none; border-radius: 10px;
+    padding: 0 20px; font-weight: 700; cursor: pointer; font-family: var(--font-display);
+    font-size: 0.92rem; flex-shrink: 0; transition: box-shadow .18s ease;
+  }
+  .chat-send:hover { box-shadow: 0 0 16px rgba(245,168,0,0.4); }
+  .chat-empty { margin: auto; color: var(--text-secondary); text-align: center; padding: 20px; font-size: 0.95rem; }
+
+  .m-row { display: flex; gap: 10px; max-width: 82%; }
+  .m-row.mine { align-self: flex-end; flex-direction: row-reverse; }
+  .m-avatar {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: #2A2A2A; color: #ccc;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.72rem; font-weight: 700; flex-shrink: 0;
+  }
+  .m-row.mine .m-avatar { background: var(--accent); color: #0A0A0A; }
+  .m-wrap { display: flex; flex-direction: column; min-width: 0; }
+  .m-row.mine .m-wrap { align-items: flex-end; }
+  .m-meta { font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 3px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .coach-badge { font-size: 0.6rem; font-weight: 700; padding: 1px 6px; border-radius: 999px; background: rgba(245,168,0,0.16); color: var(--accent); text-transform: uppercase; letter-spacing: 0.3px; }
+  .m-bubble { background: var(--bg-alt); color: var(--text); padding: 9px 13px; border-radius: 12px; font-size: 0.92rem; line-height: 1.4; word-break: break-word; white-space: pre-wrap; }
+  .m-row.mine .m-bubble { background: var(--accent); color: #0A0A0A; }
+
+  @media (min-width: 768px) {
+    #view-mensajes.active { top: calc(var(--topbar-h) + 51px); bottom: 0; }
+  }
+
+  /* ================= Perfil ================= */
+  .pf-title { font-family: var(--font-display); font-weight: 800; font-size: 1.5rem; letter-spacing: -0.5px; margin-bottom: 20px; }
+  .pf-personal-card { text-align: center; }
+  .pf-avatar {
+    width: 80px; height: 80px; border-radius: 50%;
+    background: var(--accent); color: #0A0A0A;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-display); font-weight: 800; font-size: 1.8rem;
+    margin: 0 auto 18px;
+  }
+  .pf-field { text-align: left; margin-bottom: 14px; }
+  .pf-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; color: var(--text-secondary); margin-bottom: 5px; display: block; }
+  .pf-lock { text-transform: none; letter-spacing: 0; font-weight: 500; color: #666; }
+  .pf-value { font-size: 0.98rem; color: var(--text); word-break: break-word; }
+  .pf-value.pf-readonly { color: var(--text-secondary); }
+  .pf-input {
+    width: 100%; background: var(--bg-top); border: 1px solid var(--accent);
+    border-radius: 8px; padding: 11px 13px; color: var(--text);
+    font-family: var(--font-body); font-size: 0.98rem;
+  }
+  .pf-input:focus { outline: none; box-shadow: 0 0 0 3px rgba(245,168,0,0.15); }
+  .pf-actions { display: flex; gap: 10px; margin-top: 16px; }
+  .pf-actions .btn { flex: 1; }
+  .pf-full { width: 100%; justify-content: center; }
+  .pf-error {
+    display: none; background: rgba(226,59,59,0.1); border: 1px solid rgba(226,59,59,0.4);
+    color: #ff7b7b; font-size: 0.85rem; padding: 9px 12px; border-radius: 8px; margin-bottom: 14px; text-align: left;
+  }
+  .pf-error.show { display: block; }
+
+  /* Suscripción */
+  .pf-sub-badges { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+  .pf-sub-rows { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+  .pf-srow { display: flex; justify-content: space-between; gap: 12px; font-size: 0.92rem; }
+  .pf-srow .k { color: var(--text-secondary); }
+  .pf-srow .v { color: var(--text); font-weight: 600; text-align: right; }
+  .pf-sub-info { font-size: 0.9rem; padding: 11px 13px; border-radius: 8px; line-height: 1.45; }
+  .pf-sub-info.info-active { background: rgba(59,190,94,0.1); color: #8fe0a8; }
+  .pf-sub-info.info-cancelled { background: rgba(150,150,150,0.12); color: #bbb; }
+  .pf-sub-info.info-pending { background: rgba(245,168,0,0.1); color: #f0c56a; }
+  .pf-sub-info + .btn { margin-top: 14px; }
+
+  /* Botón cancelar suscripción (outline rojo, pequeño, al pie de la card) */
+  .pf-cancel-btn {
+    display: block; width: 100%; margin-top: 16px;
+    background: transparent; border: 1px solid rgba(226,59,59,0.4); color: #d98a8a;
+    font-family: var(--font-body); font-weight: 600; font-size: 0.85rem;
+    padding: 9px 14px; border-radius: 8px; cursor: pointer;
+    transition: border-color .18s ease, color .18s ease, background .18s ease;
+  }
+  .pf-cancel-btn:hover { border-color: #E23B3B; color: #ff7b7b; background: rgba(226,59,59,0.06); }
+
+  /* Modal de confirmación de cancelación */
+  .cm-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 120; align-items: center; justify-content: center; padding: 20px; }
+  .cm-modal.show { display: flex; }
+  .cm-card { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 16px; width: 100%; max-width: 420px; padding: 24px; }
+  .cm-title { font-family: var(--font-display); font-weight: 800; font-size: 1.25rem; letter-spacing: -0.5px; margin-bottom: 12px; }
+  .cm-text { font-size: 0.92rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 20px; }
+  .cm-actions { display: flex; gap: 10px; }
+  .cm-actions.col { flex-direction: column; }
+  .cm-actions .btn, .cm-actions .cm-danger { flex: 1; justify-content: center; }
+  .cm-danger {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+    background: #E23B3B; color: #fff; border: 2px solid #E23B3B; border-radius: 8px;
+    font-family: var(--font-display); font-weight: 700; font-size: 0.92rem; letter-spacing: 0.3px;
+    padding: 11px 18px; cursor: pointer; transition: box-shadow .18s ease, transform .18s ease;
+  }
+  .cm-danger:hover { box-shadow: 0 0 18px rgba(226,59,59,0.4); transform: translateY(-2px); }
+  .cm-processing { display: flex; align-items: center; justify-content: center; gap: 10px; padding: 26px 10px; color: var(--text-secondary); font-size: 0.95rem; }
+  .cm-spinner { width: 18px; height: 18px; border: 2px solid rgba(245,168,0,0.25); border-top-color: var(--accent); border-radius: 50%; animation: cm-spin 0.7s linear infinite; flex-shrink: 0; }
+  @keyframes cm-spin { to { transform: rotate(360deg); } }
+
+  /* Badges (colores del admin) */
+  .prog-badge { display: inline-block; font-size: 0.76rem; font-weight: 700; padding: 3px 11px; border-radius: 999px; color: #fff; white-space: nowrap; border: 1px solid rgba(255,255,255,0.10); }
+  .prog-badge.prog-crossfit   { background: #1a3a5c; }
+  .prog-badge.prog-hybrid     { background: #1a3a2a; }
+  .prog-badge.prog-corredores { background: #3a2a1a; }
+  .prog-badge.prog-erika      { background: #2a1a3a; }
+  .prog-badge.prog-gonza      { background: #3a1a2a; }
+  .prog-badge.prog-otro       { background: #2A2A2A; color: var(--text-secondary); }
+  .st-badge { display: inline-block; font-size: 0.75rem; font-weight: 700; padding: 3px 10px; border-radius: 999px; }
+  .st-badge.st-active    { background: rgba(59,190,94,0.15); color: #66d98a; }
+  .st-badge.st-pending   { background: rgba(245,168,0,0.15); color: var(--accent); }
+  .st-badge.st-cancelled { background: rgba(150,150,150,0.16); color: #a8a8a8; }
+
+  /* Seguridad */
+  .pf-sec-actions { display: flex; flex-direction: column; gap: 10px; }
+  .pf-logout {
+    width: 100%; justify-content: center; display: inline-flex; align-items: center; gap: 6px;
+    background: transparent; border: 1px solid var(--border); color: var(--text-secondary);
+    font-family: var(--font-body); font-weight: 600; font-size: 0.92rem; padding: 11px 18px;
+    border-radius: 8px; cursor: pointer; transition: border-color .18s ease, color .18s ease;
+  }
+  .pf-logout:hover { border-color: #E23B3B; color: #ff7b7b; }
+
+  /* ================= Comunidad ================= */
+  .com-header { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+  .com-back { background: transparent; border: none; color: var(--text-secondary); font-family: var(--font-body); font-weight: 600; font-size: 0.95rem; cursor: pointer; padding: 6px 2px; display: inline-flex; align-items: center; gap: 5px; transition: color .18s ease; flex-shrink: 0; }
+  .com-back:hover { color: var(--accent); }
+  .com-title { font-family: var(--font-display); font-weight: 800; font-size: 1.3rem; letter-spacing: -0.5px; flex: 1; min-width: 0; }
+  .com-newbtn { flex-shrink: 0; padding: 9px 14px; font-size: 0.85rem; }
+
+  .com-feed { display: flex; flex-direction: column; gap: 14px; }
+  .com-empty { text-align: center; color: var(--text-secondary); padding: 44px 20px; font-size: 1rem; background: var(--bg-alt); border: 1px dashed var(--border); border-radius: 12px; }
+
+  .com-post { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; }
+  .com-head { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 12px; }
+  .com-avatar { width: 38px; height: 38px; border-radius: 50%; background: #2A2A2A; color: #ccc; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; font-weight: 700; flex-shrink: 0; }
+  .com-meta { flex: 1; min-width: 0; }
+  .com-author { font-weight: 700; font-size: 0.95rem; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .com-date { font-size: 0.76rem; color: var(--text-secondary); }
+  .com-del { background: transparent; border: none; color: var(--text-secondary); font-size: 1rem; cursor: pointer; padding: 2px 5px; border-radius: 6px; flex-shrink: 0; }
+  .com-del:hover { color: #ff7b7b; background: rgba(226,59,59,0.1); }
+  .com-text { font-size: 0.95rem; line-height: 1.55; white-space: pre-line; word-break: break-word; margin-bottom: 14px; }
+  .com-actions { display: flex; align-items: center; gap: 16px; font-size: 0.85rem; color: var(--text-secondary); flex-wrap: wrap; }
+  .com-like {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: transparent; border: 1px solid var(--border); border-radius: 999px; padding: 5px 12px;
+    cursor: pointer; color: var(--text-secondary); font-family: var(--font-body); font-weight: 600; font-size: 0.85rem;
+    transition: border-color .18s ease, color .18s ease, background .18s ease;
+  }
+  .com-like:hover { border-color: var(--accent); color: var(--accent); }
+  .com-like.liked { border-color: var(--accent); color: var(--accent); background: rgba(245,168,0,0.12); }
+  .com-heart { display: inline-block; }
+  .com-heart.pop { animation: like-pop .3s ease; }
+  @keyframes like-pop { 0% { transform: scale(1); } 40% { transform: scale(1.35); } 100% { transform: scale(1); } }
+  .com-cn { display: inline-flex; align-items: center; gap: 4px; }
+  .com-toggle { background: transparent; border: none; color: var(--accent); font-family: var(--font-body); font-weight: 600; font-size: 0.85rem; cursor: pointer; padding: 0; margin-left: auto; }
+  .com-toggle:hover { text-decoration: underline; }
+
+  .com-comments { margin-top: 14px; background: #111111; border-radius: 10px; padding: 14px; }
+  .com-clist { display: flex; flex-direction: column; gap: 12px; }
+  .com-clist:not(:empty) { margin-bottom: 12px; }
+  .com-c { display: flex; gap: 8px; }
+  .com-c-avatar { width: 30px; height: 30px; border-radius: 50%; background: #2A2A2A; color: #ccc; display: flex; align-items: center; justify-content: center; font-size: 0.68rem; font-weight: 700; flex-shrink: 0; }
+  .com-c-body { flex: 1; min-width: 0; }
+  .com-c-meta { font-size: 0.72rem; color: var(--text-secondary); margin-bottom: 2px; display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+  .com-c-text { font-size: 0.9rem; line-height: 1.45; word-break: break-word; white-space: pre-line; }
+  .com-cbar { display: flex; gap: 8px; }
+  .com-cinput { flex: 1; min-width: 0; background: var(--bg-top); border: 1px solid #333; border-radius: 8px; padding: 9px 12px; color: var(--text); font-family: var(--font-body); font-size: 0.9rem; }
+  .com-cinput:focus { outline: none; border-color: var(--accent); }
+  .com-cinput::placeholder { color: #555; }
+  .com-cbtn { background: var(--accent); color: #0A0A0A; border: none; border-radius: 8px; padding: 0 14px; font-weight: 700; font-size: 0.85rem; cursor: pointer; font-family: var(--font-display); flex-shrink: 0; }
+
+  .fade-in { animation: com-fade .3s ease; }
+  @keyframes com-fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+  /* Modal nueva publicación */
+  .np-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 120; align-items: center; justify-content: center; padding: 20px; }
+  .np-modal.show { display: flex; }
+  .np-card { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 16px; width: 100%; max-width: 480px; padding: 24px; }
+  .np-title { font-family: var(--font-display); font-weight: 800; font-size: 1.25rem; letter-spacing: -0.5px; margin-bottom: 16px; }
+  .np-ta { width: 100%; min-height: 130px; background: var(--bg-top); border: 1px solid #333; border-radius: 10px; padding: 12px 14px; color: var(--text); font-family: var(--font-body); font-size: 0.98rem; line-height: 1.5; resize: vertical; }
+  .np-ta:focus { outline: none; border-color: var(--accent); }
+  .np-ta::placeholder { color: #555; }
+  .np-actions { display: flex; gap: 10px; margin-top: 16px; }
+  .np-actions .btn { flex: 1; justify-content: center; }
+
+  @media (max-width: 480px) { .com-newbtn { flex: 1 0 100%; justify-content: center; } }
+
+  /* ================= Toast ================= */
+  .toast {
+    position: fixed;
+    bottom: 90px;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    background: var(--bg-alt);
+    border: 1px solid var(--accent);
+    color: var(--text);
+    padding: 12px 20px;
+    border-radius: 10px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.5);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .2s ease, transform .2s ease;
+    z-index: 80;
+    max-width: 90vw;
+    text-align: center;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ================= Desktop ================= */
+  @media (min-width: 768px) {
+    .tabbar {
+      position: sticky;
+      top: var(--topbar-h);
+      bottom: auto;
+      border-top: none;
+      border-bottom: 1px solid var(--border);
+      background: var(--bg-top);
+    }
+    .tabbar-inner { max-width: 820px; margin: 0 auto; }
+    .tabbar a {
+      flex-direction: row;
+      gap: 8px;
+      font-size: 0.9rem;
+      padding: 14px 10px;
+      border-bottom: 2px solid transparent;
+    }
+    .tabbar a.active { border-bottom-color: var(--accent); }
+    .tabbar a .tico { font-size: 1.05rem; }
+    main { padding: 28px 24px 60px; max-width: 820px; }
+    .greeting { font-size: 2rem; }
+    .toast { bottom: 24px; }
+  }
+</style>
+</head>
+<body>
+  <!-- ===== Topbar ===== -->
+  <header class="topbar">
+    <a class="topbar-logo" href="dashboard.html">
+      <img src="../logo.png" alt="HB Performance"
+           onerror="this.style.display='none';document.getElementById('logoText').style.display='block';">
+      <div id="logoText" class="logo-text" style="display:none;">HB <span class="accent">Performance</span></div>
+    </a>
+    <div class="topbar-right">
+      <span class="u-name" id="userName">—</span>
+
+      <!-- Campana de notificaciones -->
+      <div class="notif-wrap">
+        <button class="notif-bell" id="notifBell" aria-label="Notificaciones">
+          🔔<span class="notif-badge hidden" id="notifBadge">0</span>
+        </button>
+        <div class="notif-dd" id="notifDropdown">
+          <div class="notif-head">
+            <span class="nh-title">Notificaciones</span>
+            <button class="notif-markall" id="notifMarkAll">Marcar todas como leídas</button>
+          </div>
+          <div id="notifList"></div>
+        </div>
+      </div>
+
+      <button class="topbar-user" id="userBtn">
+        <span class="u-avatar" id="userAvatar">–</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ===== Tabbar ===== -->
+  <nav class="tabbar">
+    <div class="tabbar-inner">
+      <a data-view="inicio" class="active"><span class="tico">🏠</span> Inicio</a>
+      <a data-view="programa"><span class="tico">📅</span> Mi programa</a>
+      <a data-view="estadisticas"><span class="tico">📊</span> Estadísticas</a>
+      <a data-view="mensajes"><span class="tico">💬</span> Mensajes</a>
+      <a data-view="perfil"><span class="tico">👤</span> Perfil</a>
+    </div>
+  </nav>
+
+  <!-- ===== Main ===== -->
+  <main>
+    <!-- ===== VIEW: INICIO ===== -->
+    <section id="view-inicio" class="view active">
+      <h1 class="greeting" id="greeting">Hola 👋</h1>
+
+      <!-- Card HOY -->
+      <div class="card card-today">
+        <div class="card-h">📌 Hoy</div>
+        <div class="today-date" id="todayDate">—</div>
+        <div class="today-prog" id="todayProg">—</div>
+        <div id="todayBody"><div class="muted">Cargando…</div></div>
+      </div>
+
+      <!-- Card Semana -->
+      <div class="card">
+        <div class="card-h">🗓️ Tu semana</div>
+        <div class="week-row" id="weekRow"></div>
+      </div>
+
+      <!-- Card Próximos días -->
+      <div class="card">
+        <div class="card-h">⏭️ Próximos días</div>
+        <div id="upcoming"><div class="muted">Cargando…</div></div>
+      </div>
+
+      <!-- Card Comunidad -->
+      <div class="card">
+        <div class="card-h">💬 Comunidad</div>
+        <div id="commPreview"><div class="muted">Cargando…</div></div>
+        <button class="btn btn-outline" id="btnComunidad">Ver comunidad →</button>
+      </div>
+    </section>
+
+    <!-- ===== VIEW: MI PROGRAMA ===== -->
+    <section id="view-programa" class="view">
+      <div class="prog-toolbar">
+        <div class="view-toggle">
+          <button class="vt-btn active" id="progModeDay" data-mode="day">📅 Vista día</button>
+          <button class="vt-btn" id="progModeMonth" data-mode="month">🗓️ Vista mes</button>
+        </div>
+      </div>
+
+      <!-- Vista día -->
+      <div id="progDayView">
+        <div class="day-bar">
+          <button class="day-nav" id="dayPrev" aria-label="Día anterior">←</button>
+          <div class="day-label" id="dayLabel">—</div>
+          <button class="day-nav" id="dayNext" aria-label="Día siguiente">→</button>
+          <button class="btn-hoy" id="dayHoy">Hoy</button>
+        </div>
+        <div id="progBlocks"><div class="muted">Cargando…</div></div>
+      </div>
+
+      <!-- Vista mes -->
+      <div id="progMonthView" style="display:none;">
+        <div class="cal-header">
+          <button class="cal-nav" id="pcalPrev" aria-label="Mes anterior">←</button>
+          <div class="cal-title" id="pcalTitle">—</div>
+          <button class="cal-nav" id="pcalNext" aria-label="Mes siguiente">→</button>
+        </div>
+        <div class="cal-weekdays">
+          <span>Lun</span><span>Mar</span><span>Mié</span><span>Jue</span><span>Vie</span><span>Sáb</span><span>Dom</span>
+        </div>
+        <div class="cal-grid" id="pcalGrid"></div>
+        <div class="cal-legend">
+          <span class="lg"><span class="sw full"></span> Todo completo</span>
+          <span class="lg"><span class="sw partial"></span> Algunos bloques</span>
+          <span class="lg"><span class="sw dot"></span> Con planificación</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== VIEW: ESTADÍSTICAS (placeholder) ===== -->
+    <section id="view-estadisticas" class="view">
+      <div class="stats-header">
+        <h1 class="stats-title">Mis estadísticas</h1>
+        <div class="period-seg" id="periodSeg">
+          <button class="seg-btn active" data-period="week">Esta semana</button>
+          <button class="seg-btn" data-period="month">Este mes</button>
+          <button class="seg-btn" data-period="3m">Últimos 3 meses</button>
+        </div>
+      </div>
+
+      <!-- Sección 1: resumen rápido -->
+      <div class="stats-cards">
+        <div class="stat">
+          <div class="stat-label"><span>✅</span> Sesiones completadas</div>
+          <div class="stat-val" id="stSesiones">—</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label"><span>🧱</span> Bloques completados</div>
+          <div class="stat-val" id="stBloques">—</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label"><span>🔥</span> Racha actual</div>
+          <div class="stat-val" id="stRacha">—</div>
+          <div class="stat-sub">días seguidos</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label"><span>🏆</span> Mejor racha</div>
+          <div class="stat-val" id="stMejor">—</div>
+          <div class="stat-sub">días</div>
+        </div>
+      </div>
+
+      <!-- Sección 2: adherencia semanal -->
+      <div class="card">
+        <div class="card-h">📊 Tu semana</div>
+        <div class="adh-row" id="adhRow"><div class="muted">Cargando…</div></div>
+      </div>
+
+      <!-- Sección 3: historial -->
+      <div class="card">
+        <div class="card-h">📜 Historial</div>
+        <div id="histList"><div class="muted">Cargando…</div></div>
+      </div>
+
+      <!-- Sección 4: logros -->
+      <div class="card">
+        <div class="card-h">🏅 Logros</div>
+        <div class="ach-grid" id="achGrid"></div>
+      </div>
+    </section>
+
+    <!-- ===== VIEW: MENSAJES ===== -->
+    <section id="view-mensajes" class="view">
+      <div class="chat-head">
+        <div class="chat-title" id="chatTitle">Chat</div>
+        <div class="chat-sub" id="chatSub">—</div>
+      </div>
+      <div class="chat-msgs" id="chatMsgs"><div class="chat-empty">Cargando…</div></div>
+      <div class="chat-input-bar">
+        <input type="text" id="chatInput" placeholder="Escribí un mensaje…" autocomplete="off">
+        <button class="chat-send" id="chatSend">Enviar</button>
+      </div>
+    </section>
+
+    <!-- ===== VIEW: PERFIL (placeholder) ===== -->
+    <section id="view-perfil" class="view">
+      <h1 class="pf-title">Mi perfil</h1>
+
+      <!-- Sección 1: Datos personales -->
+      <div class="card pf-personal-card">
+        <div class="pf-avatar" id="pfAvatar">–</div>
+        <div id="pfPersonal"></div>
+      </div>
+
+      <!-- Sección 2: Suscripción -->
+      <div class="card" id="pfSubscription"></div>
+
+      <!-- Sección 3: Seguridad -->
+      <div class="card">
+        <div class="card-h">🔒 Seguridad</div>
+        <div class="pf-sec-actions">
+          <button class="btn btn-outline pf-full" id="pfChangePass">Cambiar contraseña</button>
+          <button class="pf-logout" id="pfLogout">Cerrar sesión</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== VIEW: COMUNIDAD ===== -->
+    <section id="view-comunidad" class="view">
+      <div class="com-header">
+        <button class="com-back" id="comBack">← Volver</button>
+        <h1 class="com-title" id="comTitle">Comunidad</h1>
+        <button class="btn btn-filled com-newbtn" id="comNewBtn">+ Nueva publicación</button>
+      </div>
+      <div class="com-feed" id="comFeed"><div class="com-empty">Cargando…</div></div>
+    </section>
+  </main>
+
+  <div class="toast" id="toast"></div>
+
+  <!-- ===== Modal de video (ejercicio) ===== -->
+  <div class="pv-modal" id="pvModal">
+    <div class="pv-inner">
+      <div class="pv-bar">
+        <div class="pv-title" id="pvTitle">Ejercicio</div>
+        <button class="pv-close" id="pvClose" aria-label="Cerrar">✕</button>
+      </div>
+      <div class="pv-frame" id="pvFrame"></div>
+    </div>
+  </div>
+
+  <!-- ===== Modal de confirmación: cancelar suscripción ===== -->
+  <div class="cm-modal" id="cancelModal">
+    <div class="cm-card" id="cancelModalCard"></div>
+  </div>
+
+  <!-- ===== Modal: nueva publicación (comunidad) ===== -->
+  <div class="np-modal" id="npModal">
+    <div class="np-card">
+      <h3 class="np-title">Nueva publicación</h3>
+      <textarea class="np-ta" id="npText" placeholder="¿Qué querés compartir?"></textarea>
+      <button type="button" class="photo-add-btn" id="npAddPhotos" style="margin-top:10px;">📷 Agregar fotos</button>
+      <div class="photo-prev" id="npPreview"></div>
+      <div class="np-actions">
+        <button class="btn btn-outline" id="npCancel">Cancelar</button>
+        <button class="btn btn-filled" id="npPublish">Publicar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Modal de imagen (compartido: bloques + comunidad) ===== -->
+  <div class="img-modal" id="imgModal">
+    <button class="img-modal-close" id="imgModalClose" aria-label="Cerrar">✕</button>
+    <img id="imgModalImg" src="" alt="Imagen">
+  </div>
+
+  <!-- Inputs de archivo ocultos (uno para bloques, uno para posts) -->
+  <input type="file" id="blockImgInput" accept="image/*" multiple style="display:none;">
+  <input type="file" id="npImgInput" accept="image/*" multiple style="display:none;">
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="../supabase.js"></script>
+  <script>
+    // ============================================================
+    // Estado + helpers
+    // ============================================================
+    let ATHLETE = null;
+    let IS_ASESORIA = false;
+    let toastTimer = null;
+
+    // Estado de "Mi programa"
+    let progMode = 'day';          // 'day' | 'month'
+    let progDate = null;           // fecha seleccionada 'YYYY-MM-DD' (se setea en init)
+    let progBlocks = [];           // bloques del día (con .completion y .exercises)
+    let progMonthCursor = null;    // { year, month(0-based) }
+    let progMonthData = {};        // 'YYYY-MM-DD' -> { id, total, completed }
+
+    // Estado de "Mensajes" (chat)
+    let chatChannel = null;        // canal del atleta (slug del programa o 'dm_' + id)
+    let chatRealtime = null;       // suscripción realtime activa
+    let chatRenderedIds = new Set();
+    const chatSenderCache = {};    // from_id -> { full_name, role }
+
+    // Estado de "Comunidad"
+    let comPosts = [];             // posts del programa (con .comments, .likeCount, .likedByMe)
+    const comExpanded = new Set(); // ids de posts con la sección de comentarios abierta
+    let comPostsRealtime = null;
+    let comCommentsRealtime = null;
+
+    // Estado de Notificaciones
+    let NOTIFS = [];               // notificaciones cargadas (desc por created_at)
+    let notifUnread = 0;
+    let notifRealtime = null;
+    let notifOpen = false;
+    let planningNotifChecked = false; // evita re-chequear la sesión de hoy varias veces por sesión
+    const NOTIF_ICONS = { message: '💬', planning: '📅', like: '👍', comment: '💬', new_athlete: '👤' };
+
+    const PROGRAM_LABELS = {
+      'crossfit': 'CrossFit',
+      'hybrid': 'Hybrid Evolution',
+      'corredores': 'Fuerza corredores',
+      'asesoria-erika': 'Asesoría Erika',
+      'asesoria-gonza': 'Asesoría Gonza'
+    };
+    const COACH_NAMES = { 'asesoria-erika': 'Erika Prada', 'asesoria-gonza': 'Gonza Gonda' };
+    const WD_SHORT = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+    const WD_LONG = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+    const MONTHS_LONG = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+
+    function esc(s) {
+      return (s == null ? '' : String(s)).replace(/[&<>"']/g, c => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[c]));
+    }
+    function pad2(n) { return String(n).padStart(2, '0'); }
+    function programLabel(slug) { return PROGRAM_LABELS[slug] || (slug ? esc(slug) : '—'); }
+    function isAsesoriaProgram(p) { return p === 'asesoria-erika' || p === 'asesoria-gonza'; }
+    function initials(name) {
+      const parts = String(name || '').trim().split(/\s+/);
+      if (!parts[0]) return '?';
+      return (parts[0][0] + (parts[1] ? parts[1][0] : '')).toUpperCase();
+    }
+    function todayStr() {
+      const d = new Date();
+      const off = d.getTimezoneOffset();
+      return new Date(d.getTime() - off * 60000).toISOString().slice(0, 10);
+    }
+    function addDaysStr(ds, n) {
+      const [y, m, d] = String(ds).split('-').map(Number);
+      const dt = new Date(y, m - 1, d);
+      dt.setDate(dt.getDate() + n);
+      return `${dt.getFullYear()}-${pad2(dt.getMonth() + 1)}-${pad2(dt.getDate())}`;
+    }
+    function mondayOf(ds) {
+      const [y, m, d] = String(ds).split('-').map(Number);
+      const dt = new Date(y, m - 1, d);
+      const dow = (dt.getDay() + 6) % 7; // Lunes = 0
+      return addDaysStr(ds, -dow);
+    }
+    function dowOf(ds) { const [y, m, d] = ds.split('-').map(Number); return new Date(y, m - 1, d).getDay(); }
+    function prettyLong(ds) {
+      const [y, m, d] = ds.split('-').map(Number);
+      return `${WD_LONG[dowOf(ds)]} ${d} de ${MONTHS_LONG[m - 1]}`;
+    }
+    function shortDayLabel(ds) {
+      const [y, m, d] = ds.split('-').map(Number);
+      return `${WD_SHORT[dowOf(ds)]} ${pad2(d)}/${pad2(m)}`;
+    }
+    // Formatea una columna DATE ('YYYY-MM-DD') → 'DD/MM/YYYY' sin desfase por timezone
+    function fmtDayOnly(ds) {
+      if (!ds) return '—';
+      const p = String(ds).slice(0, 10).split('-');
+      return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : '—';
+    }
+    function ytId(url) {
+      if (!url) return null;
+      const m = String(url).match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?v=|embed\/|shorts\/|v\/)|[?&]v=)([A-Za-z0-9_-]{11})/);
+      return m ? m[1] : null;
+    }
+    function fmtTime(ts) {
+      const d = new Date(ts);
+      if (isNaN(d)) return '';
+      return d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+    }
+    // Fecha relativa: "hace un momento", "hace 3 min", "hace 2 horas", "ayer", "hace 3 días"…
+    function fmtRelative(ts) {
+      const then = new Date(ts).getTime();
+      if (isNaN(then)) return '';
+      const sec = Math.floor((Date.now() - then) / 1000);
+      if (sec < 60) return 'hace un momento';
+      const min = Math.floor(sec / 60);
+      if (min < 60) return `hace ${min} min`;
+      const hr = Math.floor(min / 60);
+      if (hr < 24) return `hace ${hr} hora${hr === 1 ? '' : 's'}`;
+      const days = Math.floor(hr / 24);
+      if (days === 1) return 'ayer';
+      if (days < 7) return `hace ${days} días`;
+      const weeks = Math.floor(days / 7);
+      if (weeks < 5) return `hace ${weeks} semana${weeks === 1 ? '' : 's'}`;
+      return fmtDayOnly(String(ts).slice(0, 10));
+    }
+    function flash(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => t.classList.remove('show'), 2600);
+    }
+
+    const TODAY = todayStr();
+
+    // Filtro de planning_days para el atleta actual (asesoría filtra por athlete_id; grupal no)
+    function dayScope(q) {
+      q = q.eq('program_slug', ATHLETE.program);
+      if (IS_ASESORIA) q = q.eq('athlete_id', ATHLETE.id);
+      return q;
+    }
+
+    // ============================================================
+    // Navegación SPA
+    // ============================================================
+    function showView(name) {
+      // Al salir de Mensajes / Comunidad, cerrar sus suscripciones realtime
+      if (name !== 'mensajes') unsubscribeChat();
+      if (name !== 'comunidad') unsubscribeComunidad();
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+      const el = document.getElementById('view-' + name);
+      if (el) el.classList.add('active');
+      document.querySelectorAll('.tabbar a[data-view]').forEach(a =>
+        a.classList.toggle('active', a.dataset.view === name));
+      if (name === 'programa') enterPrograma();
+      if (name === 'estadisticas') loadEstadisticas();
+      if (name === 'mensajes') enterMensajes();
+      if (name === 'perfil') loadPerfil();
+      if (name === 'comunidad') enterComunidad();
+      window.scrollTo(0, 0);
+    }
+    document.querySelectorAll('.tabbar a[data-view]').forEach(a => {
+      a.addEventListener('click', () => showView(a.dataset.view));
+    });
+    document.getElementById('userBtn').addEventListener('click', () => showView('perfil'));
+    document.getElementById('btnComunidad').addEventListener('click', () => showView('comunidad'));
+
+    // ============================================================
+    // INICIO — carga de datos
+    // ============================================================
+    async function loadInicio() {
+      loadToday();
+      loadWeek();
+      loadUpcoming();
+      loadCommunity();
+    }
+
+    async function loadToday() {
+      document.getElementById('todayDate').textContent = prettyLong(TODAY);
+      document.getElementById('todayProg').textContent = programLabel(ATHLETE.program);
+      const body = document.getElementById('todayBody');
+
+      const { data, error } = await dayScope(sb.from('planning_days').select('id')).eq('date', TODAY).limit(1);
+      if (error) { body.innerHTML = '<div class="today-none">No se pudo cargar la sesión de hoy.</div>'; return; }
+      const day = data && data[0];
+      if (!day) {
+        body.innerHTML = '<div class="today-none">No hay sesión cargada para hoy. 💤</div>';
+        return;
+      }
+      const { count } = await sb.from('planning_blocks')
+        .select('id', { count: 'exact', head: true }).eq('day_id', day.id);
+      const n = count || 0;
+      body.innerHTML = `
+        <div class="today-blocks">Tenés <b>${n}</b> bloque${n === 1 ? '' : 's'} para hoy.</div>
+        <button class="btn btn-filled" id="btnHoy">Ver planificación de hoy →</button>`;
+      document.getElementById('btnHoy').addEventListener('click', () => {
+        progDate = TODAY; progMode = 'day'; showView('programa');
+      });
+    }
+
+    async function loadWeek() {
+      const monday = mondayOf(TODAY);
+      const weekDates = Array.from({ length: 7 }, (_, i) => addDaysStr(monday, i));
+      const nextMonday = addDaysStr(monday, 7);
+
+      // Días completados (≥1 block_completion del atleta esta semana)
+      const completed = new Set();
+      const { data, error } = await sb.from('block_completions')
+        .select('completed_at')
+        .eq('athlete_id', ATHLETE.id)
+        .gte('completed_at', monday)
+        .lt('completed_at', nextMonday);
+      if (!error && data) data.forEach(r => { if (r.completed_at) completed.add(String(r.completed_at).slice(0, 10)); });
+
+      const labels = ['lun', 'mar', 'mié', 'jue', 'vie', 'sáb', 'dom'];
+      document.getElementById('weekRow').innerHTML = weekDates.map((ds, i) => {
+        const done = completed.has(ds);
+        const isToday = ds === TODAY;
+        return `<div class="wk ${isToday ? 'is-today' : ''}">
+          <div class="wk-circle ${done ? 'done' : ''} ${isToday ? 'today' : ''}">${done ? '✓' : ''}</div>
+          <div class="wk-lbl">${labels[i]}</div>
+        </div>`;
+      }).join('');
+    }
+
+    async function loadUpcoming() {
+      const box = document.getElementById('upcoming');
+      const { data, error } = await dayScope(sb.from('planning_days').select('id, date'))
+        .gt('date', TODAY).order('date', { ascending: true }).limit(3);
+      if (error) { box.innerHTML = '<div class="muted">No se pudieron cargar los próximos días.</div>'; return; }
+      const days = data || [];
+      if (!days.length) { box.innerHTML = '<div class="muted">No hay más días planificados por ahora.</div>'; return; }
+
+      // Conteo de bloques por día (una sola consulta)
+      const ids = days.map(d => d.id);
+      const counts = {};
+      const { data: blocks } = await sb.from('planning_blocks').select('day_id').in('day_id', ids);
+      (blocks || []).forEach(b => { counts[b.day_id] = (counts[b.day_id] || 0) + 1; });
+
+      box.innerHTML = '<div class="up-list">' + days.map(d => {
+        const n = counts[d.id] || 0;
+        return `<div class="up-item">
+          <span class="up-date">${shortDayLabel(d.date)}</span>
+          <span class="up-count"><b>${n}</b> bloque${n === 1 ? '' : 's'}</span>
+        </div>`;
+      }).join('') + '</div>';
+    }
+
+    async function loadCommunity() {
+      const box = document.getElementById('commPreview');
+      const { data, error } = await sb.from('community_posts')
+        .select('content, created_at')
+        .eq('program_slug', ATHLETE.program)
+        .order('created_at', { ascending: false })
+        .limit(1);
+      if (error) { box.innerHTML = '<div class="muted">No se pudo cargar la comunidad.</div>'; return; }
+      const post = data && data[0];
+      if (!post) { box.innerHTML = '<div class="muted">Todavía no hay publicaciones en tu comunidad.</div>'; return; }
+      const when = post.created_at ? new Date(post.created_at).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '';
+      const text = String(post.content || '');
+      const preview = text.length > 220 ? text.slice(0, 220) + '…' : text;
+      box.innerHTML = `<div class="comm-post">
+        <div class="comm-meta">Último post${when ? ' · ' + when : ''}</div>
+        <div class="comm-text">${esc(preview)}</div>
+      </div>`;
+    }
+
+    // ============================================================
+    // MI PROGRAMA (planificación del atleta)
+    // ============================================================
+    function enterPrograma() {
+      setProgMode(progMode);
+      if (progMode === 'day') loadProgramaDay();
+      else loadProgramaMonth();
+      maybeNotifyTodayPlanning();
+    }
+    function setProgMode(mode) {
+      progMode = mode;
+      document.getElementById('progDayView').style.display = mode === 'day' ? 'block' : 'none';
+      document.getElementById('progMonthView').style.display = mode === 'month' ? 'block' : 'none';
+      document.getElementById('progModeDay').classList.toggle('active', mode === 'day');
+      document.getElementById('progModeMonth').classList.toggle('active', mode === 'month');
+    }
+    document.getElementById('progModeDay').addEventListener('click', () => { setProgMode('day'); loadProgramaDay(); });
+    document.getElementById('progModeMonth').addEventListener('click', () => {
+      setProgMode('month');
+      const [y, m] = progDate.split('-').map(Number);
+      progMonthCursor = { year: y, month: m - 1 };
+      loadProgramaMonth();
+    });
+
+    // -------- Navegación de día --------
+    document.getElementById('dayPrev').addEventListener('click', () => { progDate = addDaysStr(progDate, -1); loadProgramaDay(); });
+    document.getElementById('dayNext').addEventListener('click', () => { progDate = addDaysStr(progDate, 1); loadProgramaDay(); });
+    document.getElementById('dayHoy').addEventListener('click', () => { progDate = TODAY; loadProgramaDay(); });
+
+    async function loadProgramaDay() {
+      document.getElementById('dayLabel').textContent = prettyLong(progDate);
+      const box = document.getElementById('progBlocks');
+      box.innerHTML = '<div class="muted">Cargando…</div>';
+      progBlocks = [];
+
+      const { data: days, error } = await dayScope(sb.from('planning_days').select('id')).eq('date', progDate).limit(1);
+      if (error) { box.innerHTML = '<div class="pb-empty">No se pudo cargar la planificación.</div>'; return; }
+      const day = days && days[0];
+      if (!day) { box.innerHTML = '<div class="pb-empty">No hay sesión para este día 💤</div>'; return; }
+
+      const { data: blocks } = await sb.from('planning_blocks')
+        .select('id, title, content, order').eq('day_id', day.id).order('order', { ascending: true });
+      progBlocks = blocks || [];
+      if (!progBlocks.length) { box.innerHTML = '<div class="pb-empty">Este día no tiene bloques cargados.</div>'; return; }
+
+      const ids = progBlocks.map(b => b.id);
+      // Completions del atleta para esos bloques
+      const byBlock = {};
+      const { data: comps } = await sb.from('block_completions')
+        .select('id, block_id, completed_at, comment').eq('athlete_id', ATHLETE.id).in('block_id', ids);
+      (comps || []).forEach(c => { byBlock[c.block_id] = c; });
+      // Ejercicios linkeados (degrada si la tabla no existe)
+      const exByBlock = {};
+      const { data: exs, error: exErr } = await sb.from('exercise_links')
+        .select('id, block_id, name, youtube_url').in('block_id', ids);
+      if (!exErr) (exs || []).forEach(e => { (exByBlock[e.block_id] = exByBlock[e.block_id] || []).push(e); });
+
+      // Imágenes de comentarios, indexadas por completion_id (degrada si no existe la tabla/bucket)
+      const imgByComp = {};
+      const compIds = (comps || []).map(c => c.id);
+      if (compIds.length) {
+        const { data: imgs, error: imgErr } = await sb.from('block_images')
+          .select('id, completion_id, storage_path').in('completion_id', compIds);
+        if (!imgErr) (imgs || []).forEach(im => {
+          (imgByComp[im.completion_id] = imgByComp[im.completion_id] || []).push(
+            { id: im.id, path: im.storage_path, url: publicUrl('block-images', im.storage_path) });
+        });
+      }
+
+      progBlocks.forEach(b => {
+        b.completion = byBlock[b.id] || null;
+        b.exercises = exByBlock[b.id] || [];
+        b.images = (b.completion && imgByComp[b.completion.id]) || [];
+        b._pendingFiles = [];
+        b._prevUrls = [];
+      });
+      renderBlocks();
+    }
+
+    function renderBlocks() {
+      document.getElementById('progBlocks').innerHTML = progBlocks.map(blockCardHtml).join('');
+    }
+
+    function blockCardHtml(b) {
+      const done = !!b.completion;
+      const exHtml = (b.exercises && b.exercises.length) ? `
+        <div class="pb-ex">
+          <div class="pb-ex-label">Ejercicios</div>
+          <div class="pb-chips">${b.exercises.map(e => `<span class="pb-chip" data-ex="${esc(e.id)}">🎥 ${esc(e.name)}</span>`).join('')}</div>
+        </div>` : '';
+      return `<div class="pb-card ${done ? 'done' : ''}" data-block="${esc(b.id)}">
+        <div class="pb-head">
+          <div class="pb-title">${esc(b.title) || 'Bloque'}</div>
+          <label class="pb-check">
+            <input type="checkbox" class="pb-cb" ${done ? 'checked' : ''}>
+            <span class="pb-check-box">✓</span>
+            <span class="pb-check-lbl">Completado</span>
+          </label>
+        </div>
+        ${b.content ? `<div class="pb-content">${esc(b.content)}</div>` : ''}
+        ${exHtml}
+        <div class="pb-comment">${commentHtml(b)}</div>
+        <div class="pb-imgs">${blockImgsHtml(b)}</div>
+      </div>`;
+    }
+
+    // Galería de imágenes ya subidas del bloque (miniaturas clickeables + × para borrar)
+    function blockImgsHtml(b) {
+      if (!b.images || !b.images.length) return '';
+      return b.images.map(im => `<div class="pb-img" data-url="${esc(im.url)}">
+        <button type="button" class="pb-img-x" data-id="${esc(im.id)}" data-path="${esc(im.path)}" title="Eliminar">×</button>
+        <img src="${esc(im.url)}" alt="foto">
+      </div>`).join('');
+    }
+
+    function commentHtml(b) {
+      const c = b.completion && b.completion.comment;
+      if (c) {
+        return `<div class="cmt-text">${esc(c)}</div><button class="cmt-btn">✏️ Editar comentario</button>`;
+      }
+      return `<button class="cmt-btn">💬 Comentar</button>`;
+    }
+
+    function findBlock(card) { return progBlocks.find(x => String(x.id) === card.dataset.block); }
+
+    // Delegación de eventos sobre el contenedor de bloques
+    const progBox = document.getElementById('progBlocks');
+    progBox.addEventListener('change', async (e) => {
+      const cb = e.target.closest('.pb-cb');
+      if (!cb) return;
+      const card = cb.closest('.pb-card');
+      const b = findBlock(card);
+      if (b) await toggleBlock(b, cb.checked, card);
+    });
+    progBox.addEventListener('click', (e) => {
+      const card = e.target.closest('.pb-card');
+      if (!card) return;
+      const b = findBlock(card);
+      if (!b) return;
+      const chip = e.target.closest('.pb-chip');
+      if (chip) { const ex = (b.exercises || []).find(x => String(x.id) === chip.dataset.ex); openVideo(ex); return; }
+      // Imágenes ya subidas: × elimina (antes que abrir), thumbnail abre el modal
+      const imgX = e.target.closest('.pb-img-x');
+      if (imgX) { e.stopPropagation(); deleteBlockImage(b, card, imgX.dataset.id, imgX.dataset.path); return; }
+      const img = e.target.closest('.pb-img');
+      if (img) { openImageModal(img.dataset.url); return; }
+      // Controles de fotos en el editor de comentario
+      if (e.target.closest('.cmt-addphotos')) { openBlockImgPicker(b, card); return; }
+      const prevX = e.target.closest('.cmt-prev-x');
+      if (prevX) { removePendingBlockImg(b, card, Number(prevX.dataset.idx)); return; }
+      if (e.target.closest('.cmt-save')) { const ta = card.querySelector('.cmt-ta'); saveComment(card, b, ta ? ta.value : ''); return; }
+      if (e.target.closest('.cmt-cancel')) { clearPendingBlockImgs(b); card.querySelector('.pb-comment').innerHTML = commentHtml(b); return; }
+      if (e.target.closest('.cmt-btn')) { openCommentEditor(card, b); return; }
+    });
+
+    async function toggleBlock(b, checked, card) {
+      if (checked) {
+        card.classList.add('done');
+        const { data, error } = await sb.from('block_completions')
+          .insert({ athlete_id: ATHLETE.id, block_id: b.id, completed_at: new Date().toISOString() })
+          .select('id, block_id, completed_at, comment').single();
+        if (error) {
+          card.classList.remove('done');
+          const cb = card.querySelector('.pb-cb'); if (cb) cb.checked = false;
+          flash('No se pudo marcar como completado: ' + error.message);
+          return;
+        }
+        b.completion = data;
+      } else {
+        const prev = b.completion;
+        b.completion = null;
+        card.classList.remove('done');
+        const { error } = await sb.from('block_completions').delete()
+          .eq('athlete_id', ATHLETE.id).eq('block_id', b.id);
+        if (error) {
+          b.completion = prev;
+          card.classList.add('done');
+          const cb = card.querySelector('.pb-cb'); if (cb) cb.checked = true;
+          flash('No se pudo actualizar: ' + error.message);
+          return;
+        }
+      }
+      // El comentario vive en la completion: al cambiar el estado, refrescamos esa sección
+      card.querySelector('.pb-comment').innerHTML = commentHtml(b);
+    }
+
+    function openCommentEditor(card, b) {
+      const existing = (b.completion && b.completion.comment) || '';
+      card.querySelector('.pb-comment').innerHTML = `
+        <textarea class="cmt-ta" placeholder="¿Cómo te fue con este bloque?">${esc(existing)}</textarea>
+        <div class="cmt-photos">
+          <button type="button" class="photo-add-btn cmt-addphotos">📷 Agregar fotos</button>
+          <div class="photo-prev cmt-prev"></div>
+        </div>
+        <div class="cmt-actions">
+          <button class="btn-sm primary cmt-save">Guardar</button>
+          <button class="btn-sm cmt-cancel">Cancelar</button>
+        </div>`;
+      renderPendingBlockPreviews(b, card);
+      const ta = card.querySelector('.cmt-ta');
+      if (ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }
+    }
+
+    // -------- Fotos en comentarios de bloque --------
+    let blockImgCtx = null;
+    function openBlockImgPicker(b, card) {
+      b.images = b.images || []; b._pendingFiles = b._pendingFiles || [];
+      if (b.images.length + b._pendingFiles.length >= MAX_IMAGES) { flash(`Máximo ${MAX_IMAGES} imágenes por bloque.`); return; }
+      blockImgCtx = { b, card };
+      const inp = document.getElementById('blockImgInput');
+      inp.value = ''; inp.click();
+    }
+    function addPendingBlockImages(b, card, files) {
+      files = files.filter(f => f.type && f.type.indexOf('image/') === 0);
+      b.images = b.images || []; b._pendingFiles = b._pendingFiles || [];
+      const room = MAX_IMAGES - b.images.length - b._pendingFiles.length;
+      if (room <= 0) { flash(`Máximo ${MAX_IMAGES} imágenes por bloque.`); return; }
+      if (files.length > room) { flash(`Solo podés agregar ${room} imagen(es) más (máx ${MAX_IMAGES}).`); files = files.slice(0, room); }
+      b._pendingFiles.push(...files);
+      renderPendingBlockPreviews(b, card);
+    }
+    function removePendingBlockImg(b, card, idx) {
+      if (b._pendingFiles) b._pendingFiles.splice(idx, 1);
+      renderPendingBlockPreviews(b, card);
+    }
+    function renderPendingBlockPreviews(b, card) {
+      const box = card.querySelector('.cmt-prev');
+      if (!box) return;
+      (b._prevUrls || []).forEach(u => URL.revokeObjectURL(u)); b._prevUrls = [];
+      box.innerHTML = (b._pendingFiles || []).map((f, i) => {
+        const u = URL.createObjectURL(f); b._prevUrls.push(u);
+        return `<div class="photo-prev-item"><img src="${u}"><button type="button" class="photo-prev-x cmt-prev-x" data-idx="${i}">×</button></div>`;
+      }).join('');
+    }
+    function clearPendingBlockImgs(b) {
+      (b._prevUrls || []).forEach(u => URL.revokeObjectURL(u));
+      b._prevUrls = []; b._pendingFiles = [];
+    }
+    async function deleteBlockImage(b, card, id, path) {
+      b.images = (b.images || []).filter(im => String(im.id) !== String(id));
+      const g = card.querySelector('.pb-imgs'); if (g) g.innerHTML = blockImgsHtml(b);
+      const { error } = await sb.from('block_images').delete().eq('id', id);
+      if (error) { flash('No se pudo eliminar la imagen: ' + error.message); return; }
+      await sb.storage.from('block-images').remove([path]);
+    }
+
+    async function saveComment(card, b, text) {
+      text = text.trim();
+      if (!b.completion) {
+        // Comentar implica haber hecho el bloque → creamos la completion (marca completado)
+        const { data, error } = await sb.from('block_completions')
+          .insert({ athlete_id: ATHLETE.id, block_id: b.id, completed_at: new Date().toISOString(), comment: text || null })
+          .select('id, block_id, completed_at, comment').single();
+        if (error) { flash('No se pudo guardar el comentario: ' + error.message); return; }
+        b.completion = data;
+        card.classList.add('done');
+        const cb = card.querySelector('.pb-cb'); if (cb) cb.checked = true;
+      } else {
+        const { error } = await sb.from('block_completions').update({ comment: text || null })
+          .eq('athlete_id', ATHLETE.id).eq('block_id', b.id);
+        if (error) { flash('No se pudo guardar el comentario: ' + error.message); return; }
+        b.completion.comment = text || null;
+      }
+      // Subir las imágenes pendientes (si hay) al bucket 'block-images'
+      b.images = b.images || [];
+      if (b._pendingFiles && b._pendingFiles.length && b.completion) {
+        const saveBtn = card.querySelector('.cmt-save');
+        if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = 'Subiendo…'; }
+        const uploaded = await uploadImages('block-images', `${ATHLETE.id}/${b.id}`, b._pendingFiles);
+        if (uploaded.length) {
+          const rows = uploaded.map(u => ({ completion_id: b.completion.id, athlete_id: ATHLETE.id, storage_path: u.path }));
+          const { data: ins, error: insErr } = await sb.from('block_images').insert(rows).select('id, completion_id, storage_path');
+          if (insErr) flash('No se pudieron guardar las imágenes: ' + insErr.message);
+          else (ins || []).forEach(im => b.images.push({ id: im.id, path: im.storage_path, url: publicUrl('block-images', im.storage_path) }));
+        }
+        clearPendingBlockImgs(b);
+      }
+      card.querySelector('.pb-comment').innerHTML = commentHtml(b);
+      const g = card.querySelector('.pb-imgs'); if (g) g.innerHTML = blockImgsHtml(b);
+    }
+
+    // -------- Modal de video --------
+    function openVideo(ex) {
+      document.getElementById('pvTitle').textContent = (ex && ex.name) || 'Ejercicio';
+      const id = ex && ytId(ex.youtube_url);
+      document.getElementById('pvFrame').innerHTML = id
+        ? `<iframe src="https://www.youtube.com/embed/${id}" title="YouTube" allowfullscreen></iframe>`
+        : `<div class="pv-empty">Este ejercicio no tiene un video de YouTube válido${ex && ex.youtube_url ? ` · <a href="${esc(ex.youtube_url)}" target="_blank" rel="noopener" style="color:var(--accent)">Abrir link ↗</a>` : ''}.</div>`;
+      document.getElementById('pvModal').classList.add('show');
+    }
+    function closeVideo() {
+      document.getElementById('pvModal').classList.remove('show');
+      document.getElementById('pvFrame').innerHTML = '';
+    }
+    document.getElementById('pvClose').addEventListener('click', closeVideo);
+    document.getElementById('pvModal').addEventListener('click', (e) => { if (e.target.id === 'pvModal') closeVideo(); });
+
+    // ============================================================
+    // FOTOS — helpers compartidos (Storage + modal de imagen)
+    // ============================================================
+    const MAX_IMAGES = 5;
+
+    // URL pública de un archivo del bucket
+    function publicUrl(bucket, path) {
+      try { return sb.storage.from(bucket).getPublicUrl(path).data.publicUrl; }
+      catch (e) { return ''; }
+    }
+
+    // Nombre de archivo seguro para Storage: timestamp + aleatorio + extensión
+    function safeFileName(file) {
+      const dot = (file.name || '').lastIndexOf('.');
+      let ext = dot > -1 ? file.name.slice(dot + 1).toLowerCase().replace(/[^a-z0-9]/g, '') : '';
+      if (!ext && file.type && file.type.indexOf('/') > -1) ext = file.type.split('/')[1];
+      ext = (ext || 'jpg').slice(0, 5);
+      const rand = Math.random().toString(36).slice(2, 8);
+      return `${Date.now()}-${rand}.${ext}`;
+    }
+
+    // Sube varios archivos a un bucket bajo un prefijo; devuelve [{ path }]
+    async function uploadImages(bucket, prefix, files) {
+      const out = [];
+      for (const file of files) {
+        const path = `${prefix}/${safeFileName(file)}`;
+        const { error } = await sb.storage.from(bucket).upload(path, file, { cacheControl: '3600', upsert: false });
+        if (error) { flash('No se pudo subir una imagen: ' + error.message); continue; }
+        out.push({ path });
+      }
+      return out;
+    }
+
+    // -------- Modal de imagen (compartido) --------
+    function openImageModal(url) {
+      if (!url) return;
+      document.getElementById('imgModalImg').src = url;
+      document.getElementById('imgModal').classList.add('show');
+    }
+    function closeImageModal() {
+      document.getElementById('imgModal').classList.remove('show');
+      document.getElementById('imgModalImg').src = '';
+    }
+    document.getElementById('imgModalClose').addEventListener('click', closeImageModal);
+    document.getElementById('imgModal').addEventListener('click', (e) => { if (e.target.id === 'imgModal') closeImageModal(); });
+
+    // Input de archivo para imágenes de bloque
+    document.getElementById('blockImgInput').addEventListener('change', (e) => {
+      const files = [...e.target.files];
+      e.target.value = '';
+      if (!blockImgCtx) return;
+      addPendingBlockImages(blockImgCtx.b, blockImgCtx.card, files);
+    });
+
+    // -------- Vista mes --------
+    function shiftProgMonth(delta) {
+      let { year, month } = progMonthCursor;
+      month += delta;
+      if (month < 0) { month = 11; year--; }
+      if (month > 11) { month = 0; year++; }
+      progMonthCursor = { year, month };
+      loadProgramaMonth();
+    }
+    document.getElementById('pcalPrev').addEventListener('click', () => shiftProgMonth(-1));
+    document.getElementById('pcalNext').addEventListener('click', () => shiftProgMonth(1));
+
+    async function loadProgramaMonth() {
+      if (!progMonthCursor) { const [y, m] = progDate.split('-').map(Number); progMonthCursor = { year: y, month: m - 1 }; }
+      const { year, month } = progMonthCursor;
+      const first = `${year}-${pad2(month + 1)}-01`;
+      const lastDate = new Date(year, month + 1, 0).getDate();
+      const last = `${year}-${pad2(month + 1)}-${pad2(lastDate)}`;
+
+      progMonthData = {};
+      const { data: days } = await dayScope(sb.from('planning_days').select('id, date')).gte('date', first).lte('date', last);
+      const dayIds = [];
+      const dateByDayId = {};
+      (days || []).forEach(d => {
+        const ds = String(d.date).slice(0, 10);
+        progMonthData[ds] = { id: d.id, total: 0, completed: 0 };
+        dateByDayId[d.id] = ds;
+        dayIds.push(d.id);
+      });
+
+      const blockToDate = {};
+      const allBlockIds = [];
+      if (dayIds.length) {
+        const { data: blocks } = await sb.from('planning_blocks').select('id, day_id').in('day_id', dayIds);
+        (blocks || []).forEach(b => {
+          const ds = dateByDayId[b.day_id];
+          if (ds) { progMonthData[ds].total++; blockToDate[b.id] = ds; allBlockIds.push(b.id); }
+        });
+      }
+      if (allBlockIds.length) {
+        const { data: comps } = await sb.from('block_completions').select('block_id').eq('athlete_id', ATHLETE.id).in('block_id', allBlockIds);
+        (comps || []).forEach(c => { const ds = blockToDate[c.block_id]; if (ds && progMonthData[ds]) progMonthData[ds].completed++; });
+      }
+      renderProgMonth();
+    }
+
+    function renderProgMonth() {
+      const { year, month } = progMonthCursor;
+      document.getElementById('pcalTitle').textContent = MONTHS_LONG[month] + ' ' + year;
+      const firstDow = (new Date(year, month, 1).getDay() + 6) % 7; // Lunes = 0
+      const daysInMonth = new Date(year, month + 1, 0).getDate();
+      const cells = [];
+      for (let i = 0; i < firstDow; i++) cells.push('<div class="cal-cell empty"></div>');
+      for (let d = 1; d <= daysInMonth; d++) {
+        const ds = `${year}-${pad2(month + 1)}-${pad2(d)}`;
+        const p = progMonthData[ds];
+        const isToday = ds === TODAY;
+        let cls = '';
+        if (p) {
+          cls = 'has-plan';
+          if (p.total > 0 && p.completed >= p.total) cls += ' full';
+          else if (p.completed > 0) cls += ' partial';
+        }
+        cells.push(`<div class="cal-cell ${cls} ${isToday ? 'today' : ''}" data-date="${ds}">
+          <span class="cal-day">${d}</span>
+          ${p ? '<span class="cal-dot"></span>' : ''}
+        </div>`);
+      }
+      const grid = document.getElementById('pcalGrid');
+      grid.innerHTML = cells.join('');
+      grid.querySelectorAll('.cal-cell[data-date]').forEach(cell => {
+        cell.addEventListener('click', () => { progDate = cell.dataset.date; setProgMode('day'); loadProgramaDay(); });
+      });
+    }
+
+    // ============================================================
+    // ESTADÍSTICAS
+    // ============================================================
+    let statsPeriod = 'week';       // 'week' | 'month' | '3m'
+    let statsComps = [];            // todas las completions del atleta { block_id, completed_at }
+    let statsActiveDays = new Set();// días (por completed_at) con ≥1 completion
+    let statsPerDate = {};          // 'YYYY-MM-DD' -> { total, completed } (por día planificado)
+
+    const MONTHS_ABBR = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+
+    async function loadEstadisticas() {
+      await loadStatsData();
+      renderStatsCards();
+      renderAdherence();
+      renderHistorial();
+      renderLogros();
+    }
+
+    async function loadStatsData() {
+      // 1) Todas las completions del atleta (historial completo)
+      const { data: comps, error: cErr } = await sb.from('block_completions')
+        .select('block_id, completed_at').eq('athlete_id', ATHLETE.id);
+      statsComps = (cErr ? [] : (comps || [])).filter(c => c.completed_at);
+      statsActiveDays = new Set(statsComps.map(c => String(c.completed_at).slice(0, 10)));
+      const completedSet = new Set(statsComps.map(c => c.block_id));
+
+      // 2) Bloques del programa del atleta, con la fecha de su día (embed), para totales por día
+      let q = sb.from('planning_blocks')
+        .select('id, planning_days!inner(date, program_slug, athlete_id)')
+        .eq('planning_days.program_slug', ATHLETE.program);
+      if (IS_ASESORIA) q = q.eq('planning_days.athlete_id', ATHLETE.id);
+      const { data: blocks, error: bErr } = await q;
+
+      statsPerDate = {};
+      if (!bErr) (blocks || []).forEach(b => {
+        const pd = b.planning_days;
+        const ds = pd && pd.date ? String(pd.date).slice(0, 10) : null;
+        if (!ds) return;
+        if (!statsPerDate[ds]) statsPerDate[ds] = { total: 0, completed: 0 };
+        statsPerDate[ds].total++;
+        if (completedSet.has(b.id)) statsPerDate[ds].completed++;
+      });
+    }
+
+    function periodStart() {
+      if (statsPeriod === 'week') return mondayOf(TODAY);
+      const [y, m] = TODAY.split('-').map(Number);
+      if (statsPeriod === 'month') return `${y}-${pad2(m)}-01`;
+      // Últimos 3 meses: primer día del mes, 2 meses atrás
+      let mm = m - 2, yy = y;
+      while (mm < 1) { mm += 12; yy--; }
+      return `${yy}-${pad2(mm)}-01`;
+    }
+
+    // Racha basada en la PLANIFICACIÓN (no en días sueltos con actividad):
+    //  · Solo cuentan los días "evaluables" = los que tienen planificación cargada (total > 0).
+    //  · Días sin planificación → se ignoran (no cortan ni suman; se saltan).
+    //  · Día planificado + ≥1 bloque completado → suma a la racha.
+    //  · Día planificado + 0 bloques completados → corta la racha.
+    // La consecutividad es sobre la SECUENCIA de días planificados (los días sin plan no rompen la
+    // cadena). Se recorre en orden cronológico, salteando los huecos sin planificación.
+    function computeStreaks() {
+      // Mapa de días evaluables (planificados hasta hoy) → ¿completó al menos 1 bloque ese día?
+      const evaluable = {};
+      Object.entries(statsPerDate).forEach(([ds, p]) => {
+        if (p.total > 0 && ds <= TODAY) evaluable[ds] = p.completed > 0;
+      });
+      const evalAsc = Object.keys(evaluable).sort(); // ascendente
+      if (!evalAsc.length) return { current: 0, best: 0 };
+
+      // Racha actual: desde el día evaluable más reciente hacia atrás. Gracia para hoy: si hoy
+      // está planificado pero todavía no completó nada, no corta (podría entrenar más tarde).
+      let current = 0;
+      for (let i = evalAsc.length - 1; i >= 0; i--) {
+        const ds = evalAsc[i];
+        const done = evaluable[ds];
+        if (i === evalAsc.length - 1 && ds === TODAY && !done) continue; // gracia de hoy
+        if (done) current++;
+        else break; // día planificado sin completar → corta
+      }
+
+      // Mejor racha: corrida consecutiva más larga de días planificados-y-completados en todo
+      // el historial (los días sin planificación no cuentan ni cortan; ya no están en la lista).
+      let best = 0, run = 0;
+      evalAsc.forEach(ds => {
+        if (evaluable[ds]) { run++; if (run > best) best = run; }
+        else run = 0;
+      });
+
+      return { current, best };
+    }
+
+    function renderStatsCards() {
+      const start = periodStart();
+      const inPeriod = statsComps.filter(c => {
+        const d = String(c.completed_at).slice(0, 10);
+        return d >= start && d <= TODAY;
+      });
+      document.getElementById('stBloques').textContent = inPeriod.length;
+      document.getElementById('stSesiones').textContent = new Set(inPeriod.map(c => String(c.completed_at).slice(0, 10))).size;
+      const { current, best } = computeStreaks();
+      document.getElementById('stRacha').textContent = current;
+      document.getElementById('stMejor').textContent = best;
+    }
+
+    function renderAdherence() {
+      const monday = mondayOf(TODAY);
+      const labels = ['lun', 'mar', 'mié', 'jue', 'vie', 'sáb', 'dom'];
+      const row = document.getElementById('adhRow');
+      row.innerHTML = labels.map((lbl, i) => {
+        const ds = addDaysStr(monday, i);
+        const p = statsPerDate[ds];
+        const pct = (p && p.total > 0) ? Math.round(p.completed / p.total * 100) : null;
+        const isToday = ds === TODAY;
+        return `<div class="adh-col ${isToday ? 'today' : ''}">
+          <div class="adh-pct">${pct === null ? '–' : pct + '%'}</div>
+          <div class="adh-track"><div class="adh-fill" data-h="${pct || 0}"></div></div>
+          <div class="adh-lbl">${lbl}</div>
+        </div>`;
+      }).join('');
+      // Animar el llenado (de 0 a la altura objetivo). setTimeout (no rAF) para que
+      // funcione también si la pestaña está en segundo plano al cargar.
+      setTimeout(() => {
+        row.querySelectorAll('.adh-fill').forEach(f => { f.style.height = (f.dataset.h || 0) + '%'; });
+      }, 30);
+    }
+
+    function histLabel(ds) {
+      const [y, m, d] = ds.split('-').map(Number);
+      const wd = WD_SHORT[dowOf(ds)];
+      return `${wd.charAt(0).toUpperCase() + wd.slice(1)} ${d} ${MONTHS_ABBR[m - 1]}`;
+    }
+    function renderHistorial() {
+      const dates = Object.keys(statsPerDate).filter(d => d <= TODAY).sort().reverse().slice(0, 14);
+      const box = document.getElementById('histList');
+      if (!dates.length) { box.innerHTML = '<div class="muted">Todavía no hay sesiones planificadas.</div>'; return; }
+      box.innerHTML = '<div class="hist-list">' + dates.map(ds => {
+        const p = statsPerDate[ds];
+        const pct = p.total > 0 ? Math.round(p.completed / p.total * 100) : 0;
+        const icon = (p.total > 0 && p.completed >= p.total) ? '✅' : (p.completed > 0 ? '🟡' : '⭕');
+        return `<div class="hist-item">
+          <div class="hist-icon">${icon}</div>
+          <div class="hist-main">
+            <div class="hist-date">${histLabel(ds)}</div>
+            <div class="hist-name">${programLabel(ATHLETE.program)}</div>
+          </div>
+          <div class="hist-prog">
+            <div class="hist-count"><b>${p.completed}</b>/${p.total} bloques</div>
+            <div class="hist-bar"><div style="width:${pct}%"></div></div>
+          </div>
+        </div>`;
+      }).join('') + '</div>';
+    }
+
+    function renderLogros() {
+      const { best } = computeStreaks();
+      // Semana perfecta: alguna semana (Lun-Dom) con bloques planificados y todos completos
+      const perWeek = {};
+      Object.entries(statsPerDate).forEach(([ds, p]) => {
+        const wk = mondayOf(ds);
+        if (!perWeek[wk]) perWeek[wk] = { total: 0, completed: 0 };
+        perWeek[wk].total += p.total;
+        perWeek[wk].completed += p.completed;
+      });
+      const semanaPerfecta = Object.values(perWeek).some(w => w.total > 0 && w.completed >= w.total);
+
+      const achievements = [
+        { icon: '🔥', name: 'Primera sesión', unlocked: statsComps.length >= 1 },
+        { icon: '💪', name: 'Semana perfecta', unlocked: semanaPerfecta },
+        { icon: '🏆', name: 'Racha de 7 días', unlocked: best >= 7 },
+        { icon: '⚡', name: '30 sesiones', unlocked: statsActiveDays.size >= 30 }
+      ];
+      document.getElementById('achGrid').innerHTML = achievements.map(a => `
+        <div class="ach ${a.unlocked ? 'unlocked' : ''}">
+          <div class="ach-circle">${a.icon}<span class="ach-lock">🔒</span></div>
+          <div class="ach-name">${a.name}</div>
+        </div>`).join('');
+    }
+
+    // Selector de período (solo recalcula las 2 cards del período; el resto es histórico/semana fija)
+    document.getElementById('periodSeg').querySelectorAll('.seg-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        statsPeriod = btn.dataset.period;
+        document.querySelectorAll('#periodSeg .seg-btn').forEach(b => b.classList.toggle('active', b === btn));
+        renderStatsCards();
+      });
+    });
+
+    // ============================================================
+    // MENSAJES (chat en tiempo real, un solo canal según el programa)
+    // ============================================================
+    function athleteChannel() {
+      // Asesoría → chat privado con el coach; grupal → chat del programa
+      return IS_ASESORIA ? ('dm_' + ATHLETE.id) : ATHLETE.program;
+    }
+
+    async function enterMensajes() {
+      chatChannel = athleteChannel();
+      setChatHeader();
+      chatRenderedIds = new Set();
+      document.getElementById('chatMsgs').innerHTML = '<div class="chat-empty">Cargando…</div>';
+      await loadChatMessages();
+      await markChatRead();
+      subscribeChat();
+    }
+
+    function setChatHeader() {
+      const titleEl = document.getElementById('chatTitle');
+      const subEl = document.getElementById('chatSub');
+      if (IS_ASESORIA) {
+        titleEl.textContent = 'Chat con ' + (COACH_NAMES[ATHLETE.program] || 'tu coach');
+        subEl.textContent = 'Asesoría privada';
+      } else {
+        titleEl.textContent = 'Chat ' + programLabel(ATHLETE.program);
+        subEl.textContent = 'Cargando…';
+        sb.from('profiles').select('id', { count: 'exact', head: true })
+          .eq('program', ATHLETE.program).eq('role', 'athlete')
+          .then(({ count }) => {
+            const n = count || 0;
+            subEl.textContent = `${n} miembro${n === 1 ? '' : 's'}`;
+          });
+      }
+    }
+
+    async function loadChatMessages() {
+      const box = document.getElementById('chatMsgs');
+      const { data, error } = await sb.from('messages')
+        .select('id, from_id, channel, content, created_at, read, sender:profiles!from_id(full_name, role)')
+        .eq('channel', chatChannel)
+        .order('created_at', { ascending: false })
+        .limit(50);
+      if (error) { box.innerHTML = '<div class="chat-empty">No se pudieron cargar los mensajes. ' + esc(error.message) + '</div>'; return; }
+      const list = (data || []).slice().reverse(); // los 50 más recientes, en orden cronológico
+      list.forEach(m => { if (m.sender) chatSenderCache[m.from_id] = m.sender; });
+      renderChatMessages(list);
+    }
+
+    function renderChatMessages(list) {
+      const box = document.getElementById('chatMsgs');
+      chatRenderedIds = new Set();
+      if (!list.length) {
+        box.innerHTML = '<div class="chat-empty">Todavía no hay mensajes. ¡Escribí el primero! 👋</div>';
+        return;
+      }
+      box.innerHTML = '';
+      list.forEach(m => box.appendChild(chatMsgNode(m)));
+      scrollChatBottom();
+    }
+
+    function chatMsgNode(m) {
+      const mine = String(m.from_id) === String(ATHLETE.id);
+      const cached = chatSenderCache[m.from_id];
+      const name = mine ? (ATHLETE.full_name || 'Vos') : ((cached && cached.full_name) || 'Coach');
+      const isCoach = !mine && cached && cached.role === 'admin';
+      const row = document.createElement('div');
+      row.className = 'm-row' + (mine ? ' mine' : '');
+      row.dataset.id = m.id;
+      row.innerHTML = `
+        <div class="m-avatar">${initials(name)}</div>
+        <div class="m-wrap">
+          <div class="m-meta">${esc(name)}${isCoach ? ' <span class="coach-badge">Coach</span>' : ''} · ${fmtTime(m.created_at)}</div>
+          <div class="m-bubble">${esc(m.content)}</div>
+        </div>`;
+      chatRenderedIds.add(m.id);
+      return row;
+    }
+
+    async function appendChatMessage(row) {
+      if (!row || row.channel !== chatChannel) return;
+      if (chatRenderedIds.has(row.id)) return;   // dedupe (optimista + realtime)
+      if (String(row.from_id) !== String(ATHLETE.id) && !chatSenderCache[row.from_id]) {
+        const { data } = await sb.from('profiles').select('full_name, role').eq('id', row.from_id).single();
+        chatSenderCache[row.from_id] = data || { full_name: 'Coach', role: 'admin' };
+      }
+      const box = document.getElementById('chatMsgs');
+      const empty = box.querySelector('.chat-empty');
+      if (empty) box.innerHTML = '';
+      box.appendChild(chatMsgNode(row));
+      scrollChatBottom();
+      if (String(row.from_id) !== String(ATHLETE.id)) markChatRead();
+    }
+
+    function scrollChatBottom() {
+      const b = document.getElementById('chatMsgs');
+      b.scrollTop = b.scrollHeight;
+    }
+
+    async function sendChatMessage() {
+      const input = document.getElementById('chatInput');
+      const content = input.value.trim();
+      if (!content || !chatChannel) return;
+      input.value = '';
+      const { data, error } = await sb.from('messages')
+        .insert({ from_id: ATHLETE.id, channel: chatChannel, content })
+        .select('id, from_id, channel, content, created_at, read').single();
+      if (error) { flash('No se pudo enviar: ' + error.message); input.value = content; return; }
+      appendChatMessage(data); // optimista; realtime lo deduplica por id
+      // Notificar a los admins que el atleta escribió
+      getAdminIds().then(ids => notify(ids, {
+        type: 'message',
+        title: 'Nuevo mensaje de ' + (ATHLETE.full_name || 'un atleta'),
+        body: content.slice(0, 60),
+        link: '#mensajes'
+      }));
+    }
+
+    async function markChatRead() {
+      await sb.from('messages').update({ read: true })
+        .eq('channel', chatChannel).neq('from_id', ATHLETE.id).eq('read', false);
+    }
+
+    function subscribeChat() {
+      unsubscribeChat();
+      chatRealtime = sb.channel('chat_' + chatChannel)
+        .on('postgres_changes', {
+          event: 'INSERT', schema: 'public', table: 'messages', filter: `channel=eq.${chatChannel}`
+        }, (payload) => { appendChatMessage(payload.new); })
+        .subscribe();
+    }
+    function unsubscribeChat() {
+      if (chatRealtime) { sb.removeChannel(chatRealtime); chatRealtime = null; }
+    }
+
+    document.getElementById('chatSend').addEventListener('click', sendChatMessage);
+    document.getElementById('chatInput').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage(); }
+    });
+
+    // ============================================================
+    // PERFIL
+    // ============================================================
+    const ESTADO_LABELS = { active: 'Activo', pending: 'Pendiente', cancelled: 'Cancelado' };
+    const PROGRAM_LANDING = {
+      'crossfit': '../crossfit.html',
+      'hybrid': '../hybrid.html',
+      'corredores': '../fuerza-corredores.html',
+      'asesoria-erika': '../asesoria-erika.html',
+      'asesoria-gonza': '../asesoria-gonza.html'
+    };
+    function progKey(p) {
+      if (p === 'crossfit') return 'crossfit';
+      if (p === 'hybrid') return 'hybrid';
+      if (p === 'corredores') return 'corredores';
+      if (p === 'asesoria-erika') return 'erika';
+      if (p === 'asesoria-gonza') return 'gonza';
+      return 'otro';
+    }
+    function priceLabel(program, config) {
+      if (program === 'asesoria-erika' || program === 'asesoria-gonza') {
+        const usd = config['price_asesoria_usd'];
+        return usd ? `USD ${usd} / mes` : '—';
+      }
+      const ars = config['price_' + program + '_ars'];
+      if (!ars) return '—';
+      const n = Number(ars);
+      return `$${isNaN(n) ? ars : n.toLocaleString('es-AR')} / mes`;
+    }
+
+    function loadPerfil() {
+      document.getElementById('pfAvatar').textContent = initials(ATHLETE.full_name);
+      renderPersonalView();
+      renderSubscription();
+    }
+
+    // -------- Sección 1: datos personales --------
+    function renderPersonalView() {
+      document.getElementById('pfPersonal').innerHTML = `
+        <div class="pf-field"><span class="pf-label">Nombre completo</span>
+          <div class="pf-value">${esc(ATHLETE.full_name) || '—'}</div></div>
+        <div class="pf-field"><span class="pf-label">Email</span>
+          <div class="pf-value pf-readonly">${esc(ATHLETE.email) || '—'}</div></div>
+        <div class="pf-field"><span class="pf-label">Teléfono</span>
+          <div class="pf-value">${esc(ATHLETE.phone) || '—'}</div></div>
+        <button class="btn btn-outline pf-full" id="pfEditBtn">✏️ Editar datos</button>`;
+      document.getElementById('pfEditBtn').addEventListener('click', renderPersonalEdit);
+    }
+
+    function renderPersonalEdit() {
+      document.getElementById('pfPersonal').innerHTML = `
+        <div class="pf-error" id="pfError"></div>
+        <div class="pf-field"><label class="pf-label" for="pfName">Nombre completo</label>
+          <input class="pf-input" id="pfName" type="text" value="${esc(ATHLETE.full_name)}" autocomplete="off"></div>
+        <div class="pf-field"><span class="pf-label">Email <span class="pf-lock">(no editable)</span></span>
+          <div class="pf-value pf-readonly">${esc(ATHLETE.email) || '—'}</div></div>
+        <div class="pf-field"><label class="pf-label" for="pfPhone">Teléfono</label>
+          <input class="pf-input" id="pfPhone" type="text" value="${esc(ATHLETE.phone)}" autocomplete="off"></div>
+        <div class="pf-actions">
+          <button class="btn btn-outline" id="pfCancelBtn">Cancelar</button>
+          <button class="btn btn-filled" id="pfSaveBtn">Guardar</button>
+        </div>`;
+      document.getElementById('pfCancelBtn').addEventListener('click', renderPersonalView);
+      document.getElementById('pfSaveBtn').addEventListener('click', savePersonal);
+      const nm = document.getElementById('pfName');
+      nm.focus(); nm.setSelectionRange(nm.value.length, nm.value.length);
+    }
+
+    async function savePersonal() {
+      const full_name = document.getElementById('pfName').value.trim();
+      const phone = document.getElementById('pfPhone').value.trim();
+      const errEl = document.getElementById('pfError');
+      if (!full_name) { errEl.textContent = 'El nombre no puede quedar vacío.'; errEl.classList.add('show'); return; }
+      const btn = document.getElementById('pfSaveBtn');
+      btn.disabled = true; btn.textContent = 'Guardando…';
+      const { error } = await sb.from('profiles').update({ full_name, phone: phone || null }).eq('id', ATHLETE.id);
+      if (error) {
+        btn.disabled = false; btn.textContent = 'Guardar';
+        errEl.textContent = 'No se pudo guardar: ' + error.message; errEl.classList.add('show');
+        return;
+      }
+      ATHLETE.full_name = full_name;
+      ATHLETE.phone = phone || null;
+      // Refrescar topbar, avatar y saludo
+      const firstName = (full_name.split(' ')[0]) || 'atleta';
+      document.getElementById('userName').textContent = firstName;
+      document.getElementById('userAvatar').textContent = initials(full_name);
+      document.getElementById('pfAvatar').textContent = initials(full_name);
+      document.getElementById('greeting').innerHTML = `Hola, ${esc(firstName)} 👋`;
+      renderPersonalView();
+      flash('✓ Datos actualizados');
+    }
+
+    // -------- Sección 2: suscripción --------
+    async function renderSubscription() {
+      const box = document.getElementById('pfSubscription');
+      const status = ['active', 'pending', 'cancelled'].includes(ATHLETE.subscription_status) ? ATHLETE.subscription_status : 'pending';
+      const info = {
+        active: 'Tu suscripción se renueva automáticamente.',
+        cancelled: 'Tu suscripción está cancelada. ¿Querés volver? Contactanos.',
+        pending: 'Tu pago está siendo procesado.'
+      }[status];
+      const endRow = ATHLETE.subscription_end
+        ? `<div class="pf-srow"><span class="k">Fecha de vencimiento</span><span class="v">${fmtDayOnly(ATHLETE.subscription_end)}</span></div>` : '';
+      const backBtn = status === 'cancelled'
+        ? `<a class="btn btn-filled pf-full" href="${PROGRAM_LANDING[ATHLETE.program] || '#'}">Volver a suscribirme</a>` : '';
+      // Cancelar suscripción: solo si está activa
+      const cancelBtn = status === 'active'
+        ? `<button class="pf-cancel-btn" id="pfCancelSubBtn">Cancelar suscripción</button>` : '';
+
+      box.innerHTML = `
+        <div class="card-h">💳 Mi suscripción</div>
+        <div class="pf-sub-badges">
+          <span class="prog-badge prog-${progKey(ATHLETE.program)}">${programLabel(ATHLETE.program)}</span>
+          <span class="st-badge st-${status}">${ESTADO_LABELS[status]}</span>
+        </div>
+        <div class="pf-sub-rows">
+          <div class="pf-srow"><span class="k">Fecha de inicio</span><span class="v">${fmtDayOnly(ATHLETE.subscription_start)}</span></div>
+          ${endRow}
+          <div class="pf-srow"><span class="k">Precio del plan</span><span class="v" id="pfPrice">…</span></div>
+        </div>
+        <div class="pf-sub-info info-${status}">${info}</div>
+        ${backBtn}
+        ${cancelBtn}`;
+
+      const cancelEl = document.getElementById('pfCancelSubBtn');
+      if (cancelEl) cancelEl.addEventListener('click', openCancelModal);
+
+      // Precio desde site_config
+      const { data, error } = await sb.from('site_config').select('key, value');
+      const config = {};
+      if (!error && data) data.forEach(r => { config[r.key] = r.value; });
+      const pEl = document.getElementById('pfPrice');
+      if (pEl) pEl.textContent = priceLabel(ATHLETE.program, config);
+    }
+
+    // -------- Cancelar suscripción (confirmación) --------
+    function openCancelModal() {
+      renderCancelConfirm();
+      document.getElementById('cancelModal').classList.add('show');
+    }
+    function closeCancelModal() {
+      document.getElementById('cancelModal').classList.remove('show');
+    }
+    function renderCancelConfirm() {
+      document.getElementById('cancelModalCard').innerHTML = `
+        <h3 class="cm-title">¿Cancelar tu suscripción?</h3>
+        <p class="cm-text">Si cancelás, perdés acceso al programa al vencimiento del período actual. Esta acción no se puede deshacer.</p>
+        <div class="cm-actions">
+          <button class="btn btn-outline" id="cmBack">Volver</button>
+          <button class="cm-danger" id="cmConfirm">Sí, cancelar</button>
+        </div>`;
+      document.getElementById('cmBack').addEventListener('click', closeCancelModal);
+      document.getElementById('cmConfirm').addEventListener('click', confirmCancel);
+    }
+    function confirmCancel() {
+      const card = document.getElementById('cancelModalCard');
+      card.innerHTML = '<div class="cm-processing"><span class="cm-spinner"></span> Procesando cancelación…</div>';
+
+      // TODO: cuando se integre MP, reemplazar este bloque por:
+      // 1. fetch a Edge Function 'cancel-subscription' con mp_subscription_id
+      // 2. La Edge Function llama a MP API para cancelar
+      // 3. MP webhook notifica cancelación → Edge Function actualiza subscription_status='cancelled'
+      setTimeout(() => {
+        card.innerHTML = `
+          <h3 class="cm-title">Cancelación no disponible aún</h3>
+          <p class="cm-text">La cancelación automática estará disponible próximamente. Por ahora escribinos a WhatsApp y lo resolvemos en minutos.</p>
+          <div class="cm-actions col">
+            <a class="btn btn-filled" href="https://wa.me/5491136433379" target="_blank" rel="noopener">💬 Escribir por WhatsApp</a>
+            <button class="btn btn-outline" id="cmClose2">Cerrar</button>
+          </div>`;
+        document.getElementById('cmClose2').addEventListener('click', closeCancelModal);
+      }, 1200);
+    }
+    // Cerrar tocando el fondo del modal
+    document.getElementById('cancelModal').addEventListener('click', (e) => {
+      if (e.target.id === 'cancelModal') closeCancelModal();
+    });
+
+    // -------- Sección 3: seguridad --------
+    document.getElementById('pfChangePass').addEventListener('click', async function () {
+      const btn = this;
+      btn.disabled = true;
+      const email = ATHLETE.email;
+      if (!email) { flash('No hay un email asociado a tu cuenta.'); btn.disabled = false; return; }
+      const { error } = await sb.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin + '/app/set-password.html'
+      });
+      btn.disabled = false;
+      if (error) flash('No se pudo enviar el email: ' + error.message);
+      else flash('Te enviamos un email para cambiar tu contraseña 📧');
+    });
+    document.getElementById('pfLogout').addEventListener('click', async () => {
+      await sb.auth.signOut();
+      window.location.replace('login.html');
+    });
+
+    // ============================================================
+    // COMUNIDAD (feed del programa, en tiempo real)
+    // ============================================================
+    function enterComunidad() {
+      document.getElementById('comTitle').textContent = 'Comunidad ' + programLabel(ATHLETE.program);
+      loadComunidad();
+    }
+
+    async function loadComunidad() {
+      const feed = document.getElementById('comFeed');
+      feed.innerHTML = '<div class="com-empty">Cargando…</div>';
+      const { data: posts, error } = await sb.from('community_posts')
+        .select('id, author_id, content, created_at, author:profiles!author_id(full_name, role)')
+        .eq('program_slug', ATHLETE.program)
+        .order('created_at', { ascending: false })
+        .limit(20);
+      if (error) { feed.innerHTML = '<div class="com-empty">No se pudo cargar la comunidad. ' + esc(error.message) + '</div>'; return; }
+
+      comPosts = (posts || []).map(p => ({ ...p, comments: [], likeCount: 0, likedByMe: false, images: [] }));
+      if (!comPosts.length) {
+        feed.innerHTML = '<div class="com-empty">Todavía no hay publicaciones. ¡Sé el primero en compartir! 🎉</div>';
+        subscribeComunidad();
+        return;
+      }
+      const ids = comPosts.map(p => p.id);
+
+      // Comentarios
+      const { data: comments } = await sb.from('community_comments')
+        .select('id, post_id, content, created_at, author:profiles!author_id(full_name, role)')
+        .in('post_id', ids).order('created_at', { ascending: true });
+      const byPost = {};
+      (comments || []).forEach(c => { (byPost[c.post_id] = byPost[c.post_id] || []).push(c); });
+
+      // Likes (degrada si la tabla post_likes aún no existe)
+      const { data: likes } = await sb.from('post_likes').select('post_id, athlete_id').in('post_id', ids);
+      const likeCounts = {};
+      const myLikes = new Set();
+      (likes || []).forEach(l => {
+        likeCounts[l.post_id] = (likeCounts[l.post_id] || 0) + 1;
+        if (String(l.athlete_id) === String(ATHLETE.id)) myLikes.add(l.post_id);
+      });
+
+      // Imágenes de los posts (degrada si la tabla/bucket no existe)
+      const imgByPost = {};
+      const { data: cimgs } = await sb.from('community_images').select('id, post_id, storage_path').in('post_id', ids);
+      (cimgs || []).forEach(im => {
+        (imgByPost[im.post_id] = imgByPost[im.post_id] || []).push(
+          { id: im.id, path: im.storage_path, url: publicUrl('community-images', im.storage_path) });
+      });
+
+      comPosts.forEach(p => {
+        p.comments = byPost[p.id] || [];
+        p.likeCount = likeCounts[p.id] || 0;
+        p.likedByMe = myLikes.has(p.id);
+        p.images = imgByPost[p.id] || [];
+      });
+      renderComFeed();
+      subscribeComunidad();
+    }
+
+    function renderComFeed() {
+      const feed = document.getElementById('comFeed');
+      if (!comPosts.length) {
+        feed.innerHTML = '<div class="com-empty">Todavía no hay publicaciones. ¡Sé el primero en compartir! 🎉</div>';
+        return;
+      }
+      feed.innerHTML = comPosts.map(postCardHtml).join('');
+      comPosts.forEach(wirePost);
+    }
+
+    function postCardHtml(p) {
+      const isMine = String(p.author_id) === String(ATHLETE.id);
+      const isCoach = p.author && p.author.role === 'admin';
+      const name = (p.author && p.author.full_name) || 'Atleta';
+      const expanded = comExpanded.has(p.id);
+      return `<div class="com-post" data-id="${esc(p.id)}">
+        <div class="com-head">
+          <div class="com-avatar">${initials(name)}</div>
+          <div class="com-meta">
+            <div class="com-author">${esc(name)}${isCoach ? ' <span class="coach-badge">Coach</span>' : ''}</div>
+            <div class="com-date">${fmtRelative(p.created_at)}</div>
+          </div>
+          ${isMine ? '<button class="com-del" title="Eliminar">🗑️</button>' : ''}
+        </div>
+        <div class="com-text">${esc(p.content)}</div>
+        ${comImgsHtml(p)}
+        <div class="com-actions">
+          <button class="com-like ${p.likedByMe ? 'liked' : ''}">
+            <span class="com-heart">👍</span> <span class="com-like-n">${p.likeCount}</span>
+          </button>
+          <span class="com-cn">💬 <span class="com-cn-n">${p.comments.length}</span></span>
+          <button class="com-toggle">${expanded ? 'Ocultar comentarios' : 'Ver comentarios'}</button>
+        </div>
+        <div class="com-comments" ${expanded ? '' : 'style="display:none;"'}>
+          <div class="com-clist">${p.comments.map(comCommentHtml).join('')}</div>
+          <div class="com-cbar">
+            <input class="com-cinput" type="text" placeholder="Escribí un comentario…" autocomplete="off">
+            <button class="com-cbtn">Comentar</button>
+          </div>
+        </div>
+      </div>`;
+    }
+
+    // Grilla de imágenes del post (máx 3 columnas), miniaturas clickeables
+    function comImgsHtml(p) {
+      if (!p.images || !p.images.length) return '';
+      const cols = Math.min(3, p.images.length);
+      return `<div class="com-imgs" style="grid-template-columns:repeat(${cols},1fr)">` +
+        p.images.map(im => `<div class="com-img" data-url="${esc(im.url)}"><img src="${esc(im.url)}" alt="foto"></div>`).join('') +
+        `</div>`;
+    }
+
+    function comCommentHtml(c) {
+      const name = (c.author && c.author.full_name) || 'Atleta';
+      const isCoach = c.author && c.author.role === 'admin';
+      return `<div class="com-c" data-id="${esc(c.id)}">
+        <div class="com-c-avatar">${initials(name)}</div>
+        <div class="com-c-body">
+          <div class="com-c-meta">${esc(name)}${isCoach ? ' <span class="coach-badge">Coach</span>' : ''} · ${fmtRelative(c.created_at)}</div>
+          <div class="com-c-text">${esc(c.content)}</div>
+        </div>
+      </div>`;
+    }
+
+    function findPostCard(id) { return document.querySelector('.com-post[data-id="' + id + '"]'); }
+
+    function wirePost(p) {
+      const card = findPostCard(p.id);
+      if (!card) return;
+      card.querySelector('.com-like').addEventListener('click', () => toggleLike(p, card));
+      card.querySelector('.com-toggle').addEventListener('click', () => toggleComments(p, card));
+      const del = card.querySelector('.com-del');
+      if (del) del.addEventListener('click', () => deletePost(p, card));
+      const cbtn = card.querySelector('.com-cbtn');
+      const cinput = card.querySelector('.com-cinput');
+      if (cbtn) cbtn.addEventListener('click', () => sendComment(p, card));
+      if (cinput) cinput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendComment(p, card); }
+      });
+      card.querySelectorAll('.com-img').forEach(el =>
+        el.addEventListener('click', () => openImageModal(el.dataset.url)));
+    }
+
+    // -------- Likes (toggle optimista) --------
+    async function toggleLike(p, card) {
+      const heart = card.querySelector('.com-heart');
+      heart.classList.remove('pop'); void heart.offsetWidth; heart.classList.add('pop');
+      const wasLiked = p.likedByMe;
+      p.likedByMe = !wasLiked;
+      p.likeCount = Math.max(0, p.likeCount + (wasLiked ? -1 : 1));
+      updateLikeUI(card, p);
+      let error;
+      if (wasLiked) {
+        ({ error } = await sb.from('post_likes').delete().eq('post_id', p.id).eq('athlete_id', ATHLETE.id));
+      } else {
+        ({ error } = await sb.from('post_likes').insert({ post_id: p.id, athlete_id: ATHLETE.id }));
+        // Avisar al autor del post (si no es el propio atleta)
+        if (!error && p.author_id && String(p.author_id) !== String(ATHLETE.id)) {
+          notify(p.author_id, {
+            type: 'like',
+            title: (ATHLETE.full_name || 'Alguien') + ' le dio 👍 a tu post',
+            body: (p.content || '').slice(0, 40),
+            link: '#comunidad'
+          });
+        }
+      }
+      if (error) {
+        // revertir
+        p.likedByMe = wasLiked;
+        p.likeCount = Math.max(0, p.likeCount + (wasLiked ? 1 : -1));
+        updateLikeUI(card, p);
+        flash('No se pudo actualizar el like.');
+      }
+    }
+    function updateLikeUI(card, p) {
+      card.querySelector('.com-like').classList.toggle('liked', p.likedByMe);
+      card.querySelector('.com-like-n').textContent = p.likeCount;
+    }
+
+    // -------- Comentarios --------
+    function toggleComments(p, card) {
+      const section = card.querySelector('.com-comments');
+      const toggleBtn = card.querySelector('.com-toggle');
+      if (comExpanded.has(p.id)) {
+        comExpanded.delete(p.id);
+        section.style.display = 'none';
+        toggleBtn.textContent = 'Ver comentarios';
+      } else {
+        comExpanded.add(p.id);
+        section.style.display = '';
+        toggleBtn.textContent = 'Ocultar comentarios';
+        card.querySelector('.com-cinput').focus();
+      }
+    }
+
+    async function sendComment(p, card) {
+      const input = card.querySelector('.com-cinput');
+      const content = input.value.trim();
+      if (!content) return;
+      input.value = '';
+      const { data, error } = await sb.from('community_comments')
+        .insert({ post_id: p.id, author_id: ATHLETE.id, content })
+        .select('id, post_id, content, created_at, author:profiles!author_id(full_name, role)').single();
+      if (error) { flash('No se pudo comentar: ' + error.message); input.value = content; return; }
+      if (!data.author) data.author = { full_name: ATHLETE.full_name, role: ATHLETE.role };
+      addCommentToPost(p, card, data); // optimista; realtime deduplica por id
+      // Avisar al autor del post (si no es el propio atleta)
+      if (p.author_id && String(p.author_id) !== String(ATHLETE.id)) {
+        notify(p.author_id, {
+          type: 'comment',
+          title: (ATHLETE.full_name || 'Alguien') + ' comentó tu publicación',
+          body: content.slice(0, 60),
+          link: '#comunidad'
+        });
+      }
+    }
+
+    function addCommentToPost(p, card, c) {
+      if (p.comments.some(x => String(x.id) === String(c.id))) return; // dedupe
+      p.comments.push(c);
+      card.querySelector('.com-cn-n').textContent = p.comments.length;
+      if (comExpanded.has(p.id)) {
+        const list = card.querySelector('.com-clist');
+        const wrap = document.createElement('div');
+        wrap.innerHTML = comCommentHtml(c);
+        const node = wrap.firstElementChild;
+        node.classList.add('fade-in');
+        list.appendChild(node);
+      }
+    }
+
+    // -------- Eliminar post propio --------
+    async function deletePost(p, card) {
+      if (!confirm('¿Eliminar tu publicación? Esta acción no se puede deshacer.')) return;
+      const { error } = await sb.from('community_posts').delete().eq('id', p.id);
+      if (error) { flash('No se pudo eliminar: ' + error.message); return; }
+      comPosts = comPosts.filter(x => x.id !== p.id);
+      comExpanded.delete(p.id);
+      card.remove();
+      if (!comPosts.length) renderComFeed();
+    }
+
+    // -------- Nueva publicación (modal) --------
+    let npPendingFiles = [];
+    let npPrevUrls = [];
+
+    function openNewPostModal() {
+      document.getElementById('npText').value = '';
+      clearNpImages();
+      document.getElementById('npModal').classList.add('show');
+      setTimeout(() => document.getElementById('npText').focus(), 50);
+    }
+    function closeNewPostModal() {
+      document.getElementById('npModal').classList.remove('show');
+      clearNpImages();
+    }
+    function clearNpImages() {
+      npPrevUrls.forEach(u => URL.revokeObjectURL(u));
+      npPrevUrls = []; npPendingFiles = [];
+      const box = document.getElementById('npPreview');
+      if (box) box.innerHTML = '';
+    }
+    function addPendingNpImages(files) {
+      files = files.filter(f => f.type && f.type.indexOf('image/') === 0);
+      const room = MAX_IMAGES - npPendingFiles.length;
+      if (room <= 0) { flash(`Máximo ${MAX_IMAGES} imágenes por publicación.`); return; }
+      if (files.length > room) { flash(`Solo podés agregar ${room} imagen(es) más (máx ${MAX_IMAGES}).`); files = files.slice(0, room); }
+      npPendingFiles.push(...files);
+      renderNpPreviews();
+    }
+    function renderNpPreviews() {
+      const box = document.getElementById('npPreview');
+      npPrevUrls.forEach(u => URL.revokeObjectURL(u)); npPrevUrls = [];
+      box.innerHTML = npPendingFiles.map((f, i) => {
+        const u = URL.createObjectURL(f); npPrevUrls.push(u);
+        return `<div class="photo-prev-item"><img src="${u}"><button type="button" class="photo-prev-x" data-idx="${i}">×</button></div>`;
+      }).join('');
+    }
+    document.getElementById('npAddPhotos').addEventListener('click', () => {
+      if (npPendingFiles.length >= MAX_IMAGES) { flash(`Máximo ${MAX_IMAGES} imágenes por publicación.`); return; }
+      const inp = document.getElementById('npImgInput'); inp.value = ''; inp.click();
+    });
+    document.getElementById('npImgInput').addEventListener('change', (e) => {
+      const files = [...e.target.files]; e.target.value = '';
+      addPendingNpImages(files);
+    });
+    document.getElementById('npPreview').addEventListener('click', (e) => {
+      const x = e.target.closest('.photo-prev-x');
+      if (!x) return;
+      npPendingFiles.splice(Number(x.dataset.idx), 1);
+      renderNpPreviews();
+    });
+
+    async function publishPost() {
+      const ta = document.getElementById('npText');
+      const content = ta.value.trim();
+      if (!content) { ta.focus(); return; }
+      const btn = document.getElementById('npPublish');
+      btn.disabled = true; btn.textContent = 'Publicando…';
+      const { data, error } = await sb.from('community_posts')
+        .insert({ author_id: ATHLETE.id, program_slug: ATHLETE.program, content })
+        .select('id, author_id, content, created_at, author:profiles!author_id(full_name, role)').single();
+      if (error) { btn.disabled = false; btn.textContent = 'Publicar'; flash('No se pudo publicar: ' + error.message); return; }
+      if (!data.author) data.author = { full_name: ATHLETE.full_name, role: ATHLETE.role };
+      // Subir imágenes al bucket 'community-images'
+      data.images = [];
+      if (npPendingFiles.length) {
+        const uploaded = await uploadImages('community-images', `${ATHLETE.id}/${data.id}`, npPendingFiles);
+        if (uploaded.length) {
+          const rows = uploaded.map(u => ({ post_id: data.id, author_id: ATHLETE.id, storage_path: u.path }));
+          const { data: ins, error: insErr } = await sb.from('community_images').insert(rows).select('id, storage_path');
+          if (insErr) flash('No se pudieron guardar las imágenes: ' + insErr.message);
+          else data.images = (ins || []).map(im => ({ id: im.id, path: im.storage_path, url: publicUrl('community-images', im.storage_path) }));
+        }
+      }
+      btn.disabled = false; btn.textContent = 'Publicar';
+      prependPost(data); // optimista; realtime deduplica
+      closeNewPostModal();
+    }
+
+    function prependPost(raw) {
+      if (comPosts.some(x => String(x.id) === String(raw.id))) return; // dedupe
+      const p = { ...raw, comments: raw.comments || [], likeCount: raw.likeCount || 0, likedByMe: !!raw.likedByMe, images: raw.images || [] };
+      comPosts.unshift(p);
+      const feed = document.getElementById('comFeed');
+      const empty = feed.querySelector('.com-empty');
+      if (empty) feed.innerHTML = '';
+      const wrap = document.createElement('div');
+      wrap.innerHTML = postCardHtml(p);
+      const node = wrap.firstElementChild;
+      node.classList.add('fade-in');
+      feed.prepend(node);
+      wirePost(p);
+    }
+
+    document.getElementById('comBack').addEventListener('click', () => showView('inicio'));
+    document.getElementById('comNewBtn').addEventListener('click', openNewPostModal);
+    document.getElementById('npCancel').addEventListener('click', closeNewPostModal);
+    document.getElementById('npPublish').addEventListener('click', publishPost);
+    document.getElementById('npModal').addEventListener('click', (e) => { if (e.target.id === 'npModal') closeNewPostModal(); });
+
+    // -------- Realtime --------
+    function subscribeComunidad() {
+      unsubscribeComunidad();
+      comPostsRealtime = sb.channel('community_' + ATHLETE.program)
+        .on('postgres_changes', {
+          event: 'INSERT', schema: 'public', table: 'community_posts', filter: `program_slug=eq.${ATHLETE.program}`
+        }, (payload) => onNewPost(payload.new))
+        .subscribe();
+      comCommentsRealtime = sb.channel('community_comments_rt')
+        .on('postgres_changes', {
+          event: 'INSERT', schema: 'public', table: 'community_comments'
+        }, (payload) => onNewComment(payload.new))
+        .subscribe();
+    }
+    function unsubscribeComunidad() {
+      if (comPostsRealtime) { sb.removeChannel(comPostsRealtime); comPostsRealtime = null; }
+      if (comCommentsRealtime) { sb.removeChannel(comCommentsRealtime); comCommentsRealtime = null; }
+    }
+    async function onNewPost(row) {
+      if (comPosts.some(x => String(x.id) === String(row.id))) return; // ya está (propio optimista)
+      const { data } = await sb.from('profiles').select('full_name, role').eq('id', row.author_id).single();
+      row.author = data || { full_name: 'Atleta', role: 'athlete' };
+      const { data: imgs } = await sb.from('community_images').select('id, storage_path').eq('post_id', row.id);
+      row.images = (imgs || []).map(im => ({ id: im.id, path: im.storage_path, url: publicUrl('community-images', im.storage_path) }));
+      prependPost(row);
+    }
+    async function onNewComment(row) {
+      const p = comPosts.find(x => String(x.id) === String(row.post_id));
+      if (!p) return; // comentario de un post que no está en el feed
+      if (p.comments.some(c => String(c.id) === String(row.id))) return; // ya está (propio optimista)
+      const { data } = await sb.from('profiles').select('full_name, role').eq('id', row.author_id).single();
+      row.author = data || { full_name: 'Atleta', role: 'athlete' };
+      const card = findPostCard(p.id);
+      if (card) addCommentToPost(p, card, row);
+    }
+
+    // ============================================================
+    // NOTIFICACIONES (campana + realtime)
+    // ============================================================
+    // Inserta una notificación para uno o varios usuarios (degrada en silencio
+    // si la tabla no existe todavía). No lanza; nunca rompe el flujo que la llama.
+    async function notify(userIds, payload) {
+      const ids = (Array.isArray(userIds) ? userIds : [userIds]).filter(Boolean);
+      if (!ids.length) return;
+      const rows = ids.map(uid => ({
+        user_id: uid,
+        type: payload.type,
+        title: payload.title,
+        body: payload.body || null,
+        link: payload.link || null
+      }));
+      const { error } = await sb.from('notifications').insert(rows);
+      if (error) console.warn('notify:', error.message);
+    }
+
+    // Ids de todos los admins (para avisarles de mensajes nuevos del atleta)
+    async function getAdminIds() {
+      const { data } = await sb.from('profiles').select('id').eq('role', 'admin');
+      return (data || []).map(r => r.id);
+    }
+
+    async function loadNotifs() {
+      const { data, error } = await sb.from('notifications')
+        .select('id, type, title, body, link, read, created_at')
+        .eq('user_id', ATHLETE.id)
+        .order('created_at', { ascending: false })
+        .limit(30);
+      if (error) { NOTIFS = []; renderNotifs(); updateNotifBadge(); return; } // degrada si no existe la tabla
+      NOTIFS = data || [];
+      notifUnread = NOTIFS.filter(n => !n.read).length;
+      renderNotifs();
+      updateNotifBadge();
+    }
+
+    function updateNotifBadge(animate) {
+      const badge = document.getElementById('notifBadge');
+      if (notifUnread > 0) {
+        badge.textContent = notifUnread > 99 ? '99+' : notifUnread;
+        badge.classList.remove('hidden');
+        if (animate) { badge.classList.remove('pop'); void badge.offsetWidth; badge.classList.add('pop'); }
+      } else {
+        badge.classList.add('hidden');
+      }
+      document.getElementById('notifMarkAll').disabled = notifUnread === 0;
+    }
+
+    function notifItemHtml(n) {
+      const ico = NOTIF_ICONS[n.type] || '🔔';
+      return `<div class="notif-item${n.read ? '' : ' unread'}" data-id="${esc(n.id)}">
+        <span class="notif-ico">${ico}</span>
+        <div class="notif-body-wrap">
+          <div class="notif-c-title">${esc(n.title)}</div>
+          ${n.body ? `<div class="notif-c-body">${esc(n.body)}</div>` : ''}
+          <div class="notif-c-time">${esc(fmtRelative(n.created_at))}</div>
+        </div>
+      </div>`;
+    }
+
+    function renderNotifs() {
+      const list = document.getElementById('notifList');
+      if (!NOTIFS.length) {
+        list.innerHTML = '<div class="notif-empty">No tenés notificaciones nuevas</div>';
+        return;
+      }
+      list.innerHTML = NOTIFS.map(notifItemHtml).join('');
+    }
+
+    // Notificación entrante por realtime (o auto-generada) → se agrega arriba
+    function prependNotif(n) {
+      if (!n || NOTIFS.some(x => String(x.id) === String(n.id))) return; // dedupe
+      NOTIFS.unshift(n);
+      if (NOTIFS.length > 60) NOTIFS = NOTIFS.slice(0, 60);
+      if (!n.read) notifUnread++;
+      renderNotifs();
+      updateNotifBadge(true);
+    }
+
+    function notifNavigate(link) {
+      const view = String(link || '').replace(/^#/, '');
+      if (view === 'programa') showView('programa');
+      else if (view === 'mensajes') showView('mensajes');
+      else if (view === 'comunidad') showView('comunidad');
+      else showView('inicio');
+    }
+
+    async function onNotifItemClick(id) {
+      const n = NOTIFS.find(x => String(x.id) === String(id));
+      closeNotifDropdown();
+      if (!n) return;
+      if (!n.read) {
+        n.read = true;
+        notifUnread = Math.max(0, notifUnread - 1);
+        renderNotifs();
+        updateNotifBadge();
+        sb.from('notifications').update({ read: true }).eq('id', n.id).then(({ error }) => {
+          if (error) console.warn('marcar leída:', error.message);
+        });
+      }
+      if (n.link) notifNavigate(n.link);
+    }
+
+    async function markAllNotifsRead() {
+      if (!notifUnread) return;
+      NOTIFS.forEach(n => n.read = true);
+      notifUnread = 0;
+      renderNotifs();
+      updateNotifBadge();
+      const { error } = await sb.from('notifications').update({ read: true })
+        .eq('user_id', ATHLETE.id).eq('read', false);
+      if (error) console.warn('marcar todas:', error.message);
+    }
+
+    function openNotifDropdown() {
+      document.getElementById('notifDropdown').classList.add('open');
+      notifOpen = true;
+    }
+    function closeNotifDropdown() {
+      document.getElementById('notifDropdown').classList.remove('open');
+      notifOpen = false;
+    }
+    function toggleNotifDropdown() { notifOpen ? closeNotifDropdown() : openNotifDropdown(); }
+
+    function subscribeNotifs() {
+      unsubscribeNotifs();
+      notifRealtime = sb.channel('notifs_' + ATHLETE.id)
+        .on('postgres_changes', {
+          event: 'INSERT', schema: 'public', table: 'notifications',
+          filter: `user_id=eq.${ATHLETE.id}`
+        }, (payload) => prependNotif(payload.new))
+        .subscribe();
+    }
+    function unsubscribeNotifs() {
+      if (notifRealtime) { sb.removeChannel(notifRealtime); notifRealtime = null; }
+    }
+
+    // Avisa al atleta si hoy tiene una sesión cargada (una vez por día, dedupe por la propia tabla)
+    async function maybeNotifyTodayPlanning() {
+      if (planningNotifChecked) return;
+      planningNotifChecked = true;
+      const { data: days, error } = await dayScope(sb.from('planning_days').select('id')).eq('date', TODAY).limit(1);
+      if (error || !days || !days[0]) return;
+      const { count } = await sb.from('planning_blocks')
+        .select('id', { count: 'exact', head: true }).eq('day_id', days[0].id);
+      const nblocks = count || 0;
+      if (!nblocks) return;
+      // ¿ya avisamos hoy? (dedupe usando la propia tabla de notificaciones)
+      const { data: prev } = await sb.from('notifications').select('id')
+        .eq('user_id', ATHLETE.id).eq('type', 'planning')
+        .gte('created_at', TODAY + 'T00:00:00').limit(1);
+      if (prev && prev.length) return;
+      const { data, error: insErr } = await sb.from('notifications').insert({
+        user_id: ATHLETE.id, type: 'planning',
+        title: '¡Tenés sesión para hoy!',
+        body: `Tu planificación de hoy está lista. ${nblocks} bloque${nblocks === 1 ? '' : 's'} te esperan.`,
+        link: '#programa'
+      }).select('id, type, title, body, link, read, created_at').single();
+      if (!insErr && data) prependNotif(data); // optimista; realtime deduplica por id
+    }
+
+    // Listeners de la campana
+    document.getElementById('notifBell').addEventListener('click', (e) => { e.stopPropagation(); toggleNotifDropdown(); });
+    document.getElementById('notifMarkAll').addEventListener('click', (e) => { e.stopPropagation(); markAllNotifsRead(); });
+    document.getElementById('notifList').addEventListener('click', (e) => {
+      const item = e.target.closest('.notif-item');
+      if (item) onNotifItemClick(item.dataset.id);
+    });
+    // Cerrar al clickear fuera del dropdown
+    document.addEventListener('click', (e) => {
+      if (notifOpen && !e.target.closest('.notif-wrap')) closeNotifDropdown();
+    });
+
+    // ============================================================
+    // Auth guard + arranque
+    // ============================================================
+    async function init() {
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session || !session.user) { window.location.replace('login.html'); return; }
+
+      const { data: profile, error } = await sb.from('profiles').select('*').eq('id', session.user.id).single();
+      if (error || !profile) { window.location.replace('login.html'); return; }
+      if (profile.role === 'admin') { window.location.replace('../admin/index.html'); return; }
+
+      ATHLETE = profile;
+      IS_ASESORIA = isAsesoriaProgram(profile.program);
+      progDate = TODAY;
+
+      const firstName = (profile.full_name || '').split(' ')[0] || 'atleta';
+      document.getElementById('greeting').innerHTML = `Hola, ${esc(firstName)} 👋`;
+      document.getElementById('userName').textContent = firstName;
+      document.getElementById('userAvatar').textContent = initials(profile.full_name);
+
+      loadNotifs();
+      subscribeNotifs();
+
+      showView('inicio');
+      loadInicio();
+    }
+
+    init();
+  </script>
+</body>
+</html>

@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HB Performance — Entrenamiento híbrido y asesorías online</title>
+<meta name="description" content="HB Performance: gimnasio de entrenamiento híbrido y coaching online. Fuerza, potencia y rendimiento con método.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Playfair+Display:ital,wght@1,400;1,600;1,700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0A0A0A;
+    --bg-alt: #1A1A1A;
+    --bg-footer: #0D0D0D;
+    --placeholder: #2A2A2A;
+    --placeholder-text: #666666;
+    --accent: #F5A800;
+    --text: #FFFFFF;
+    --text-secondary: #AAAAAA;
+    --font-display: 'Inter', sans-serif;
+    --font-body: 'Inter', sans-serif;
+    --font-accent: 'Playfair Display', serif;
+    --maxw: 1200px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; scroll-padding-top: 80px; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    line-height: 1.6;
+    overflow-x: hidden;
+  }
+
+  h1, h2, h3, h4 {
+    font-family: var(--font-display);
+    font-weight: 800;
+    line-height: 1.04;
+    letter-spacing: -1px;
+  }
+
+  /* Playfair Display italic accent words */
+  .accent {
+    font-family: var(--font-accent);
+    font-style: italic;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 0;
+  }
+
+  a { color: inherit; text-decoration: none; }
+
+  img { max-width: 100%; display: block; }
+
+  .container {
+    width: 100%;
+    max-width: var(--maxw);
+    margin: 0 auto;
+    padding: 0 24px;
+  }
+
+  /* ---------- Placeholder images ---------- */
+  .placeholder {
+    background: var(--placeholder);
+    color: var(--placeholder-text);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    font-family: var(--font-body);
+    font-size: 0.85rem;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    min-height: 120px;
+  }
+
+  /* ---------- Buttons ---------- */
+  .btn {
+    display: inline-block;
+    font-family: var(--font-display);
+    text-transform: uppercase;
+    font-weight: 700;
+    letter-spacing: 1px;
+    font-size: 1.05rem;
+    padding: 14px 28px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: transform .2s ease, background .2s ease, color .2s ease, box-shadow .2s ease;
+    border: 2px solid var(--accent);
+    background: transparent;
+    color: var(--accent);
+  }
+  .btn-filled {
+    background: var(--accent);
+    color: #0A0A0A;
+  }
+  .btn-filled:hover {
+    box-shadow: 0 0 22px rgba(245,168,0,0.45);
+    transform: translateY(-2px);
+  }
+  .btn-outline:hover {
+    background: var(--accent);
+    color: #0A0A0A;
+    transform: translateY(-2px);
+  }
+  .btn-link {
+    background: none;
+    border: none;
+    color: var(--accent);
+    padding: 0;
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: gap .2s ease;
+  }
+  .btn-link:hover { gap: 12px; }
+
+  /* ---------- Logo ---------- */
+  .logo {
+    font-family: var(--font-display);
+    color: var(--accent);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    line-height: 1;
+  }
+  .logo .logo-accent {
+    font-family: var(--font-accent);
+    font-style: italic;
+    font-weight: 600;
+    text-transform: none;
+    letter-spacing: 0;
+  }
+  /* Logo en imagen (logo.png). Alto fijo, ancho proporcional. */
+  .logo-img {
+    display: block;
+    height: 54px;
+    width: auto;
+    object-fit: contain;
+  }
+  .logo-img--footer { height: 110px; margin: 0 auto; }
+
+  /* Logo horizontal (navbar): HB + PERFORMANCE al lado */
+  .logo-lockup { display: flex; align-items: center; gap: 10px; }
+  .logo-lockup .logo-hb   { height: 48px; width: auto; display: block; }
+  .logo-lockup .logo-perf { height: 20px; width: auto; display: block; }
+  .logo-lockup .logo-text { display: none; }
+  .logo-lockup.logo--fallback .logo-hb,
+  .logo-lockup.logo--fallback .logo-perf { display: none; }
+  .logo-lockup.logo--fallback .logo-text { display: inline; }
+
+  /* ---------- Navbar ---------- */
+  .navbar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 1000;
+    background: rgba(10,10,10,0.92);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid rgba(245,168,0,0.15);
+  }
+  .nav-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 72px;
+  }
+  .navbar .logo { font-size: 1.6rem; }
+  .nav-links {
+    display: flex;
+    gap: 32px;
+    list-style: none;
+  }
+  .nav-links a {
+    font-family: var(--font-display);
+    text-transform: uppercase;
+    font-weight: 600;
+    letter-spacing: 1px;
+    font-size: 1.05rem;
+    color: var(--text);
+    transition: color .2s ease;
+  }
+  .nav-links a:hover { color: var(--accent); }
+
+  /* Botón "Ingresar" — separado del resto de los links por un divisor */
+  .nav-login {
+    display: flex;
+    align-items: center;
+    margin-left: 4px;
+    padding-left: 28px;
+    border-left: 1px solid rgba(255,255,255,0.14);
+  }
+  .nav-links a.btn-ingresar {
+    display: inline-block;
+    font-family: var(--font-display);
+    text-transform: uppercase;
+    font-weight: 700;
+    letter-spacing: 1px;
+    font-size: 0.85rem;
+    color: var(--accent);
+    background: transparent;
+    border: 2px solid var(--accent);
+    border-radius: 6px;
+    padding: 8px 20px;
+    transition: background .2s ease, color .2s ease;
+  }
+  .nav-links a.btn-ingresar:hover {
+    background: var(--accent);
+    color: #0A0A0A;
+  }
+
+  .hamburger {
+    display: none;
+    flex-direction: column;
+    gap: 5px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 6px;
+  }
+  .hamburger span {
+    width: 26px;
+    height: 3px;
+    background: var(--accent);
+    border-radius: 2px;
+    transition: transform .3s ease, opacity .3s ease;
+  }
+  .hamburger.open span:nth-child(1) { transform: translateY(8px) rotate(45deg); }
+  .hamburger.open span:nth-child(2) { opacity: 0; }
+  .hamburger.open span:nth-child(3) { transform: translateY(-8px) rotate(-45deg); }
+
+  /* ---------- Hero ---------- */
+  .hero {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    position: relative;
+    overflow: hidden;
+    padding: 100px 0 60px;
+    background: var(--bg);
+  }
+
+  /* Parallax crossfade photo slideshow */
+  .hero-slideshow {
+    position: absolute;
+    top: -10%; left: 0;
+    width: 100%;
+    height: 120%;
+    z-index: 0;
+    overflow: hidden;
+    will-change: transform;
+  }
+  .hero-slide {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center center;
+    opacity: 0;
+    transition: opacity 1.2s ease-in-out;
+    will-change: opacity, transform;
+  }
+  .hero-slide.pos-top { object-position: top center; }
+  .hero-slide.pos-center { object-position: center center; }
+  .hero-slide.active {
+    opacity: 1;
+    animation: kenburns 10s ease-out forwards;
+  }
+  @keyframes kenburns {
+    from { transform: scale(1); }
+    to   { transform: scale(1.05); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .hero-slide.active { animation: none; }
+  }
+  .hero-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    background: rgba(0, 0, 0, 0.52);
+    pointer-events: none;
+  }
+
+  .hero-content { position: relative; z-index: 2; max-width: 820px; }
+  .hero .badge {
+    display: inline-block;
+    font-family: var(--font-body);
+    font-weight: 600;
+    font-size: 0.8rem;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--accent);
+    background: rgba(245,168,0,0.08);
+    border: 1px solid rgba(245,168,0,0.35);
+    border-radius: 999px;
+    padding: 8px 18px;
+    margin-bottom: 28px;
+  }
+  .hero h1 {
+    color: var(--text);
+    font-weight: 800;
+    font-size: clamp(3.25rem, 9vw, 5.5rem);
+    margin-bottom: 22px;
+  }
+  .hero h1 .accent { font-weight: 600; }
+  .hero .subhead {
+    color: var(--text);
+    font-size: clamp(1.1rem, 2.5vw, 1.5rem);
+    font-weight: 500;
+    margin-bottom: 36px;
+  }
+  .hero-ctas { display: flex; gap: 16px; flex-wrap: wrap; }
+
+  /* ---------- Sections ---------- */
+  section { padding: 96px 0; }
+  .section-title {
+    font-size: clamp(2.2rem, 5vw, 3rem);
+    color: var(--text);
+    margin-bottom: 8px;
+  }
+  .section-title .accent { color: var(--accent); }
+  .divider {
+    width: 64px;
+    height: 4px;
+    background: var(--accent);
+    border-radius: 2px;
+    margin: 16px 0 40px;
+  }
+  .divider.center { margin-left: auto; margin-right: auto; }
+  .section-subtitle {
+    color: var(--text-secondary);
+    font-size: 1.15rem;
+    margin-bottom: 40px;
+    margin-top: -16px;
+  }
+  .text-center { text-align: center; }
+
+  /* ---------- Programas ---------- */
+  .cards-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 28px;
+  }
+  .program-card {
+    background: var(--bg-alt);
+    border-left: 3px solid var(--accent);
+    border-radius: 6px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transition: box-shadow .25s ease, transform .25s ease;
+  }
+  .program-card:hover {
+    box-shadow: 0 0 20px rgba(245,168,0,0.4);
+    transform: translateY(-2px);
+  }
+  .program-card .placeholder { aspect-ratio: 16 / 10; min-height: 0; }
+
+  /* Imagen de portada de cada card (16:9, cubre; bordes redondeados vía overflow del card) */
+  .program-card .card-cover {
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    object-fit: cover;
+    object-position: center;
+    display: block;
+  }
+
+  .program-card .card-body { padding: 24px; display: flex; flex-direction: column; flex: 1; }
+  .program-card h3 { font-size: 1.7rem; margin-bottom: 12px; }
+  .program-card p { color: var(--text-secondary); font-size: 0.98rem; margin-bottom: 22px; flex: 1; }
+
+  /* Mobile: cards más compactas */
+  @media (max-width: 768px) {
+    .cards-grid { gap: 20px; }
+    .program-card .card-cover { aspect-ratio: auto; height: 200px; }
+    .program-card .card-body { padding: 18px 20px; }
+    .program-card h3 { font-size: 1.5rem; margin-bottom: 8px; }
+    .program-card p { font-size: 0.95rem; margin-bottom: 16px; }
+  }
+
+  /* ---------- Asesorías ---------- */
+  .coaches-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 32px;
+  }
+  .coach-card {
+    background: #000;
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    transition: transform .25s ease, box-shadow .25s ease;
+  }
+  .coach-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 12px 30px rgba(0,0,0,0.5), 0 0 18px rgba(245,168,0,0.2);
+  }
+  .coach-card .placeholder { aspect-ratio: 3 / 4; min-height: 0; }
+  .coach-card .coach-photo {
+    width: 100%;
+    aspect-ratio: 3 / 4;
+    object-fit: cover;
+    object-position: 50% 12%;
+    display: block;
+    background: radial-gradient(circle at 50% 30%, #232323 0%, #0d0d0d 75%);
+  }
+  .coach-card .card-body { padding: 28px; display: flex; flex-direction: column; flex: 1; }
+  .coach-card h3 { font-size: 2rem; color: var(--accent); margin-bottom: 12px; }
+  .coach-card p { color: var(--text-secondary); margin-bottom: 24px; flex: 1; }
+
+  /* ---------- Testimonios (muro de capturas) ---------- */
+  .testi-wall {
+    column-count: 3;
+    column-gap: 20px;
+  }
+  .testi-card {
+    break-inside: avoid;
+    margin-bottom: 20px;
+    background: var(--bg-alt);
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid transparent;
+    transition: transform .3s ease, border-color .3s ease, box-shadow .3s ease;
+  }
+  .testi-card img { width: 100%; height: auto; display: block; }
+  .testi-card:hover {
+    transform: scale(1.02);
+    border-color: var(--accent);
+    box-shadow: 0 0 18px rgba(245,168,0,0.25);
+  }
+  /* Mostrar solo las primeras 4 hasta tocar "Ver más" */
+  .testi-wall:not(.expanded) .testi-more { display: none; }
+  .testi-more-wrap { text-align: center; margin-top: 32px; }
+
+  /* ---------- Footer ---------- */
+  footer {
+    background: var(--bg-footer);
+    padding: 64px 0 32px;
+    text-align: center;
+    border-top: 1px solid rgba(245,168,0,0.12);
+  }
+  footer .logo { font-size: 2rem; margin-bottom: 28px; }
+  .notice-box {
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    padding: 18px 24px;
+    max-width: 640px;
+    margin: 0 auto 32px;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    background: rgba(245,168,0,0.04);
+  }
+  .notice-box a { color: var(--accent); }
+  .social-row {
+    display: flex;
+    justify-content: center;
+    gap: 18px;
+    margin-bottom: 28px;
+  }
+  .social-row a {
+    width: 44px; height: 44px;
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-secondary);
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 0.8rem;
+    transition: border-color .2s ease, color .2s ease, transform .2s ease;
+  }
+  .social-row a:hover { border-color: var(--accent); color: var(--accent); transform: translateY(-3px); }
+  .copyright { color: var(--placeholder-text); font-size: 0.85rem; }
+
+  /* ---------- Fade-in animation ---------- */
+  .fade-in {
+    opacity: 0;
+    transform: translateY(28px);
+    transition: opacity .7s ease, transform .7s ease;
+  }
+  .fade-in.visible { opacity: 1; transform: translateY(0); }
+
+  /* ---------- Responsive ---------- */
+  @media (max-width: 900px) {
+    .cards-grid { grid-template-columns: 1fr; }
+    .coaches-grid { grid-template-columns: 1fr; }
+    /* Botón de coach a todo el ancho cuando las cards se apilan */
+    .coach-card .btn { display: block; width: 100%; text-align: center; }
+  }
+
+  @media (max-width: 768px) {
+    .hamburger { display: flex; }
+    .nav-links {
+      position: absolute;
+      top: 72px; left: 0; right: 0;
+      flex-direction: column;
+      gap: 0;
+      background: rgba(10,10,10,0.98);
+      border-bottom: 1px solid rgba(245,168,0,0.15);
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height .35s ease;
+    }
+    .nav-links.open { max-height: 380px; }
+    .nav-links li { width: 100%; text-align: center; }
+    .nav-links a { display: block; padding: 18px 0; border-top: 1px solid rgba(255,255,255,0.05); }
+
+    /* "Ingresar" como último item del menú: sin el divisor de desktop, botón centrado */
+    .nav-login {
+      margin-left: 0;
+      padding: 16px 0;
+      border-left: none;
+      border-top: 1px solid rgba(255,255,255,0.05);
+      justify-content: center;
+    }
+    .nav-links a.btn-ingresar { padding: 12px 34px; }
+
+    section { padding: 72px 0; }
+
+    /* Testimonios: 2 columnas en tablet */
+    .testi-wall { column-count: 2; }
+  }
+
+  @media (max-width: 480px) {
+    .hero-ctas { flex-direction: column; }
+    .hero-ctas .btn { width: 100%; text-align: center; }
+    /* Testimonios: 1 columna en mobile */
+    .testi-wall { column-count: 1; }
+    /* Botón de coach: una sola línea (sin cortar la flecha) */
+    .coach-card .btn { font-size: 0.9rem; letter-spacing: 0.5px; padding: 14px 12px; white-space: nowrap; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ NAVBAR ============ -->
+<header class="navbar">
+  <div class="container nav-inner">
+    <!-- Logo horizontal: HB + PERFORMANCE al lado. Cae al texto si faltan los archivos -->
+    <a href="#hero" class="logo logo-lockup" aria-label="HB Performance — inicio">
+      <img class="logo-hb" src="logo-hb.png" alt=""
+           onerror="this.parentNode.classList.add('logo--fallback');">
+      <img class="logo-perf" src="logo-perf.png" alt="HB Performance">
+      <span class="logo-text">HB <span class="logo-accent">Performance</span></span>
+    </a>
+
+    <nav aria-label="Navegación principal">
+      <ul class="nav-links" id="navLinks">
+        <li><a href="#programas">Programas</a></li>
+        <li><a href="#asesorias">Asesorías</a></li>
+        <li><a href="#testimonios">Testimonios</a></li>
+        <li class="nav-login"><a href="app/login.html" class="btn-ingresar">Ingresar</a></li>
+      </ul>
+    </nav>
+
+    <button class="hamburger" id="hamburger" aria-label="Abrir menú" aria-expanded="false" aria-controls="navLinks">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+</header>
+
+<main>
+
+  <!-- ============ HERO ============ -->
+  <section class="hero" id="hero">
+    <div class="hero-slideshow" id="heroSlideshow" aria-hidden="true">
+      <!-- object-position = punto focal por imagen (verificado en recorte desktop + mobile).
+           X% encuadra en mobile, Y% encuadra en desktop. Menor Y = imagen más arriba. -->
+      <img class="hero-slide" style="object-position: 45% 40%;" src="images/img1.jpg" alt="">
+      <img class="hero-slide" style="object-position: 55% 26%;" src="images/img2.jpg" alt="">
+      <img class="hero-slide" style="object-position: 68% 50%;" src="images/img3.jpg" alt="">
+      <img class="hero-slide" style="object-position: 48% 35%;" src="images/img4.jpg" alt="">
+      <img class="hero-slide" style="object-position: 45% 28%;" src="images/img5.jpg" alt="">
+      <img class="hero-slide" style="object-position: 58% 38%;" src="images/img6.jpg" alt="">
+      <img class="hero-slide" style="object-position: 52% 26%;" src="images/img7.jpg" alt="">
+      <img class="hero-slide" style="object-position: 50% 26%;" src="images/img8.jpg" alt="">
+    </div>
+    <div class="hero-overlay" aria-hidden="true"></div>
+    <div class="container hero-content">
+      <span class="badge">• Entrenamiento híbrido &amp; coaching online</span>
+      <h1>Entrená con <span class="accent">propósito</span></h1>
+      <p class="subhead">Fuerza. Potencia. Rendimiento híbrido.</p>
+      <div class="hero-ctas">
+        <a href="#programas" class="btn btn-filled">Ver programas</a>
+        <a href="#asesorias" class="btn btn-outline">Elegí tu coach</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PROGRAMAS ============ -->
+  <section id="programas">
+    <div class="container">
+      <div class="fade-in">
+        <h2 class="section-title">Nuestros <span class="accent">programas</span></h2>
+        <div class="divider"></div>
+      </div>
+      <div class="cards-grid">
+        <article class="program-card fade-in">
+          <img class="card-cover" src="images/card-crossfit.png" alt="CrossFit Program">
+          <div class="card-body">
+            <h3>Crossfit</h3>
+            <p>Potencia, técnica y comunidad. Clases programadas con metodología científica.</p>
+            <a href="crossfit.html" class="btn-link">Ver programa →</a>
+          </div>
+        </article>
+        <article class="program-card fade-in">
+          <img class="card-cover" src="images/card-hybrid.png" alt="Hybrid Evolution">
+          <div class="card-body">
+            <h3>Hybrid Program</h3>
+            <p>La combinación perfecta de fuerza y running. Rendimiento sin sacrificar nada.</p>
+            <a href="hybrid.html" class="btn-link">Ver programa →</a>
+          </div>
+        </article>
+        <article class="program-card fade-in">
+          <img class="card-cover" src="images/card-corredores.png" alt="Fuerza para corredores">
+          <div class="card-body">
+            <h3>Fuerza para corredores</h3>
+            <p>El complemento que le faltaba a tu entrenamiento aeróbico. Más fuerza, menos lesiones.</p>
+            <a href="fuerza-corredores.html" class="btn-link">Ver programa →</a>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ ASESORÍAS ============ -->
+  <section id="asesorias">
+    <div class="container">
+      <div class="fade-in text-center">
+        <h2 class="section-title">Asesorías <span class="accent">personalizadas</span></h2>
+        <div class="divider center"></div>
+        <p class="section-subtitle">Elegí tu coach y trabajá con acompañamiento directo</p>
+      </div>
+      <div class="coaches-grid">
+        <article class="coach-card fade-in">
+          <img class="coach-photo" src="images/coach-erika.png" alt="Erika Prada" style="object-position: 50% 15%;">
+          <div class="card-body">
+            <h3>Erika Prada</h3>
+            <p>Entrenadora híbrida. Especialista en fuerza, potencia y longevidad.</p>
+            <a href="asesoria-erika.html" class="btn btn-outline">Quiero esta asesoría →</a>
+          </div>
+        </article>
+        <article class="coach-card fade-in">
+          <img class="coach-photo" src="images/coach-gonza.png" alt="Gonza Gonda" style="object-fit: contain; object-position: 50% 100%; padding: 16% 11% 0;">
+          <div class="card-body">
+            <h3>Gonza Gonda</h3>
+            <p>Coach de alto rendimiento. Especialista en crossfit y programación avanzada.</p>
+            <a href="asesoria-gonza.html" class="btn btn-outline">Quiero esta asesoría →</a>
+          </div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ TESTIMONIOS ============ -->
+  <section id="testimonios">
+    <div class="container">
+      <div class="fade-in text-center">
+        <h2 class="section-title">Lo que dice nuestra <span class="accent">comunidad</span></h2>
+        <div class="divider center"></div>
+        <p class="section-subtitle">Mensajes reales de atletas que ya entrenan con nosotros</p>
+      </div>
+      <div class="testi-wall fade-in">
+        <div class="testi-card"><img src="images/testimonio-1.JPEG" alt="Testimonio de un atleta de HB Performance" loading="lazy"></div>
+        <div class="testi-card"><img src="images/testimonio-2.JPEG" alt="Testimonio de un atleta de HB Performance" loading="lazy"></div>
+        <div class="testi-card"><img src="images/testimonio-3.JPEG" alt="Testimonio de un atleta de HB Performance" loading="lazy"></div>
+        <div class="testi-card"><img src="images/testimonio-4.JPEG" alt="Testimonio de un atleta de HB Performance" loading="lazy"></div>
+        <div class="testi-card testi-more"><img src="images/testimonio-5.JPEG" alt="Testimonio de un atleta de HB Performance" loading="lazy"></div>
+        <div class="testi-card testi-more"><img src="images/testimonio-6.JPEG" alt="Testimonio de un atleta de HB Performance" loading="lazy"></div>
+        <div class="testi-card testi-more"><img src="images/testimonio-7.JPEG" alt="Testimonio de un atleta de HB Performance" loading="lazy"></div>
+        <div class="testi-card testi-more"><img src="images/testimonio-8.JPEG" alt="Testimonio de un atleta de HB Performance" loading="lazy"></div>
+      </div>
+      <div class="testi-more-wrap fade-in">
+        <button class="btn btn-outline" id="testiToggle" aria-expanded="false">Ver más</button>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ============ FOOTER ============ -->
+<footer>
+  <div class="container">
+    <!-- Logo footer: muestra logo.png si existe; si no, cae al texto automáticamente -->
+    <div class="logo">
+      <img class="logo-img logo-img--footer" src="logo.png" alt="HB Performance"
+           onerror="this.style.display='none';this.nextElementSibling.style.display='inline';">
+      <span class="logo-text" style="display:none;">HB <span class="logo-accent">Performance</span></span>
+    </div>
+    <div class="notice-box">
+      📱 Nuestros programas se gestionan a través de WodUp. La app está disponible en iOS. Si usás Android, podés acceder desde tu navegador en <a href="https://app.wodup.com" target="_blank" rel="noopener">app.wodup.com</a>
+    </div>
+    <div class="social-row">
+      <a href="#" aria-label="Instagram">IG</a>
+      <a href="#" aria-label="YouTube">YT</a>
+    </div>
+    <p class="copyright">© 2025 HB Performance. Todos los derechos reservados.</p>
+  </div>
+</footer>
+
+<script>
+  // ---------- Hamburger menu ----------
+  (function () {
+    var hamburger = document.getElementById('hamburger');
+    var navLinks = document.getElementById('navLinks');
+
+    hamburger.addEventListener('click', function () {
+      var open = navLinks.classList.toggle('open');
+      hamburger.classList.toggle('open', open);
+      hamburger.setAttribute('aria-expanded', String(open));
+      hamburger.setAttribute('aria-label', open ? 'Cerrar menú' : 'Abrir menú');
+    });
+
+    // Close menu after clicking a link (mobile)
+    navLinks.querySelectorAll('a').forEach(function (link) {
+      link.addEventListener('click', function () {
+        navLinks.classList.remove('open');
+        hamburger.classList.remove('open');
+        hamburger.setAttribute('aria-expanded', 'false');
+        hamburger.setAttribute('aria-label', 'Abrir menú');
+      });
+    });
+  })();
+
+  // ---------- Fade-in on scroll (Intersection Observer) ----------
+  (function () {
+    var elements = document.querySelectorAll('.fade-in');
+
+    if (!('IntersectionObserver' in window)) {
+      elements.forEach(function (el) { el.classList.add('visible'); });
+      return;
+    }
+
+    var observer = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.15, rootMargin: '0px 0px -40px 0px' });
+
+    elements.forEach(function (el) { observer.observe(el); });
+  })();
+
+  // ---------- Hero parallax crossfade slideshow ----------
+  (function () {
+    var slideshow = document.getElementById('heroSlideshow');
+    if (!slideshow) return;
+
+    var slides = Array.prototype.slice.call(slideshow.querySelectorAll('.hero-slide'));
+    if (!slides.length) return;
+
+    // Preload all images for smooth transitions
+    slides.forEach(function (img) {
+      var pre = new Image();
+      pre.src = img.getAttribute('src');
+    });
+
+    // Crossfade every 5s
+    var current = 0;
+    slides[current].classList.add('active');
+
+    if (slides.length > 1) {
+      setInterval(function () {
+        slides[current].classList.remove('active');
+        current = (current + 1) % slides.length;
+        slides[current].classList.add('active');
+      }, 5000);
+    }
+
+    // Subtle parallax on scroll (0.3x), skipped when reduced motion is preferred
+    var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!reduce) {
+      var ticking = false;
+      window.addEventListener('scroll', function () {
+        if (!ticking) {
+          window.requestAnimationFrame(function () {
+            var offset = window.pageYOffset * 0.3;
+            slideshow.style.transform = 'translate3d(0,' + offset + 'px,0)';
+            ticking = false;
+          });
+          ticking = true;
+        }
+      }, { passive: true });
+    }
+  })();
+
+  // ---------- Testimonios: "Ver más" / "Ver menos" ----------
+  (function () {
+    var toggle = document.getElementById('testiToggle');
+    var wall = document.querySelector('.testi-wall');
+    if (!toggle || !wall) return;
+
+    toggle.addEventListener('click', function () {
+      var expanded = wall.classList.toggle('expanded');
+      toggle.textContent = expanded ? 'Ver menos' : 'Ver más';
+      toggle.setAttribute('aria-expanded', String(expanded));
+    });
+  })();
+</script>
+
+</body>
+</html>

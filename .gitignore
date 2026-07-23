@@ -1,0 +1,10 @@
+# Secretos / credenciales — NO subir
+Codigos.txt
+
+# Configuración local de Claude Code (específica de la máquina)
+.claude/settings.local.json
+
+# Basura del SO
+Thumbs.db
+.DS_Store
+desktop.ini
