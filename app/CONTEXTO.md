@@ -212,6 +212,16 @@ CREATE POLICY "Admin actualiza mensajes" ON public.messages
 
 ## Historial
 ### 2026-07-23
+- **Páginas de asesoría sin precio (`asesoria-erika.html` / `asesoria-gonza.html`, raíz).** Se **eliminó
+  por completo la sección de precio** (el `.price-box` con "USD 150 / mes", la nota "Equivalente a
+  $225.000 ARS… Pago vía PayPal o Mercado Pago" y el "El tipo de cambio se actualiza mensualmente", más el
+  eyebrow "Precio"). En su lugar quedó un texto simple `.asesoria-nota`: **"Las asesorías son
+  personalizadas. El valor se coordina directamente con tu coach."**. Se **mantuvo el botón de WhatsApp**
+  (`.coach-cta` → `btn-filled`, Erika `wa.me/5491136433379`, Gonza `wa.me/5491122895924`, mensaje
+  pre-cargado intacto). Nota: estos archivos no tenían botones MP/PayPal como tal; el pago solo se
+  mencionaba en el texto del `.price-box`, que ya no está. Las reglas CSS `.price-box` quedaron sin uso
+  (inofensivas). Verificado: 0 refs a "USD 150"/"PayPal"/"Mercado" en el HTML, 1 nota nueva y 1 CTA de
+  WhatsApp por archivo, bloque bien formado. (Cambio de landing; detalle también en el `CLAUDE.md` raíz.)
 - **Favicon en todas las páginas HTML.** Se agregó en el `<head>` (justo después del `<meta viewport>`) de
   las **10 páginas** (`index.html`, `crossfit.html`, `hybrid.html`, `fuerza-corredores.html`,
   `asesoria-erika.html`, `asesoria-gonza.html`, `app/login.html`, `app/set-password.html`,

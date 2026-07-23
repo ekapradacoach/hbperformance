@@ -245,6 +245,13 @@ Registro cronológico de lo que se va haciendo. Entrada nueva arriba o abajo seg
 - La caja WodUp de las **sub-páginas de programa** (crossfit/hybrid/fuerza-corredores) NO se tocó — sigue ahí.
 - La regla CSS `.notice-box` quedó sin usar (inofensiva); `index.html` parsea OK (`new Function`).
 
+### 2026-07-23 — Páginas de asesoría sin precio
+- En `asesoria-erika.html` y `asesoria-gonza.html` se **eliminó la sección de precio** (`.price-box` con
+  "USD 150 / mes" + notas de PayPal/Mercado Pago + eyebrow "Precio"). Se reemplazó por una nota simple
+  `.asesoria-nota`: "Las asesorías son personalizadas. El valor se coordina directamente con tu coach."
+- Se **mantuvo el botón de WhatsApp** (`.coach-cta`, con el número y mensaje pre-cargado de cada coach).
+- Las reglas CSS `.price-box` quedaron sin uso (inofensivas). El valor de la asesoría se coordina 1‑a‑1.
+
 ### 2026-07-20 — Páginas de asesorías creadas (erika / gonza)
 - Se crearon **`asesoria-erika.html`** y **`asesoria-gonza.html`** con el estilo del sitio (navbar,
   footer, fuentes, botones, fade-in). Con esto **todas las sub-páginas están listas**.

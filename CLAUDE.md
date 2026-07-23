@@ -30,7 +30,10 @@ Todas las sub-páginas ✅ creadas (programas + asesorías).
 Mismo navbar/footer/estilo. Estructura: **hero con foto del coach a pantalla** (`.coach-hero-bg`
 cover + `.coach-hero-overlay` gradiente) + back-link "← Volver" + badge + "Asesoría *personalizada*"
 + subtítulo → intro → **Especialidades: acordeón de 3** (uno abierto a la vez, `max-height` animado,
-ícono "+"→"×") → **Qué incluye** (lista emojis) → **Precio** USD 150/mes → **CTA WhatsApp** (`btn-filled`).
+ícono "+"→"×") → **Qué incluye** (lista emojis) → **nota `.asesoria-nota`** ("Las asesorías son
+personalizadas. El valor se coordina directamente con tu coach.") → **CTA WhatsApp** (`btn-filled`).
+⚠️ **Ya NO hay precio ni botones de pago** (MP/PayPal): se eliminó la sección de precio (2026-07-23);
+solo queda la nota y el CTA de WhatsApp. (Las reglas CSS `.price-box` quedaron sin uso, inofensivas.)
 - Links WhatsApp con mensaje pre-cargado: Erika `wa.me/5491136433379` · Gonza `wa.me/5491122895924`.
 - Fotos hero: `coach-erika.png` (bg-position `center 18%`) · `coach-gonza.png` (`center 8%`).
 

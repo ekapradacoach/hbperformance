@@ -192,6 +192,11 @@ si el error es de sesión/JWT expirada → estado inválido. No requiere tablas 
 al portal (borde dorado, hover relleno; en mobile va como último item del menú hamburguesa). Ver detalle
 en el `CLAUDE.md`/`CONTEXTO.md` de la raíz.
 
+**Landing de asesorías (`asesoria-erika.html` / `asesoria-gonza.html`, raíz):** desde 2026-07-23 **NO
+muestran precio ni botones de pago** (se eliminó la sección USD 150/MP/PayPal). En su lugar va una nota
+`.asesoria-nota` ("Las asesorías son personalizadas. El valor se coordina directamente con tu coach.") +
+el CTA de WhatsApp que ya existía. El valor se coordina 1‑a‑1 con el coach.
+
 Editor de planificación (dentro de `admin/index.html`, para grupos y asesorías) — 4 features:
 1. **Vista día / Vista mes** (toggle). La vista mes es un calendario (Lun-Dom) con navegación ← →;
    los días con planificación llevan punto dorado; click en un día → vista día con esa fecha.
