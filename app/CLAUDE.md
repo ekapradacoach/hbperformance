@@ -392,6 +392,10 @@ Misma que la landing:
 - Atleta solo ve datos de su programa
 - Admin ve todo
 - supabase.js siempre primero en los scripts
+- **Favicon**: todas las páginas HTML (landing, sub-páginas, `app/*`, `admin/*`) llevan en el `<head>`,
+  justo después del `<meta viewport>`, `<link rel="icon" type="image/png" href="/logo.png">` +
+  `<link rel="apple-touch-icon" href="/logo.png">`. Usa `logo.png` de la raíz con path **absoluto**
+  (`/logo.png`) → funciona desde cualquier subcarpeta en producción (`hbperformance.fit/logo.png`).
 
 ## Cómo trabajar
 1. Leer CONTEXTO.md para estado actual

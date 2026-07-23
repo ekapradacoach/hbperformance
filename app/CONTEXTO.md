@@ -212,6 +212,17 @@ CREATE POLICY "Admin actualiza mensajes" ON public.messages
 
 ## Historial
 ### 2026-07-23
+- **Favicon en todas las páginas HTML.** Se agregó en el `<head>` (justo después del `<meta viewport>`) de
+  las **10 páginas** (`index.html`, `crossfit.html`, `hybrid.html`, `fuerza-corredores.html`,
+  `asesoria-erika.html`, `asesoria-gonza.html`, `app/login.html`, `app/set-password.html`,
+  `app/dashboard.html`, `admin/index.html`):
+  ```html
+  <link rel="icon" type="image/png" href="/logo.png">
+  <link rel="apple-touch-icon" href="/logo.png">
+  ```
+  Usa el `logo.png` de la raíz con **path absoluto** (`/logo.png`) → resuelve bien desde `app/` y `admin/`
+  en producción (`hbperformance.fit/logo.png`). Verificado: exactamente 1 de cada link por archivo, dentro
+  del `<head>`. (Nota: con `file://` local el path absoluto no resuelve; en producción con dominio sí.)
 - **3 cambios: sin WodUp en el footer de la landing, comunidad oculta en asesorías, foto de perfil.**
   1. **`index.html`** — se **eliminó el aviso de WodUp** del footer (`.notice-box`), sin reemplazo. (Detalle
      también en el `CONTEXTO.md`/`CLAUDE.md` de la raíz.)
