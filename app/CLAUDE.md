@@ -155,9 +155,18 @@ la **Edge Function `create-athlete`** (`POST /functions/v1/create-athlete`, Bear
 admin, body `{ full_name, email, phone, program }`) que crea el user en Auth + el profile y responde
 `{ ok }` o `{ ok:false, error }`. ⚠️ Falta implementar/deployar esa function (ver CONTEXTO.md).
 
+**Dominio de producción:** el sitio vive en **`https://hbperformance.fit`**. Todos los `redirectTo` de
+`resetPasswordForEmail` (login "¿Olvidaste tu contraseña?" y Perfil "Cambiar contraseña") apuntan
+**hardcodeados** a `https://hbperformance.fit/app/set-password.html` (antes usaban `window.location.origin`).
+El invite de la Edge Function `create-athlete` debe usar el mismo redirect (la llamada desde el admin manda
+`redirectTo: 'https://hbperformance.fit/app/set-password.html'` en el body; la function —fuera de este
+repo, en Supabase— debe honrarlo). ⚠️ Estas URLs también tienen que estar en la allowlist de **Redirect
+URLs** de Supabase Auth.
+
 **Activación de cuenta (`app/set-password.html`)**: página a la que llega el atleta nuevo desde el link
 de invitación/recuperación del email (`create-athlete` genera el invite; también la usa "Cambiar
-contraseña" y "¿Olvidaste tu contraseña?" con `redirectTo` a esta página). Misma identidad visual que
+contraseña" y "¿Olvidaste tu contraseña?" con `redirectTo` a esta página, ya en dominio de producción).
+`set-password.html` en sí NO envía emails (consume el token y llama `updateUser`). Misma identidad visual que
 `login.html`. Tiene **4 estados** en una sola card: (1) **cargando** — spinner + "Verificando tu
 invitación" mientras detecta el token; (2) **formulario** — "Activá tu *cuenta*" + 2 campos (nueva
 contraseña / repetir, mín. 8) + botón dorado "ACTIVAR CUENTA", valida coincidencia y longitud (error en

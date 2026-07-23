@@ -2257,7 +2257,7 @@
       const email = ATHLETE.email;
       if (!email) { flash('No hay un email asociado a tu cuenta.'); btn.disabled = false; return; }
       const { error } = await sb.auth.resetPasswordForEmail(email, {
-        redirectTo: window.location.origin + '/app/set-password.html'
+        redirectTo: 'https://hbperformance.fit/app/set-password.html'
       });
       btn.disabled = false;
       if (error) flash('No se pudo enviar el email: ' + error.message);

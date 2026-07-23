@@ -289,7 +289,7 @@
         return;
       }
       const { error } = await sb.auth.resetPasswordForEmail(email, {
-        redirectTo: window.location.origin + '/app/set-password.html'
+        redirectTo: 'https://hbperformance.fit/app/set-password.html'
       });
       if (error) {
         showError('No se pudo enviar el email de recuperación.');

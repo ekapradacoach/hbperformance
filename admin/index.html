@@ -2383,7 +2383,11 @@
             full_name,
             email,
             phone: phone || null,
-            program: coach.slug
+            program: coach.slug,
+            // URL de producción a la que debe apuntar el invite del email.
+            // ⚠️ La Edge Function create-athlete (en Supabase, fuera de este repo) debe usar este
+            // valor como redirectTo del inviteUserByEmail (o tenerlo hardcodeado ahí mismo).
+            redirectTo: 'https://hbperformance.fit/app/set-password.html'
           })
         });
 

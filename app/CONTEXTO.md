@@ -189,6 +189,23 @@ CREATE POLICY "Admin actualiza mensajes" ON public.messages
 
 ## Historial
 ### 2026-07-23
+- **URLs actualizadas al dominio de producción `https://hbperformance.fit`.** El sitio ya tiene dominio real.
+  - `app/login.html` (link "¿Olvidaste tu contraseña?") y `app/dashboard.html` (Perfil → "Cambiar
+    contraseña"): el `redirectTo` de `resetPasswordForEmail` pasó de `window.location.origin +
+    '/app/set-password.html'` a **`'https://hbperformance.fit/app/set-password.html'`** (hardcodeado).
+  - `admin/index.html`: la llamada a la Edge Function **`create-athlete`** ahora manda en el body
+    `redirectTo: 'https://hbperformance.fit/app/set-password.html'` (con comentario). ⚠️ La **Edge Function
+    vive en Supabase, fuera de este repo** — debe leer ese `redirectTo` (o tenerlo hardcodeado) en el
+    `inviteUserByEmail`. No se puede cambiar desde estos archivos.
+  - `app/set-password.html`: **sin cambios** — no tiene `resetPasswordForEmail` (consume el token del email
+    y llama `updateUser`); es el *destino* del redirect, no el emisor.
+  - **No había** referencias literales a `localhost`, `file://` ni `127.0.0.1` en ningún archivo (solo esos
+    dos `window.location.origin`, ya reemplazados). El resto de URLs `https://` (Google Fonts, CDN de
+    Supabase, wa.me, YouTube, WodUp, endpoint de la Edge Function, bucket de Storage) son de producción y
+    quedaron igual.
+  - Sintaxis verificada (`new Function`) en los 3 archivos editados: OK.
+  - ⚠️ Recordatorio: agregar `https://hbperformance.fit/app/set-password.html` a la allowlist de **Redirect
+    URLs** en Supabase → Authentication → URL Configuration, o el link del email será rechazado.
 - **Fotos del atleta en el editor de bloques del admin (`admin/index.html`).** En la sección
   `.athlete-comment` (asesorías), además del texto del comentario ahora se muestran las **imágenes que el
   atleta subió al bloque**. `attachAthleteComments` ahora también pide el `id` de cada `block_completions`
