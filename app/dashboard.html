@@ -70,7 +70,9 @@
     background: var(--accent); color: #0A0A0A;
     display: flex; align-items: center; justify-content: center;
     font-size: 0.8rem; font-weight: 800; flex-shrink: 0;
+    position: relative; overflow: hidden;
   }
+  .u-avatar .av-img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .topbar-right { display: flex; align-items: center; gap: 12px; }
 
   /* ================= Notificaciones (campana + dropdown) ================= */
@@ -598,7 +600,18 @@
     display: flex; align-items: center; justify-content: center;
     font-family: var(--font-display); font-weight: 800; font-size: 1.8rem;
     margin: 0 auto 18px;
+    position: relative; overflow: hidden; cursor: pointer;
   }
+  .pf-avatar .av-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  /* Overlay de cámara (aparece al hover / durante la subida) */
+  .pf-avatar .pf-cam {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.5); color: #fff; font-size: 1.5rem;
+    opacity: 0; transition: opacity .18s ease;
+  }
+  .pf-avatar:hover .pf-cam { opacity: 1; }
+  .pf-avatar.uploading { pointer-events: none; }
+  .pf-avatar.uploading .pf-cam { opacity: 1; }
   .pf-field { text-align: left; margin-bottom: 14px; }
   .pf-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 700; color: var(--text-secondary); margin-bottom: 5px; display: block; }
   .pf-lock { text-transform: none; letter-spacing: 0; font-weight: 500; color: #666; }
@@ -866,8 +879,8 @@
         <div id="upcoming"><div class="muted">Cargando…</div></div>
       </div>
 
-      <!-- Card Comunidad -->
-      <div class="card">
+      <!-- Card Comunidad (se oculta para atletas de asesoría) -->
+      <div class="card" id="cardComunidad">
         <div class="card-h">💬 Comunidad</div>
         <div id="commPreview"><div class="muted">Cargando…</div></div>
         <button class="btn btn-outline" id="btnComunidad">Ver comunidad →</button>
@@ -1053,6 +1066,7 @@
   <!-- Inputs de archivo ocultos (uno para bloques, uno para posts) -->
   <input type="file" id="blockImgInput" accept="image/*" multiple style="display:none;">
   <input type="file" id="npImgInput" accept="image/*" multiple style="display:none;">
+  <input type="file" id="avatarInput" accept="image/*" style="display:none;">
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="../supabase.js"></script>
@@ -1224,7 +1238,12 @@
       loadToday();
       loadWeek();
       loadUpcoming();
-      loadCommunity();
+      // Los atletas de asesoría NO ven la comunidad: se oculta la card entera
+      if (IS_ASESORIA) {
+        document.getElementById('cardComunidad').style.display = 'none';
+      } else {
+        loadCommunity();
+      }
     }
 
     async function loadToday() {
@@ -1668,6 +1687,70 @@
       addPendingBlockImages(blockImgCtx.b, blockImgCtx.card, files);
     });
 
+    // ============================================================
+    // AVATAR / FOTO DE PERFIL
+    // ============================================================
+    let avatarBust = 0; // cache-buster para refrescar la foto tras subir una nueva
+
+    function avatarSrc() {
+      if (!ATHLETE || !ATHLETE.avatar_url) return null;
+      return ATHLETE.avatar_url + (avatarBust ? ('?v=' + avatarBust) : '');
+    }
+
+    // Pinta un círculo-avatar con la foto (si hay avatar_url) o las iniciales.
+    // withCamera agrega el overlay 📷 (solo en la card de perfil).
+    function paintAvatar(el, withCamera) {
+      if (!el) return;
+      const src = avatarSrc();
+      const cam = withCamera ? '<span class="pf-cam">📷</span>' : '';
+      if (src) {
+        el.classList.add('has-photo');
+        el.innerHTML = `<img class="av-img" src="${esc(src)}" alt="Foto de perfil">${cam}`;
+      } else {
+        el.classList.remove('has-photo');
+        el.innerHTML = `<span class="av-initials">${esc(initials(ATHLETE ? ATHLETE.full_name : ''))}</span>${cam}`;
+      }
+    }
+
+    // Refresca los dos avatares visibles: topbar + card de perfil
+    function refreshAvatars() {
+      paintAvatar(document.getElementById('userAvatar'), false);
+      paintAvatar(document.getElementById('pfAvatar'), true);
+    }
+
+    async function onAvatarSelected(file) {
+      if (!file) return;
+      if (!file.type || file.type.indexOf('image/') !== 0) { flash('El archivo tiene que ser una imagen.'); return; }
+      if (file.size > 5 * 1024 * 1024) { flash('La imagen no puede superar los 5 MB.'); return; }
+      const pf = document.getElementById('pfAvatar');
+      if (pf) pf.classList.add('uploading');
+      // Path fijo por atleta → cada subida sobrescribe la anterior (upsert)
+      const path = `${ATHLETE.id}/avatar.jpg`;
+      const { error: upErr } = await sb.storage.from('avatars').upload(path, file, {
+        upsert: true, contentType: file.type || 'image/jpeg', cacheControl: '3600'
+      });
+      if (upErr) { if (pf) pf.classList.remove('uploading'); flash('No se pudo subir la foto: ' + upErr.message); return; }
+      const url = publicUrl('avatars', path);
+      const { error: dbErr } = await sb.from('profiles').update({ avatar_url: url }).eq('id', ATHLETE.id);
+      if (pf) pf.classList.remove('uploading');
+      if (dbErr) { flash('No se pudo guardar la foto: ' + dbErr.message); return; }
+      ATHLETE.avatar_url = url;
+      avatarBust = Date.now();
+      refreshAvatars();
+      flash('✓ Foto de perfil actualizada');
+    }
+
+    // Click en el avatar de la card de perfil → abre el selector de archivo
+    document.getElementById('pfAvatar').addEventListener('click', () => {
+      const inp = document.getElementById('avatarInput');
+      inp.value = ''; inp.click();
+    });
+    document.getElementById('avatarInput').addEventListener('change', (e) => {
+      const file = e.target.files && e.target.files[0];
+      e.target.value = '';
+      onAvatarSelected(file);
+    });
+
     // -------- Vista mes --------
     function shiftProgMonth(delta) {
       let { year, month } = progMonthCursor;
@@ -2102,7 +2185,7 @@
     }
 
     function loadPerfil() {
-      document.getElementById('pfAvatar').textContent = initials(ATHLETE.full_name);
+      paintAvatar(document.getElementById('pfAvatar'), true);
       renderPersonalView();
       renderSubscription();
     }
@@ -2157,8 +2240,7 @@
       // Refrescar topbar, avatar y saludo
       const firstName = (full_name.split(' ')[0]) || 'atleta';
       document.getElementById('userName').textContent = firstName;
-      document.getElementById('userAvatar').textContent = initials(full_name);
-      document.getElementById('pfAvatar').textContent = initials(full_name);
+      refreshAvatars(); // conserva la foto si tiene; si no, repinta las iniciales nuevas
       document.getElementById('greeting').innerHTML = `Hola, ${esc(firstName)} 👋`;
       renderPersonalView();
       flash('✓ Datos actualizados');
@@ -2838,7 +2920,7 @@
       const firstName = (profile.full_name || '').split(' ')[0] || 'atleta';
       document.getElementById('greeting').innerHTML = `Hola, ${esc(firstName)} 👋`;
       document.getElementById('userName').textContent = firstName;
-      document.getElementById('userAvatar').textContent = initials(profile.full_name);
+      refreshAvatars(); // topbar + perfil: foto si tiene avatar_url, si no iniciales
 
       loadNotifs();
       subscribeNotifs();

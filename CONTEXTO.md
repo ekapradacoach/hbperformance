@@ -239,6 +239,12 @@ Registro cronológico de lo que se va haciendo. Entrada nueva arriba o abajo seg
   menú abre, botón centrado (`justify-content:center`), sin divisor, borde dorado, padding 12px 34px;
   regla `:hover` = bg `var(--accent)` + color `#0A0A0A`. Sin errores de consola.
 
+### 2026-07-23 — Footer sin aviso de WodUp
+- Se **eliminó** el bloque `.notice-box` del footer de `index.html` (el aviso "📱 Nuestros programas se
+  gestionan a través de WodUp… app.wodup.com"), **sin reemplazo**. El footer queda: logo → redes → copyright.
+- La caja WodUp de las **sub-páginas de programa** (crossfit/hybrid/fuerza-corredores) NO se tocó — sigue ahí.
+- La regla CSS `.notice-box` quedó sin usar (inofensiva); `index.html` parsea OK (`new Function`).
+
 ### 2026-07-20 — Páginas de asesorías creadas (erika / gonza)
 - Se crearon **`asesoria-erika.html`** y **`asesoria-gonza.html`** con el estilo del sitio (navbar,
   footer, fuentes, botones, fade-in). Con esto **todas las sub-páginas están listas**.

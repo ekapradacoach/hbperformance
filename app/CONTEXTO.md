@@ -43,6 +43,29 @@ Las tablas **`block_images`** y **`community_images`** y los buckets **`block-im
   (todos los del programa), **INSERT** de las propias (`author_id = auth.uid()`).
 El front **degrada en silencio** si falta algo (galerías vacías; al subir/borrar recién ahí avisa por toast).
 
+### ⚠️ Foto de perfil — bucket `avatars` + columna `profiles.avatar_url` (pendiente en Supabase)
+Para la foto de perfil del atleta (vista Perfil) hace falta:
+1. **Columna nueva** en `profiles`:
+   ```sql
+   ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS avatar_url text;
+   ```
+2. **Bucket `avatars`** (crearlo manual en Storage → New bucket → nombre `avatars` → **Public: ON**).
+3. **Policies de Storage** (SQL):
+   ```sql
+   CREATE POLICY "Atleta sube su avatar" ON storage.objects
+     FOR INSERT WITH CHECK (
+       bucket_id = 'avatars' AND auth.uid()::text = (storage.foldername(name))[1]
+     );
+   CREATE POLICY "Atleta actualiza su avatar" ON storage.objects
+     FOR UPDATE USING (
+       bucket_id = 'avatars' AND auth.uid()::text = (storage.foldername(name))[1]
+     );
+   CREATE POLICY "Todos ven avatares" ON storage.objects
+     FOR SELECT USING (bucket_id = 'avatars');
+   ```
+El path es `{athlete_id}/avatar.jpg` (fijo, `upsert:true` → sobrescribe). Sin la columna, el `UPDATE`
+falla y avisa por toast; sin el bucket/policies, la subida falla y avisa. La UI degrada a iniciales.
+
 ## ⚠️ Cambios de esquema pendientes en Supabase
 - **`notifications`** (nueva tabla) — notificaciones en tiempo real (campana del dashboard atleta y del
   admin). Correr en el SQL Editor:
@@ -189,6 +212,37 @@ CREATE POLICY "Admin actualiza mensajes" ON public.messages
 
 ## Historial
 ### 2026-07-23
+- **3 cambios: sin WodUp en el footer de la landing, comunidad oculta en asesorías, foto de perfil.**
+  1. **`index.html`** — se **eliminó el aviso de WodUp** del footer (`.notice-box`), sin reemplazo. (Detalle
+     también en el `CONTEXTO.md`/`CLAUDE.md` de la raíz.)
+  2. **`app/dashboard.html` — Comunidad oculta para asesorías.** La card de Inicio ahora tiene
+     `id="cardComunidad"`; en `loadInicio`, si `IS_ASESORIA` → `display:none` y **no** se llama
+     `loadCommunity` (el botón "Ver comunidad →" queda dentro de la card oculta, inaccesible). La vista
+     `comunidad` sigue en el código pero no es alcanzable para atletas de asesoría. Los grupales la ven igual.
+  3. **`app/dashboard.html` — Foto de perfil.** El avatar de la card Perfil (`#pfAvatar`, 80px) es clickeable
+     con overlay **📷 al hover** → input `image/*` (`#avatarInput`, máx **5 MB**, valida tipo y tamaño con
+     toast). Sube al bucket **`avatars`** con path fijo **`{athlete_id}/avatar.jpg`** (`upsert:true`,
+     `contentType`) → `UPDATE profiles SET avatar_url` (URL pública `getPublicUrl`) → `refreshAvatars()`
+     repinta **topbar + card de perfil** al instante (cache-buster `?v=Date.now()` en `avatarSrc`). Helpers
+     nuevos: `avatarBust`, `avatarSrc`, `paintAvatar(el, withCamera)`, `refreshAvatars`, `onAvatarSelected`.
+     `init`/`loadPerfil`/`savePersonal` ahora usan `paintAvatar`/`refreshAvatars` (antes seteaban
+     `textContent = initials(...)`). Si `avatar_url` existe → `<img class="av-img">` (cover, círculo); si no,
+     iniciales. Reutiliza `publicUrl`/`flash` ya existentes.
+  - **Verificado** en el navegador con 2 harness temporales (fake de Supabase con DB en memoria **+ Storage
+    simulado** `upload`/`getPublicUrl` + parser de embed sin regex, ambos borrados; **sin errores de
+    consola**):
+    - **Grupal (crossfit, sin avatar):** card Comunidad **visible**; avatar arranca en **iniciales "JP"**
+      (topbar + perfil, con 📷 en perfil); **subir foto** → Storage `avatars/ath-1/avatar.jpg`
+      (`upsert:true`, contentType `image/png`, cacheControl 3600), `profiles.avatar_url` = URL pública
+      limpia, topbar y perfil pasan a `<img ...?v=…>` al instante, toast "✓ Foto de perfil actualizada";
+      **validación**: >5 MB → "La imagen no puede superar los 5 MB.", no-imagen → "El archivo tiene que ser
+      una imagen.", `avatar_url` sin cambios en ambos rechazos.
+    - **Asesoría (asesoria-erika, con avatar_url):** card Comunidad **oculta** (`display:none`, botón sin
+      `offsetParent`); en la carga el avatar ya muestra la **foto** (`<img>`) en topbar y perfil (sin
+      iniciales), con 📷 en el de perfil.
+  - `index.html` y `app/dashboard.html` reales pasan `new Function` (syntax OK).
+  - ⚠️ Pendiente en Supabase (ver sección Storage arriba): **columna `profiles.avatar_url`** + **bucket
+    `avatars` público** + **policies de Storage** (INSERT/UPDATE del atleta en su prefijo + SELECT público).
 - **URLs actualizadas al dominio de producción `https://hbperformance.fit`.** El sitio ya tiene dominio real.
   - `app/login.html` (link "¿Olvidaste tu contraseña?") y `app/dashboard.html` (Perfil → "Cambiar
     contraseña"): el `redirectTo` de `resetPasswordForEmail` pasó de `window.location.origin +

@@ -76,6 +76,9 @@ como en admin: grupal filtra por `program_slug`; asesoría además por `athlete_
 - Vista **Inicio**: saludo, card **HOY** (fecha + programa + nº de bloques del día o "no hay sesión" +
   botón a Mi programa), card **Tu semana** (7 círculos Lun-Dom), **Próximos días** (3 futuros con
   planificación), **Comunidad** (último `community_posts`; botón "Ver comunidad →" abre la vista Comunidad).
+  ⚠️ La card **Comunidad se OCULTA para atletas de asesoría** (`IS_ASESORIA` → `#cardComunidad`
+  `display:none` en `loadInicio`, sin cargar `loadCommunity`): la comunidad es solo para programas grupales.
+  La vista `comunidad` sigue existiendo en el código pero queda inaccesible para asesorías (sin card ni botón).
 - Vista **Mi programa** (✅ desarrollada): toggle **Vista día / Vista mes**. *Día*: barra con ← →
   fecha + botón "Hoy"; si no hay planificación "No hay sesión para este día 💤"; si hay, lista de
   bloques. Cada bloque = card borde-izq dorado con: título dorado + **checkbox custom "Completado"**
@@ -115,9 +118,15 @@ como en admin: grupal filtra por `program_slug`; asesoría además por `athlete_
   ('chat_'+canal).on(postgres_changes INSERT filter channel=eq.X)`), se desuscribe al salir de la vista.
   Marca leídos al abrir (`UPDATE read=true WHERE channel=X AND from_id != uid AND read=false`). La vista
   usa `position:fixed` entre topbar y tabbar (el área de mensajes scrollea internamente).
-- Vista **Perfil** (✅ desarrollada): 3 cards. **Datos personales** (avatar 80px con iniciales; nombre +
-  teléfono editables, email solo lectura; "✏️ Editar datos" → inputs con borde dorado → "Guardar"
-  `UPDATE profiles`; feedback toast "✓ Datos actualizados"; refresca topbar/avatar/saludo). **Mi
+- Vista **Perfil** (✅ desarrollada): 3 cards. **Datos personales** (**avatar 80px con FOTO o iniciales**;
+  nombre + teléfono editables, email solo lectura; "✏️ Editar datos" → inputs con borde dorado → "Guardar"
+  `UPDATE profiles`; feedback toast "✓ Datos actualizados"; refresca topbar/avatar/saludo). **Foto de
+  perfil**: el avatar de la card es clickeable (overlay 📷 al hover) → selector `image/*` (máx 5 MB) →
+  sube al bucket **`avatars`** (path fijo `{athlete_id}/avatar.jpg`, `upsert:true`) → `UPDATE profiles SET
+  avatar_url` (URL pública) → `refreshAvatars()` repinta **topbar + card de perfil** en el acto (con
+  cache-buster `?v=Date.now()`). Si `avatar_url` existe se muestra la foto (`<img class="av-img">`) en
+  topbar y perfil; si no, iniciales (`paintAvatar`/`avatarSrc`). Valida tipo y tamaño (toast si falla);
+  degrada si falta el bucket/columna. **Mi
   suscripción** (badge de programa con colores del admin + badge de estado Activo/Cancelado/Pendiente;
   fecha inicio/vencimiento; **precio leído de `site_config`** según programa — "$45.000 / mes" o "USD 150
   / mes"; texto informativo según estado; si cancelado → botón "Volver a suscribirme" al landing del
@@ -221,6 +230,7 @@ subscription_start date
 subscription_end date
 subscription_status text ('active' | 'cancelled' | 'pending')
 mp_subscription_id text
+avatar_url text   ← ⚠️ AGREGAR en Supabase. URL pública de la foto de perfil (bucket `avatars`). NULL = usa iniciales.
 created_at timestamptz
 
 ### programs
