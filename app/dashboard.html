@@ -662,6 +662,7 @@
   .cm-card { background: var(--bg-alt); border: 1px solid var(--border); border-radius: 16px; width: 100%; max-width: 420px; padding: 24px; }
   .cm-title { font-family: var(--font-display); font-weight: 800; font-size: 1.25rem; letter-spacing: -0.5px; margin-bottom: 12px; }
   .cm-text { font-size: 0.92rem; color: var(--text-secondary); line-height: 1.5; margin-bottom: 20px; }
+  .cm-text.cm-error { color: #ff7b7b; }
   .cm-actions { display: flex; gap: 10px; }
   .cm-actions.col { flex-direction: column; }
   .cm-actions .btn, .cm-actions .cm-danger { flex: 1; justify-content: center; }
@@ -2310,24 +2311,54 @@
       document.getElementById('cmBack').addEventListener('click', closeCancelModal);
       document.getElementById('cmConfirm').addEventListener('click', confirmCancel);
     }
-    function confirmCancel() {
+    async function confirmCancel() {
       const card = document.getElementById('cancelModalCard');
       card.innerHTML = '<div class="cm-processing"><span class="cm-spinner"></span> Procesando cancelación…</div>';
 
-      // TODO: cuando se integre MP, reemplazar este bloque por:
-      // 1. fetch a Edge Function 'cancel-subscription' con mp_subscription_id
-      // 2. La Edge Function llama a MP API para cancelar
-      // 3. MP webhook notifica cancelación → Edge Function actualiza subscription_status='cancelled'
-      setTimeout(() => {
-        card.innerHTML = `
-          <h3 class="cm-title">Cancelación no disponible aún</h3>
-          <p class="cm-text">La cancelación automática estará disponible próximamente. Por ahora escribinos a WhatsApp y lo resolvemos en minutos.</p>
-          <div class="cm-actions col">
-            <a class="btn btn-filled" href="https://wa.me/5491136433379" target="_blank" rel="noopener">💬 Escribir por WhatsApp</a>
-            <button class="btn btn-outline" id="cmClose2">Cerrar</button>
-          </div>`;
-        document.getElementById('cmClose2').addEventListener('click', closeCancelModal);
-      }, 1200);
+      try {
+        const { data: { session } } = await sb.auth.getSession();
+        if (!session) { showCancelError('Tu sesión expiró. Volvé a iniciar sesión.'); return; }
+
+        const response = await fetch('https://frjlafrgdcbomdnentbe.supabase.co/functions/v1/cancel-subscription', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`
+          }
+        });
+        const result = await response.json();
+
+        if (result && result.ok) {
+          // Actualizar la UI: estado → Cancelado, ocultar "Cancelar", mostrar "Volver a suscribirme"
+          ATHLETE.subscription_status = 'cancelled';
+          renderSubscription();
+          card.innerHTML = `
+            <h3 class="cm-title">Suscripción cancelada</h3>
+            <p class="cm-text">Tu suscripción fue cancelada.</p>
+            <div class="cm-actions col">
+              <button class="btn btn-filled" id="cmClose2">Cerrar</button>
+            </div>`;
+          document.getElementById('cmClose2').addEventListener('click', closeCancelModal);
+        } else {
+          showCancelError((result && result.error) || 'No se pudo cancelar la suscripción.');
+        }
+      } catch (err) {
+        showCancelError('Hubo un error de conexión. Probá de nuevo.');
+      }
+    }
+
+    // Estado de error de la cancelación: mensaje + fallback de WhatsApp
+    function showCancelError(msg) {
+      const card = document.getElementById('cancelModalCard');
+      card.innerHTML = `
+        <h3 class="cm-title">No se pudo cancelar</h3>
+        <p class="cm-text cm-error">${esc(msg)}</p>
+        <p class="cm-text">Escribinos por WhatsApp y lo resolvemos en minutos.</p>
+        <div class="cm-actions col">
+          <a class="btn btn-filled" href="https://wa.me/5491136433379" target="_blank" rel="noopener">💬 Escribir por WhatsApp</a>
+          <button class="btn btn-outline" id="cmClose2">Cerrar</button>
+        </div>`;
+      document.getElementById('cmClose2').addEventListener('click', closeCancelModal);
     }
     // Cerrar tocando el fondo del modal
     document.getElementById('cancelModal').addEventListener('click', (e) => {

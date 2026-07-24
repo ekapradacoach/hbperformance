@@ -131,9 +131,14 @@ como en admin: grupal filtra por `program_slug`; asesoría además por `athlete_
   fecha inicio/vencimiento; **precio leído de `site_config`** según programa — "$45.000 / mes" o "USD 150
   / mes"; texto informativo según estado; si cancelado → botón "Volver a suscribirme" al landing del
   programa; si **activo** → botón "Cancelar suscripción" (outline rojo) que abre un modal de confirmación
-  → "Sí, cancelar" muestra "Procesando…" y luego un mensaje amigable de que la cancelación automática aún
-  no está disponible + botón de WhatsApp `wa.me/5491136433379`. ⚠️ La cancelación NO cambia el estado
-  todavía (hay un TODO para integrar la Edge Function `cancel-subscription` + MP webhook)). **Seguridad**
+  → "Sí, cancelar" muestra "Procesando cancelación…" (spinner) y llama a la **Edge Function real**
+  `POST /functions/v1/cancel-subscription` (Bearer = access_token de la sesión). Si `result.ok` → modal
+  "Tu suscripción fue cancelada." + se pone `ATHLETE.subscription_status='cancelled'` y se **re-renderiza**
+  la card (`renderSubscription`): badge → **Cancelado**, se oculta "Cancelar", aparece "Volver a
+  suscribirme". Si error (o `ok:false`) → `showCancelError`: "No se pudo cancelar" + el `result.error` en
+  rojo + botón de **WhatsApp** `wa.me/5491136433379` (fallback) + "Cerrar" (sin tocar el estado).
+  ⚠️ La Edge Function `cancel-subscription` (en Supabase, fuera de este repo) es la que cancela en MP y
+  pone `subscription_status='cancelled'` server-side. **Seguridad**
   ("Cambiar contraseña" → `resetPasswordForEmail` + toast; "Cerrar sesión" → `signOut` → `login.html`,
   botón outline rojo al hover).
 - Vista **Comunidad** (✅ desarrollada): NO es un tab — se entra desde el botón "Ver comunidad →" de la

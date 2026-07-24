@@ -219,6 +219,9 @@ CREATE POLICY "Admin actualiza mensajes" ON public.messages
   (dominio del sitio) para que no la reutilicen. Ideal a futuro: moverla a una Edge Function.
 
 ## ⚠️ Pendiente (documentado, NO codeado) — cancelación de suscripciones vía MercadoPago
+- ✅ **Front conectado (2026-07-24):** el botón "Cancelar suscripción" del Perfil ya llama a la Edge
+  Function real `POST /functions/v1/cancel-subscription` (ver más abajo). Falta tener **deployada** esa
+  function en Supabase (cancela en MP + pone `subscription_status='cancelled'`).
 - **Edge Function webhook de MP** que reciba la notificación de cancelación de suscripción y haga
   `UPDATE profiles SET subscription_status='cancelled'` para el `mp_subscription_id` correspondiente
   (ver "Flujo de cancelación" en CLAUDE.md). Hoy la baja se hace **manual** desde la sección Alumnos
@@ -237,6 +240,25 @@ CREATE POLICY "Admin actualiza mensajes" ON public.messages
 
 ## Historial
 ### 2026-07-24
+- **Cancelación de suscripción conectada con la Edge Function real (`app/dashboard.html`, Perfil).**
+  `confirmCancel` pasó de un mock ("cancelación no disponible aún…") a llamar de verdad a
+  `POST https://frjlafrgdcbomdnentbe.supabase.co/functions/v1/cancel-subscription` con
+  `Authorization: Bearer <access_token>` (de `sb.auth.getSession()`). Muestra "Procesando cancelación…"
+  con spinner mientras espera. Si `result.ok` → modal "Tu suscripción fue cancelada.", setea
+  `ATHLETE.subscription_status='cancelled'` y **re-renderiza** la card (`renderSubscription`): badge →
+  **Cancelado**, se oculta el botón "Cancelar", aparece "Volver a suscribirme" (al landing del programa).
+  Si error / `ok:false` → nuevo `showCancelError`: título "No se pudo cancelar" + `result.error` en rojo
+  (clase `.cm-error` nueva) + botón **WhatsApp** `wa.me/5491136433379` (target _blank) + "Cerrar", **sin**
+  cambiar el estado. Se eliminó el `setTimeout`/TODO del mock.
+  - **Verificado** con harness temporal (fake de Supabase + `fetch` stubeado configurable, ya borrado;
+    **sin errores de consola**): con atleta **activo** (crossfit) → badge "Activo", botón "Cancelar"
+    presente; abrir modal → "Sí, cancelar" → **fetch correcto** (URL de la function, `POST`, `Bearer
+    tok-123`); con `{ok:true}` → modal "Tu suscripción fue cancelada.", badge → **Cancelado**, botón
+    "Cancelar" desaparece, aparece "Volver a suscribirme" (`../crossfit.html`); con `{ok:false, error:'…'}`
+    → "No se pudo cancelar" + el error en rojo + WhatsApp `https://wa.me/5491136433379` (_blank) + "Cerrar",
+    y el estado queda **Activo** (no se toca). `app/dashboard.html` pasa `new Function` (syntax OK).
+  - ⚠️ Requiere la Edge Function **`cancel-subscription`** deployada en Supabase (cancela en MP + pone
+    `subscription_status='cancelled'` server-side). El front solo la invoca.
 - **Checkout con datos previos al pago + página de éxito post-pago.**
   - **Modal de datos en las 3 landing de programa** (`crossfit.html`, `hybrid.html`,
     `fuerza-corredores.html`): el botón "Suscribirme — $XX.000 ARS" (`#btn-mp`) **ya no navega a MP**;
