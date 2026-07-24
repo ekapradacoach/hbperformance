@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" href="/logo.png">
+<link rel="apple-touch-icon" href="/logo.png">
+<title>¡Gracias por suscribirte! — HB Performance</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Playfair+Display:ital,wght@1,400;1,600;1,700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0A0A0A;
+    --bg-alt: #1A1A1A;
+    --accent: #F5A800;
+    --text: #FFFFFF;
+    --text-secondary: #AAAAAA;
+    --font-display: 'Inter', sans-serif;
+    --font-body: 'Inter', sans-serif;
+    --font-accent: 'Playfair Display', serif;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    line-height: 1.6;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    text-align: center;
+  }
+
+  a { color: inherit; text-decoration: none; }
+  img { max-width: 100%; display: block; }
+
+  .accent {
+    font-family: var(--font-accent);
+    font-style: italic;
+    font-weight: 600;
+    color: var(--accent);
+  }
+
+  .success-wrap { width: 100%; max-width: 480px; }
+
+  .success-logo { margin-bottom: 30px; }
+  .success-logo img { height: 60px; margin: 0 auto; }
+  .success-logo .logo-text {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 1.6rem;
+    letter-spacing: -1px;
+  }
+
+  .success-icon {
+    font-size: 4.5rem;
+    line-height: 1;
+    margin-bottom: 20px;
+  }
+
+  h1 {
+    font-family: var(--font-display);
+    font-weight: 800;
+    font-size: 2rem;
+    letter-spacing: -1px;
+    line-height: 1.15;
+    margin-bottom: 18px;
+  }
+
+  .success-text {
+    color: var(--text-secondary);
+    font-size: 1.05rem;
+    margin-bottom: 14px;
+  }
+
+  .success-note {
+    color: #777;
+    font-size: 0.9rem;
+    margin-bottom: 32px;
+  }
+
+  .btn-home {
+    display: inline-block;
+    font-family: var(--font-display);
+    text-transform: uppercase;
+    font-weight: 700;
+    letter-spacing: 1px;
+    font-size: 1rem;
+    padding: 15px 34px;
+    border-radius: 6px;
+    cursor: pointer;
+    border: 2px solid var(--accent);
+    background: var(--accent);
+    color: #0A0A0A;
+    transition: transform .2s ease, box-shadow .2s ease;
+  }
+  .btn-home:hover {
+    box-shadow: 0 0 22px rgba(245,168,0,0.45);
+    transform: translateY(-2px);
+  }
+
+  @media (max-width: 420px) {
+    h1 { font-size: 1.65rem; }
+    .success-icon { font-size: 3.8rem; }
+  }
+</style>
+</head>
+<body>
+  <div class="success-wrap">
+    <div class="success-logo">
+      <img src="logo.png" alt="HB Performance"
+           onerror="this.style.display='none';document.getElementById('logoText').style.display='block';">
+      <div id="logoText" class="logo-text" style="display:none;">HB <span class="accent">Performance</span></div>
+    </div>
+
+    <div class="success-icon">✅</div>
+    <h1>¡Gracias por <span class="accent">suscribirte</span>!</h1>
+    <p class="success-text">En los próximos minutos vas a recibir un email en tu casilla con el link para activar tu cuenta y acceder a tu portal de entrenamiento.</p>
+    <p class="success-note">Si no lo ves en tu bandeja de entrada, revisá la carpeta de spam.</p>
+
+    <a href="index.html" class="btn-home">Volver al inicio →</a>
+  </div>
+</body>
+</html>

@@ -66,6 +66,31 @@ Para la foto de perfil del atleta (vista Perfil) hace falta:
 El path es `{athlete_id}/avatar.jpg` (fijo, `upsert:true` → sobrescribe). Sin la columna, el `UPDATE`
 falla y avisa por toast; sin el bucket/policies, la subida falla y avisa. La UI degrada a iniciales.
 
+### ⚠️ Checkout con datos previos — tabla `pending_subscriptions` (pendiente en Supabase)
+Para el modal de datos previo al pago (crossfit/hybrid/fuerza-corredores) hace falta:
+```sql
+CREATE TABLE public.pending_subscriptions (
+  id uuid default gen_random_uuid() primary key,
+  full_name text not null,
+  email text not null,
+  phone text,
+  program text not null,   -- 'crossfit' | 'hybrid' | 'corredores'
+  created_at timestamptz default now()
+);
+ALTER TABLE public.pending_subscriptions ENABLE ROW LEVEL SECURITY;
+-- La landing es pública (sin login) → INSERT anónimo permitido:
+CREATE POLICY "Público crea pending" ON public.pending_subscriptions
+  FOR INSERT WITH CHECK (true);
+-- (opcional) que el admin las pueda ver:
+CREATE POLICY "Admin ve pending" ON public.pending_subscriptions
+  FOR SELECT USING (public.get_my_role() = 'admin');
+```
+La Edge Function `process-payment` (con `service_role`) lee y borra estos registros — **bypassa RLS**, así
+que no necesita policies de SELECT/DELETE. El front degrada: si el INSERT falla, muestra el error en rojo y
+no redirige a MP. ⚠️ **Punto 3 del pedido (actualizar la Edge Function `process-payment`) lo hace el usuario
+manualmente en Supabase → Edge Functions**, no está en este repo. El código de referencia (busca en
+`pending_subscriptions` por `program`, crea/activa el user, borra el pending) lo tiene el usuario.
+
 ## ⚠️ Cambios de esquema pendientes en Supabase
 - **`notifications`** (nueva tabla) — notificaciones en tiempo real (campana del dashboard atleta y del
   admin). Correr en el SQL Editor:
@@ -211,6 +236,37 @@ CREATE POLICY "Admin actualiza mensajes" ON public.messages
   Esto reemplaza al INSERT directo en `profiles` (que fallaba por la FK id→auth.users).
 
 ## Historial
+### 2026-07-24
+- **Checkout con datos previos al pago + página de éxito post-pago.**
+  - **Modal de datos en las 3 landing de programa** (`crossfit.html`, `hybrid.html`,
+    `fuerza-corredores.html`): el botón "Suscribirme — $XX.000 ARS" (`#btn-mp`) **ya no navega a MP**;
+    ahora `preventDefault` + abre `#payModal` ("Completá tus datos para continuar": nombre req, email req,
+    teléfono opc, "Continuar al pago →" / "Cancelar"). Al continuar: valida nombre y email (regex simple),
+    **INSERT en `pending_subscriptions`** (`full_name, email, phone, program`) con `program` =
+    `crossfit`/`hybrid`/`corredores` según la página, y **recién ahí `window.location.href = PAY_MP_LINK`**
+    (el `mp_link_<prog>` de `site_config`). Si el INSERT falla → error en rojo, no redirige. Se refactorizó
+    el `<script>` de config de cada página para: guardar `PAY_MP_LINK` (ya no setea `href` en `#btn-mp`),
+    definir `PAY_PROGRAM`/`PAY_MP_KEY`, y cablear el modal. El botón PayPal sigue yendo directo. Modal con
+    CSS propio (`.pay-modal`/`.pay-card`/…, estilo de la landing). Las 3 ya tenían CDN Supabase + `supabase.js`.
+  - **`pago-exitoso.html`** (nuevo, raíz): página centrada, fondo `#0A0A0A`, dorado. Logo + ✅ grande +
+    "¡Gracias por *suscribirte*!" + texto ("En los próximos minutos vas a recibir un email…") + nota chica
+    ("…revisá la carpeta de spam.") + botón "Volver al inicio →" (`index.html`). Favicon incluido.
+  - **Punto 3 — Edge Function `process-payment`**: se le pasó al usuario el código actualizado (en
+    `status='authorized'` busca el `pending_subscriptions` más reciente del `program` = external_reference,
+    crea/activa el user con esos datos, y borra el pending). **Vive en Supabase, no en este repo** → lo
+    actualiza el usuario a mano. Documentado en la sección de pendientes.
+  - **Verificado** en el navegador con harness temporal (fake de Supabase con `site_config` +
+    `pending_subscriptions`, `mp_link_crossfit` = `#test-paid-crossfit` para no navegar afuera; borrado;
+    **sin errores de consola**): botón con texto de `site_config`, modal oculto al inicio → **abre** al
+    clickear; validación nombre vacío ("Ingresá tu nombre completo.") y email inválido ("Ingresá un email
+    válido.") sin insertar nada; **submit válido** → 1 fila en `pending_subscriptions`
+    (`full_name/email/phone/program='crossfit'`) + redirige a `#test-paid-crossfit`; cerrar por "Cancelar"
+    y por click en backdrop. **`pago-exitoso.html`**: ✅, título, textos, botón → `index.html`, fondo
+    `#0A0A0A`, logo OK. Las 4 páginas pasan `new Function` (syntax OK).
+  - ⚠️ Pendiente en Supabase: crear la tabla **`pending_subscriptions`** + policy de **INSERT público**
+    (ver sección arriba) y **actualizar la Edge Function `process-payment`**. También el back-URL de la
+    suscripción de MP debe apuntar a `pago-exitoso.html` para que el atleta caiga ahí tras pagar.
+
 ### 2026-07-23
 - **Páginas de asesoría sin precio (`asesoria-erika.html` / `asesoria-gonza.html`, raíz).** Se **eliminó
   por completo la sección de precio** (el `.price-box` con "USD 150 / mes", la nota "Equivalente a

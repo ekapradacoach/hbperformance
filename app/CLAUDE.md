@@ -347,6 +347,16 @@ RLS: usuario SELECT/UPDATE de las suyas (auth.uid()=user_id); INSERT admin (get_
 **y** "sistema" (WITH CHECK true → cualquiera autenticado puede crear notifs para otro usuario, necesario
 para que el atleta avise al admin/autor). ⚠️ Crear tabla + habilitar **Realtime** (SQL en CONTEXTO.md).
 
+### pending_subscriptions   ← ✅ datos del atleta capturados ANTES de pagar (checkout de programas grupales)
+id uuid (default gen_random_uuid())
+full_name text (not null)
+email text (not null)
+phone text
+program text (not null)   — 'crossfit' | 'hybrid' | 'corredores' (= external_reference en MP)
+created_at timestamptz (default now())
+RLS: **INSERT público** (WITH CHECK true → la landing es sin login) + SELECT admin. El `service_role`
+de la Edge Function `process-payment` la lee/borra (bypassa RLS). ⚠️ Crear tabla + policy (SQL en CONTEXTO.md).
+
 ## Sistema de notificaciones (campana 🔔 — `app/dashboard.html` + `admin/index.html`)
 Idéntico en ambos portales. **Campana en la topbar** (dashboard: entre nombre y avatar; admin: junto al
 "Hola, [nombre] 👋") con **badge rojo** de no leídas (oculto si 0). Click → **dropdown** (320px, máx 400px
@@ -374,12 +384,22 @@ navega a su `link` (`showView`). **Íconos:** message 💬 · planning 📅 · l
 - admin → acceso total
 - athlete → acceso solo a su programa
 
-## Flujo de alta de atleta
-1. Atleta compra suscripción en la landing (MP o PayPal)
-2. Edge Function process-payment recibe webhook de MP
-3. Crea usuario en Supabase Auth → envía email con link a app/set-password.html
-4. Atleta crea contraseña → accede a app/dashboard.html
-5. Ve planificación de su programa automáticamente
+## Flujo de alta de atleta (programas grupales, vía checkout con datos previos)
+1. En la landing de programa (`crossfit/hybrid/fuerza-corredores.html`) el atleta toca **"Suscribirme —
+   $XX.000 ARS"** → **NO va directo a MP**: abre un **modal** (`#payModal`) que pide nombre (req), email
+   (req) y teléfono (opc). "Continuar al pago →" valida, hace **INSERT en `pending_subscriptions`**
+   (`full_name, email, phone, program`) y recién ahí **redirige al link de MP** (`mp_link_<prog>` de
+   `site_config`). (El botón PayPal sigue yendo directo a su link, sin modal.)
+2. MP cobra y manda el **webhook** a la Edge Function **`process-payment`** (external_reference = program).
+3. Con `status='authorized'`, la function **busca en `pending_subscriptions`** el registro más reciente de
+   ese `program` (`ORDER BY created_at DESC LIMIT 1`), usa `email/full_name/phone` para **crear el usuario**
+   (invite `inviteUserByEmail` con `redirectTo` a `https://hbperformance.fit/app/set-password.html` + insert
+   en `profiles`) o reactivar si ya existía, y luego **borra** ese registro de `pending_subscriptions`.
+   ⚠️ Esta function vive en **Supabase → Edge Functions → process-payment** (NO en este repo); el usuario
+   la actualiza a mano. El código de referencia lo tiene el usuario (2026-07-24).
+4. El email de MP redirige (back URL) a **`pago-exitoso.html`** (raíz): ✅ "¡Gracias por suscribirte!" +
+   aviso de que llegará el email para activar la cuenta + botón "Volver al inicio →". Estilo de la landing.
+5. El atleta recibe el email → `set-password.html` → crea contraseña → `dashboard.html` con su programa.
 
 ## Flujo de cancelación
 1. MP webhook notifica cancelación

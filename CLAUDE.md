@@ -17,6 +17,7 @@ HB Performance/
 ├── fuerza-corredores.html    ← sub-página programa Fuerza para Corredores ✅
 ├── asesoria-erika.html       ← página asesoría Erika Prada ✅
 ├── asesoria-gonza.html       ← página asesoría Gonza Gonda ✅
+├── pago-exitoso.html         ← ✅ landing de "gracias" post-pago (back-URL de MP)
 ├── logo.jpg                  ← logo original (fondo negro)
 ├── logo.png                  ← lockup completo transparente (usado en footer)
 ├── logo-hb.png / logo-perf.png ← partes del logo para el navbar horizontal
@@ -42,8 +43,14 @@ Mismo navbar/footer/estilo que `index.html`. Estructura: hero corto (back-link "
 programas" + badge + título con acento + subtítulo) → layout 2 columnas (izq: 2 placeholders
 "foto programa" 4:3 · der: descripción, listas con check dorado, caja WodUp, caja de precio) →
 banda CTA "¿Tenés dudas? Escribinos" (`#whatsapp`).
-- **Precio con DOS botones**: MP `btn-filled` "Suscribirme — $XX.000 ARS" (`#mp-[prog]`) +
-  PayPal `btn-outline` "Subscribe — USD XX" (`#paypal-[prog]`). Lado a lado; apilados en ≤600px.
+- **Precio con DOS botones**: MP `btn-filled` "Suscribirme — $XX.000 ARS" (`#btn-mp`) +
+  PayPal `btn-outline` "Subscribe — USD XX" (`#btn-paypal`). Lado a lado; apilados en ≤600px.
+  ⚠️ Desde **2026-07-24** el botón de MP **ya NO va directo a MP**: abre un **modal** (`#payModal`,
+  "Completá tus datos para continuar": nombre/email/teléfono) → INSERT en `pending_subscriptions`
+  (`program` = crossfit/hybrid/corredores) → recién ahí redirige al `mp_link_<prog>` de `site_config`.
+  El botón PayPal sí sigue yendo directo. Tras pagar, MP debería volver a **`pago-exitoso.html`** (raíz):
+  ✅ "¡Gracias por suscribirte!" + aviso del email de activación + botón "Volver al inicio →". El flujo
+  completo (webhook → `process-payment` busca el pending → crea el user → set-password) está en `app/CLAUDE.md`.
 - Montos: crossfit 45.000/USD40 · hybrid 45.000/USD40 · corredores 40.000/USD35.
 - `hybrid.html` tiene sección **"Elegí tu plan"** con 2 cards (`.level-card`): "Plan 3 días + 1
   corrida" y "Plan 4 días + 1 corrida".

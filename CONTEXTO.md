@@ -245,6 +245,19 @@ Registro cronológico de lo que se va haciendo. Entrada nueva arriba o abajo seg
 - La caja WodUp de las **sub-páginas de programa** (crossfit/hybrid/fuerza-corredores) NO se tocó — sigue ahí.
 - La regla CSS `.notice-box` quedó sin usar (inofensiva); `index.html` parsea OK (`new Function`).
 
+### 2026-07-24 — Checkout con datos previos + página de éxito post-pago
+- En `crossfit.html` / `hybrid.html` / `fuerza-corredores.html`, el botón MP "Suscribirme — $XX.000 ARS"
+  (`#btn-mp`) **ya NO va directo a Mercado Pago**: ahora abre un **modal** (`#payModal`) que pide nombre,
+  email (requeridos) y teléfono (opcional). "Continuar al pago →" valida → **INSERT en
+  `pending_subscriptions`** (`full_name, email, phone, program`) → redirige al `mp_link_<prog>` de
+  `site_config`. El botón PayPal sigue yendo directo. Modal con CSS propio (`.pay-modal`), estilo landing.
+- Nuevo **`pago-exitoso.html`** (raíz): ✅ "¡Gracias por suscribirte!" + aviso del email de activación +
+  "revisá spam" + botón "Volver al inicio →" (`index.html`). Centrado, fondo `#0A0A0A`, dorado, favicon.
+- La Edge Function `process-payment` (en Supabase, NO en el repo) la actualiza el usuario para buscar el
+  `pending_subscriptions` por `program`, crear/activar el user y borrar el pending. Detalle en `app/CLAUDE.md`.
+- ⚠️ Pendiente en Supabase: tabla `pending_subscriptions` + policy INSERT público (SQL en `app/CONTEXTO.md`)
+  + actualizar `process-payment` + back-URL de MP → `pago-exitoso.html`. Verificado por harness (sin errores).
+
 ### 2026-07-23 — Páginas de asesoría sin precio
 - En `asesoria-erika.html` y `asesoria-gonza.html` se **eliminó la sección de precio** (`.price-box` con
   "USD 150 / mes" + notas de PayPal/Mercado Pago + eyebrow "Precio"). Se reemplazó por una nota simple
