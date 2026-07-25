@@ -282,7 +282,8 @@ completed_at timestamptz
 comment text
 
 ### site_config   ← ✅ config editable del sitio (precios, links de pago, WhatsApp). Clave-valor.
-key text (primary key)   — p.ej. price_crossfit_ars, mp_link_hybrid, whatsapp_erika
+key text (primary key)   — p.ej. price_crossfit_ars, whatsapp_erika, **mp_plan_crossfit** (id del
+  preapproval_plan por programa, lo escribe `create-plans`). `mp_link_<prog>` = legacy sin uso.
 value text (not null)
 updated_at timestamptz (default now())
 RLS: admin FOR ALL (get_my_role()='admin'); **público SELECT** (las landing lo leen sin auth).
@@ -389,22 +390,37 @@ navega a su `link` (`showView`). **Íconos:** message 💬 · planning 📅 · l
 - admin → acceso total
 - athlete → acceso solo a su programa
 
-## Flujo de alta de atleta (programas grupales, vía checkout con datos previos)
+## Flujo de alta de atleta (programas grupales — suscripción MP creada POR API)
+⚠️ **Migrado 2026-07-25**: antes se redirigía a un link fijo del plan del panel no-code de MP
+(`mp_link_<prog>`), pero esas suscripciones **no quedaban asociadas a la app** `684615023666257` y MP
+**nunca disparaba el webhook** en ventas reales (solo "Simular notificación" andaba). Ahora la suscripción
+se **crea por API** (`POST /preapproval`) → queda asociada a la app → MP sí manda el webhook.
 1. En la landing de programa (`crossfit/hybrid/fuerza-corredores.html`) el atleta toca **"Suscribirme —
-   $XX.000 ARS"** → **NO va directo a MP**: abre un **modal** (`#payModal`) que pide nombre (req), email
-   (req) y teléfono (opc). "Continuar al pago →" valida, hace **INSERT en `pending_subscriptions`**
-   (`full_name, email, phone, program`) y recién ahí **redirige al link de MP** (`mp_link_<prog>` de
-   `site_config`). (El botón PayPal sigue yendo directo a su link, sin modal.)
+   $XX.000 ARS"** → abre un **modal** (`#payModal`) que pide nombre (req), email (req) y teléfono (opc).
+   "Continuar al pago →" valida, hace **INSERT en `pending_subscriptions`** (`full_name, email, phone,
+   program`) y luego **invoca la Edge Function `create-subscription`** (`sb.functions.invoke`, body
+   `{ program, email }`). Esa function crea la suscripción en MP (`POST /preapproval` con el
+   `preapproval_plan_id` del programa) y devuelve el **`init_point`**; la landing **redirige ahí**. Si
+   falla → error en el modal (no redirige). (El botón PayPal sigue yendo directo a su link, sin modal.)
 2. MP cobra y manda el **webhook** a la Edge Function **`process-payment`** (external_reference = program).
 3. Con `status='authorized'`, la function **busca en `pending_subscriptions`** el registro más reciente de
    ese `program` (`ORDER BY created_at DESC LIMIT 1`), usa `email/full_name/phone` para **crear el usuario**
    (invite `inviteUserByEmail` con `redirectTo` a `https://hbperformance.fit/app/set-password.html` + insert
    en `profiles`) o reactivar si ya existía, y luego **borra** ese registro de `pending_subscriptions`.
-   ⚠️ Esta function vive en **Supabase → Edge Functions → process-payment** (NO en este repo); el usuario
-   la actualiza a mano. El código de referencia lo tiene el usuario (2026-07-24).
-4. El email de MP redirige (back URL) a **`pago-exitoso.html`** (raíz): ✅ "¡Gracias por suscribirte!" +
-   aviso de que llegará el email para activar la cuenta + botón "Volver al inicio →". Estilo de la landing.
+4. El back_url de MP lleva a **`pago-exitoso.html`** (raíz): ✅ "¡Gracias por suscribirte!" + aviso de que
+   llegará el email para activar la cuenta + botón "Volver al inicio →". Estilo de la landing.
 5. El atleta recibe el email → `set-password.html` → crea contraseña → `dashboard.html` con su programa.
+
+**Edge Functions del pago** (código versionado en `supabase/functions/` — NO se auto-deployan, se
+despliegan a mano en Supabase):
+- **`create-plans`** (uso único): crea los 3 `preapproval_plan` por API con el precio ARS de `site_config`
+  (mensual) y guarda los IDs en `site_config` (`mp_plan_crossfit`/`_hybrid`/`_corredores`). Correr 1 vez.
+- **`create-subscription`** (pública, `verify_jwt` OFF): body `{ program, email }` → `POST /preapproval`
+  con `preapproval_plan_id` + `external_reference=program` + `back_url` → devuelve `{ ok, init_point }`.
+- **`process-payment`** (webhook): parseo robusto (subscription_preapproval / subscription_authorized_payment
+  / IPN); resuelve la preapproval correcta y hace el alta como en el paso 3.
+⚠️ Secretos en Supabase (nunca hardcodeados): `MP_ACCESS_TOKEN`, `SUPABASE_URL`, `SERVICE_ROLE_KEY`.
+⚠️ Las claves `mp_link_<prog>` de `site_config` quedaron **legacy/sin uso** (ya no se redirige a ellas).
 
 ## Flujo de cancelación
 1. MP webhook notifica cancelación

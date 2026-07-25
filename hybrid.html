@@ -354,10 +354,8 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="supabase.js"></script>
 <script>
-  // Programa y clave del link de MP para esta página
+  // Programa de esta página (para el INSERT en pending_subscriptions + la suscripción por API)
   const PAY_PROGRAM = 'hybrid';
-  const PAY_MP_KEY = 'mp_link_hybrid';
-  let PAY_MP_LINK = '';
 
   // ---- Modal de datos previo al pago ----
   var payModal = document.getElementById('payModal');
@@ -386,8 +384,18 @@
     try {
       var res = await sb.from('pending_subscriptions').insert({ full_name: name, email: email, phone: phone || null, program: PAY_PROGRAM });
       if (res.error) { btn.disabled = false; btn.textContent = 'Continuar al pago →'; payErr('No se pudo continuar: ' + res.error.message); return; }
-      if (!PAY_MP_LINK || PAY_MP_LINK === '#') { btn.disabled = false; btn.textContent = 'Continuar al pago →'; payErr('El link de pago no está disponible en este momento. Escribinos por WhatsApp.'); return; }
-      window.location.href = PAY_MP_LINK;
+
+      // Crear la suscripción POR API (queda asociada a la app → MP dispara el webhook)
+      // y redirigir al checkout (init_point) que devuelve la Edge Function create-subscription.
+      var fn = await sb.functions.invoke('create-subscription', { body: { program: PAY_PROGRAM, email: email } });
+      var out = fn && fn.data;
+      if ((fn && fn.error) || !out || !out.ok || !out.init_point) {
+        btn.disabled = false; btn.textContent = 'Continuar al pago →';
+        var emsg = (out && out.error) || (fn && fn.error && fn.error.message) || 'No se pudo generar el link de pago.';
+        payErr(emsg + ' Si el problema sigue, escribinos por WhatsApp.');
+        return;
+      }
+      window.location.href = out.init_point;
     } catch (err) {
       btn.disabled = false; btn.textContent = 'Continuar al pago →';
       payErr('Hubo un error de conexión. Probá de nuevo.');
@@ -412,7 +420,6 @@
 
       var mp = document.getElementById('btn-mp');
       if (mp && arsFmt != null) mp.textContent = 'Suscribirme — $' + arsFmt + ' ARS';
-      PAY_MP_LINK = config[PAY_MP_KEY] || '';   // link real de MP (el botón abre el modal, luego redirige acá)
       var pp = document.getElementById('btn-paypal');
       if (pp) { if (config['paypal_link_hybrid']) pp.href = config['paypal_link_hybrid']; pp.textContent = 'Subscribe — USD ' + usd; }
       var wa = document.getElementById('btn-whatsapp');

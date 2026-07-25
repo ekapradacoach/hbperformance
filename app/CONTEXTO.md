@@ -239,6 +239,58 @@ CREATE POLICY "Admin actualiza mensajes" ON public.messages
   Esto reemplaza al INSERT directo en `profiles` (que fallaba por la FK id→auth.users).
 
 ## Historial
+### 2026-07-25
+- **Migración del checkout de MP: de "link fijo del plan no-code" a suscripción creada POR API.**
+  - **Diagnóstico** (confirmado con la doc de MP): los planes se crearon en el panel no-code ("Tu negocio →
+    Suscripciones"); ese tipo de integración **NO** dispara los Webhooks configurados en "Tus integraciones".
+    Por eso "Simular notificación" andaba (pega directo a la URL) pero una venta real nunca llamaba a
+    `process-payment`: la suscripción real nunca quedaba asociada a la app `684615023666257`. **Fix:** crear
+    la suscripción por API (`POST /preapproval`) con el token de la app → queda asociada → MP manda el webhook.
+  - **Nuevas Edge Functions** (código versionado en `supabase/functions/`, se **deployan a mano**, NO auto):
+    - **`create-plans`** (uso único): `POST /preapproval_plan` x3 (crossfit/hybrid/corredores) con el precio
+      ARS de `site_config` (mensual, `currency_id: ARS`), guarda los IDs en `site_config`
+      (`mp_plan_crossfit`/`mp_plan_hybrid`/`mp_plan_corredores`) y los devuelve en el JSON.
+    - **`create-subscription`** (pública, deploy con `--no-verify-jwt`): recibe `{ program, email }`, lee el
+      `preapproval_plan_id` del programa de `site_config` y el `MP_ACCESS_TOKEN` de **Secrets**, hace
+      `POST /preapproval` (`preapproval_plan_id`, `payer_email`, `external_reference: program`, `back_url`,
+      `status: pending`) y devuelve `{ ok, init_point }`. Errores → `{ ok:false, error }` (status 200).
+    - **`process-payment`** (webhook, AJUSTADO): parseo robusto del payload real —
+      `subscription_preapproval` (data.id = preapproval), `subscription_authorized_payment`
+      (data.id = authorized_payment → se consulta `/authorized_payments/{id}` para sacar `preapproval_id`),
+      `payment`/otros → se ignoran (antes hacía `GET /preapproval/{id}` con un id equivocado). Tolera IPN por
+      querystring. `.maybeSingle()` en los lookups. **La lógica de alta NO cambió**: busca en
+      `pending_subscriptions` por `program`, crea/activa el user (invite + insert en profiles) y borra el pending.
+  - **Landing (`crossfit/hybrid/fuerza-corredores.html`)**: en `submitPay`, después del INSERT en
+    `pending_subscriptions`, en vez de `window.location.href = PAY_MP_LINK` ahora hace
+    `sb.functions.invoke('create-subscription', { body: { program, email } })` y redirige a
+    `data.init_point`. Si `fn.error` o `!data.ok` o falta `init_point` → muestra el error en el modal (con
+    mención a WhatsApp) y no redirige. Se eliminaron `PAY_MP_KEY`/`PAY_MP_LINK` (y su lectura de site_config).
+  - **Verificado** con harness temporal (fake de Supabase + `functions.invoke` stubeado, `init_point` a un
+    hash para no navegar afuera; borrado; **sin errores de consola**): modal abre; **éxito** → INSERT del
+    pending (`program=crossfit`) + `invoke('create-subscription', {program:'crossfit', email})` + redirect a
+    `#checkout-crossfit-ok`; **error de negocio** (`{ok:false,error}`) y **de transporte** (`fn.error`) →
+    muestran el mensaje + mención a WhatsApp, sin redirigir, botón rehabilitado. Las 3 landing pasan
+    `new Function` (syntax OK) y ya no tienen refs a `PAY_MP_LINK`.
+  - ⚠️ **Pasos manuales en Supabase / MP (para que funcione de punta a punta):**
+    1. `MP_ACCESS_TOKEN` (de la app 684615023666257) en **Supabase → Edge Functions → Secrets** (ya debería
+       estar, `process-payment` lo usa).
+    2. Deploy de **`create-plans`** (`--no-verify-jwt`) → invocarla **1 vez** (curl o el tester del dashboard)
+       → anotar acá los `preapproval_plan_id` que devuelve (quedan también en `site_config`). Después se puede
+       borrar/deshabilitar `create-plans`.
+    3. Deploy de **`create-subscription`** con `--no-verify-jwt` (endpoint público, la landing no tiene sesión).
+    4. Redeploy de **`process-payment`** con la versión ajustada.
+    5. En **MP → Tus integraciones → Webhooks**: apuntar a `.../functions/v1/process-payment` y suscribir el
+       evento de **suscripciones (preapproval)**. Verificar que las NUEVAS ventas (por API) sí lleguen.
+    6. Back_url de MP → `https://hbperformance.fit/pago-exitoso.html` (ya viene en el plan y en el preapproval).
+  - ⚠️ **A validar en sandbox de MP:** que `POST /preapproval` con `preapproval_plan_id` + `payer_email` +
+    `status: 'pending'` (sin `card_token_id`) devuelva `init_point` para redirigir. Si MP pidiera tokenizar la
+    tarjeta en el front (MP.js) o usara el `init_point` del PLAN, hay que ajustar `create-subscription` (el
+    código ya loguea la respuesta cruda de MP y devuelve un error claro si no viene `init_point`).
+  - ⚠️ **NO se pusheó todavía** a GitHub: pushear la landing antes de tener `create-subscription` deployada
+    rompería el checkout en vivo. Commitear/pushear cuando el lado Supabase esté listo (o cuando lo pidas).
+  - **Puntos 4 (no tocar chat/notifs/comunidad) y 5 (preguntar) cumplidos**: solo se tocó el flujo de pago;
+    se pidió y usó el código actual de `process-payment` en vez de asumir.
+
 ### 2026-07-24
 - **Cancelación de suscripción conectada con la Edge Function real (`app/dashboard.html`, Perfil).**
   `confirmCancel` pasó de un mock ("cancelación no disponible aún…") a llamar de verdad a
