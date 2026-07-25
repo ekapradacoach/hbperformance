@@ -18,6 +18,13 @@
 //  - Tolera body JSON y también IPN por querystring (?type=&id=).
 //  - .maybeSingle() en los lookups para no tirar error cuando no hay fila.
 //
+// Cambio 2026-07-26 (identificar el programa de forma robusta):
+//  - Los preapproval_plan NO tienen external_reference seteado, así que no se puede
+//    confiar en ese campo. Ahora el `program` se deriva del `preapproval_plan_id` de
+//    la suscripción, mapeándolo contra site_config (mp_plan_crossfit/_hybrid/_corredores).
+//    external_reference se usa solo como respaldo/validación. Se eliminó el fallback
+//    peligroso a 'crossfit' (mandaba todo a crossfit si no había external_reference).
+//
 // Secretos: MP_ACCESS_TOKEN, SUPABASE_URL, SERVICE_ROLE_KEY.
 // ============================================================================
 
@@ -28,6 +35,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 const MP_API = 'https://api.mercadopago.com'
+const PROGRAMS = ['crossfit', 'hybrid', 'corredores']
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
@@ -108,8 +116,14 @@ Deno.serve(async (req) => {
     }
 
     if (status === 'authorized') {
-      const program = externalReference ?? 'crossfit'
-      if (!externalReference) console.warn('Preapproval sin external_reference → fallback crossfit')
+      // Programa: fuente de verdad = preapproval_plan_id mapeado contra site_config.
+      // external_reference solo como respaldo/validación (los planes no lo tienen seteado).
+      const program = await resolveProgram(adminClient, subscription)
+      if (!program) {
+        console.error('No se pudo determinar el program. plan_id:',
+          subscription.preapproval_plan_id, 'external_reference:', externalReference)
+        return json({ ok: false, error: 'No se pudo determinar el programa de la suscripción' }, 422)
+      }
 
       // Buscar datos del atleta en pending_subscriptions (el más reciente del programa)
       const { data: pending } = await adminClient
@@ -190,4 +204,49 @@ function json(body: unknown, status = 200) {
     status,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' }
   })
+}
+
+// Si en site_config quedó guardado el init_point completo en vez del id pelado,
+// extrae el preapproval_plan_id de la URL; si ya es el id, lo devuelve tal cual.
+function extractPlanId(value: string): string {
+  const m = /preapproval_plan_id=([^&\s]+)/.exec(value ?? '')
+  return m ? m[1] : String(value ?? '')
+}
+
+// Determina el `program` de una suscripción de forma robusta:
+//  1) mapeando su preapproval_plan_id contra site_config (mp_plan_<program>) → fuente de verdad
+//  2) external_reference como respaldo (solo si es un program válido) y como validación
+async function resolveProgram(adminClient: any, subscription: any): Promise<string | null> {
+  const externalReference = subscription?.external_reference ?? null
+  const planId = subscription?.preapproval_plan_id ? String(subscription.preapproval_plan_id) : null
+
+  // Mapa plan_id → program desde site_config
+  let programByPlan: string | null = null
+  if (planId) {
+    const keys = PROGRAMS.map((p) => `mp_plan_${p}`)
+    const { data: cfgRows } = await adminClient
+      .from('site_config')
+      .select('key, value')
+      .in('key', keys)
+    for (const r of (cfgRows ?? [])) {
+      if (extractPlanId(r.value) === planId) {
+        programByPlan = r.key.replace('mp_plan_', '')
+        break
+      }
+    }
+  }
+
+  // external_reference solo si es un program conocido
+  const refValid = externalReference && PROGRAMS.includes(externalReference) ? externalReference : null
+
+  // Validación: si el plan_id resuelve un program y external_reference existe pero difiere, avisar
+  if (programByPlan && refValid && programByPlan !== refValid) {
+    console.warn(`external_reference="${refValid}" != program por plan_id="${programByPlan}" → uso el del plan_id`)
+  }
+  if (externalReference && !refValid) {
+    console.warn(`external_reference="${externalReference}" no es un program válido → se ignora`)
+  }
+
+  // Fuente de verdad: plan_id; respaldo: external_reference válido
+  return programByPlan ?? refValid
 }

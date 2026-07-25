@@ -396,8 +396,9 @@ navega a su `link` (`showView`). **Íconos:** message 💬 · planning 📅 · l
 (`POST /preapproval`) pero **exige `card_token_id`** (tokenizar tarjeta en el front con MP.js). (3) **Enfoque
 final (Opción B, 2026-07-25)**: redirigir al **checkout del PLAN** (`.../subscriptions/checkout?
 preapproval_plan_id=<ID>`); MP crea ahí la suscripción asociada al plan (→ a la app → dispara el webhook) y
-el atleta pone email + tarjeta directo en MP. El plan lleva `external_reference=program` → la suscripción lo
-hereda → `process-payment` no cambia.
+el atleta pone email + tarjeta directo en MP. ⚠️ Los planes **NO tienen `external_reference` seteado**, así
+que `process-payment` **identifica el programa mapeando el `preapproval_plan_id` de la suscripción contra
+`site_config`** (`mp_plan_<program>`); `external_reference` queda solo como respaldo/validación (2026-07-26).
 1. En la landing de programa (`crossfit/hybrid/fuerza-corredores.html`) el atleta toca **"Suscribirme —
    $XX.000 ARS"** → abre un **modal** (`#payModal`) que pide nombre (req), email (req) y teléfono (opc).
    "Continuar al pago →" valida, hace **INSERT en `pending_subscriptions`** (`full_name, email, phone,
@@ -405,7 +406,8 @@ hereda → `process-payment` no cambia.
    `{ program, email }`). Esa function **NO llama a la API de MP**: lee el `preapproval_plan_id` del programa
    de `site_config` y devuelve el **`init_point`** del checkout del plan; la landing **redirige ahí**. Si
    falla → error en el modal (no redirige). (El botón PayPal sigue yendo directo a su link, sin modal.)
-2. MP cobra y manda el **webhook** a la Edge Function **`process-payment`** (external_reference = program).
+2. MP cobra y manda el **webhook** a la Edge Function **`process-payment`** (el `program` se resuelve del
+   `preapproval_plan_id` de la suscripción vía `site_config`).
 3. Con `status='authorized'`, la function **busca en `pending_subscriptions`** el registro más reciente de
    ese `program` (`ORDER BY created_at DESC LIMIT 1`), usa `email/full_name/phone` para **crear el usuario**
    (invite `inviteUserByEmail` con `redirectTo` a `https://hbperformance.fit/app/set-password.html` + insert
@@ -423,12 +425,13 @@ despliegan a mano en Supabase):
   **NO llama a la API de MP ni usa MP_ACCESS_TOKEN** (Opción B). Si en site_config estuviera el init_point
   completo lo usa; si es solo el id, reconstruye la URL.
 - **`process-payment`** (webhook): parseo robusto (subscription_preapproval / subscription_authorized_payment
-  / IPN); resuelve la preapproval correcta y hace el alta como en el paso 3.
+  / IPN); resuelve la preapproval correcta y hace el alta como en el paso 3. **Identifica el `program`
+  mapeando el `preapproval_plan_id` de la suscripción contra `site_config`** (`mp_plan_<program>`, helper
+  `resolveProgram`); `external_reference` es respaldo/validación. Si no puede determinar el programa → 422
+  (no crea nada; antes caía a un fallback peligroso a 'crossfit', eliminado 2026-07-26).
 ⚠️ Secretos en Supabase (nunca hardcodeados): `MP_ACCESS_TOKEN` (lo usan `create-plans` y `process-payment`,
 NO `create-subscription`), `SUPABASE_URL`, `SERVICE_ROLE_KEY`.
 ⚠️ Las claves `mp_link_<prog>` de `site_config` quedaron **legacy/sin uso** (ya no se redirige a ellas).
-⚠️ Para que `process-payment` rutee bien por programa, el `preapproval_plan` de cada programa debe tener
-`external_reference=program` (el `create-plans` del repo NO lo setea aún — ver CONTEXTO 2026-07-25 tarde).
 
 ## Flujo de cancelación
 1. MP webhook notifica cancelación

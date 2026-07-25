@@ -239,6 +239,31 @@ CREATE POLICY "Admin actualiza mensajes" ON public.messages
   Esto reemplaza al INSERT directo en `profiles` (que fallaba por la FK id→auth.users).
 
 ## Historial
+### 2026-07-26 — process-payment identifica el programa por preapproval_plan_id (no por external_reference)
+- **Motivo**: se detectó que los `preapproval_plan` actuales **NO tienen `external_reference` seteado**
+  (el `create-plans` del repo tampoco lo setea). Entonces la suscripción que MP crea al pagar por el checkout
+  del plan tampoco lo hereda, y `process-payment` no podía confiar en ese campo — su fallback a `'crossfit'`
+  habría mandado **todas** las altas de hybrid/corredores a crossfit.
+- **Fix (`supabase/functions/process-payment/index.ts`)**: nuevo helper **`resolveProgram(adminClient,
+  subscription)`** que:
+  1. Toma `subscription.preapproval_plan_id` y lo mapea contra `site_config` (`mp_plan_crossfit`/`_hybrid`/
+     `_corredores`) → **fuente de verdad** del `program`. Helper `extractPlanId` tolera que en site_config
+     esté guardado el id pelado **o** el init_point completo (`...?preapproval_plan_id=<ID>`).
+  2. `external_reference` se usa solo como **respaldo** (si es un program válido) y **validación** (si difiere
+     del que da el plan_id, loguea warning y **gana el plan_id**).
+  3. Si no se puede determinar el programa (plan_id no está en site_config y no hay external_reference válido)
+     → devuelve `null` y la función responde **422** (no crea ni activa a nadie). **Se eliminó el fallback
+     peligroso `externalReference ?? 'crossfit'`.**
+- **NO se recrearon los planes** (punto 2): se trabaja con los `preapproval_plan_id` que ya están en
+  `site_config`. Tampoco cambió `create-subscription` ni las landing.
+- **Deploy**: redeployar **solo `process-payment`**.
+- **Verificado** (punto 3): no se puede probar de punta a punta sin MP real, pero se **unit-testeó la lógica
+  de `resolveProgram`/`extractPlanId` en Node (10/10 PASS)**: los 3 programas mapean bien por plan_id; sin
+  external_reference gana el plan_id; con external_reference que coincide/difiere (gana plan_id + warning);
+  plan desconocido + external_reference válido → usa el respaldo; plan desconocido sin ref válida → null;
+  config guardada como URL completa → `extractPlanId` saca el id igual; external_reference basura → se ignora.
+  El TS des-tipado parsea OK (`new Function`).
+
 ### 2026-07-25 (tarde) — Opción B: redirigir al checkout del PLAN (no crear preapproval por API)
 - **Cambio de enfoque en `create-subscription`** (confirmado con la doc de MP). La Opción A de la mañana
   (`POST /preapproval` con `preapproval_plan_id`) **fallaba con `card_token_id is required`**: crear la
