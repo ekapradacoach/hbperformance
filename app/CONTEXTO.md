@@ -239,6 +239,32 @@ CREATE POLICY "Admin actualiza mensajes" ON public.messages
   Esto reemplaza al INSERT directo en `profiles` (que fallaba por la FK id→auth.users).
 
 ## Historial
+### 2026-07-25 (tarde) — Opción B: redirigir al checkout del PLAN (no crear preapproval por API)
+- **Cambio de enfoque en `create-subscription`** (confirmado con la doc de MP). La Opción A de la mañana
+  (`POST /preapproval` con `preapproval_plan_id`) **fallaba con `card_token_id is required`**: crear la
+  suscripción por API asociada a un plan exige tokenizar la tarjeta en el front con MP.js. En vez de eso →
+  **Opción B: redirigir directo al checkout del PLAN**, donde el atleta completa email + tarjeta en MP.
+  - `create-subscription` **simplificada**: ya NO llama a la API de MP. Recibe `{ program }`, lee el
+    `preapproval_plan_id` de `site_config` (`mp_plan_<program>`, que guardó `create-plans`) y devuelve
+    `{ ok, init_point }` con el checkout del plan:
+    `https://www.mercadopago.com.ar/subscriptions/checkout?preapproval_plan_id=<ID>`. Si en site_config
+    ya estuviera guardado el init_point completo (empieza con http) lo usa tal cual; si es solo el id, lo
+    reconstruye. **Ya NO usa `MP_ACCESS_TOKEN`** (no lo borres de Secrets: `create-plans` y `process-payment`
+    lo siguen usando).
+  - **Landing (crossfit/hybrid/fuerza-corredores)**: SIN cambios. Siguen invocando
+    `sb.functions.invoke('create-subscription', { body: { program, email } })` y redirigiendo a
+    `data.init_point` (el contrato `{ ok, init_point }` no cambió; `email` ya no lo usa la función, lo pide
+    MP en el checkout).
+  - **`process-payment`**: SIN cambios respecto de la versión ajustada de la mañana. La suscripción que MP
+    crea al pagar por el checkout del plan hereda el `external_reference` del plan (= program), así que sigue
+    buscando en `pending_subscriptions` por programa igual que antes.
+  - **Deploy**: solo hay que **redeployar `create-subscription`** (sigue con `verify_jwt` OFF).
+  - ⚠️ **OJO — external_reference en el plan** (a confirmar, ver más abajo): el `create-plans` que quedó en el
+    repo **NO** setea `external_reference` en el `preapproval_plan`. Si los planes deployados no lo tienen,
+    las suscripciones no lo heredarán y `process-payment` mandaría todo a `crossfit` (su fallback). Verificar
+    que los planes tengan external_reference; si no, hay que setearlo (recrear planes) o que `process-payment`
+    derive el program desde `subscription.preapproval_plan_id` (mapeo contra `mp_plan_<program>` de site_config).
+
 ### 2026-07-25
 - **Migración del checkout de MP: de "link fijo del plan no-code" a suscripción creada POR API.**
   - **Diagnóstico** (confirmado con la doc de MP): los planes se crearon en el panel no-code ("Tu negocio →

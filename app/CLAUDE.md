@@ -390,17 +390,20 @@ navega a su `link` (`showView`). **Íconos:** message 💬 · planning 📅 · l
 - admin → acceso total
 - athlete → acceso solo a su programa
 
-## Flujo de alta de atleta (programas grupales — suscripción MP creada POR API)
-⚠️ **Migrado 2026-07-25**: antes se redirigía a un link fijo del plan del panel no-code de MP
-(`mp_link_<prog>`), pero esas suscripciones **no quedaban asociadas a la app** `684615023666257` y MP
-**nunca disparaba el webhook** en ventas reales (solo "Simular notificación" andaba). Ahora la suscripción
-se **crea por API** (`POST /preapproval`) → queda asociada a la app → MP sí manda el webhook.
+## Flujo de alta de atleta (programas grupales — redirige al checkout del PLAN de MP)
+⚠️ **Historia**: (1) antes se redirigía a un link fijo del plan no-code → no quedaba asociado a la app
+`684615023666257` → MP nunca disparaba el webhook. (2) Se probó crear la suscripción por API
+(`POST /preapproval`) pero **exige `card_token_id`** (tokenizar tarjeta en el front con MP.js). (3) **Enfoque
+final (Opción B, 2026-07-25)**: redirigir al **checkout del PLAN** (`.../subscriptions/checkout?
+preapproval_plan_id=<ID>`); MP crea ahí la suscripción asociada al plan (→ a la app → dispara el webhook) y
+el atleta pone email + tarjeta directo en MP. El plan lleva `external_reference=program` → la suscripción lo
+hereda → `process-payment` no cambia.
 1. En la landing de programa (`crossfit/hybrid/fuerza-corredores.html`) el atleta toca **"Suscribirme —
    $XX.000 ARS"** → abre un **modal** (`#payModal`) que pide nombre (req), email (req) y teléfono (opc).
    "Continuar al pago →" valida, hace **INSERT en `pending_subscriptions`** (`full_name, email, phone,
    program`) y luego **invoca la Edge Function `create-subscription`** (`sb.functions.invoke`, body
-   `{ program, email }`). Esa function crea la suscripción en MP (`POST /preapproval` con el
-   `preapproval_plan_id` del programa) y devuelve el **`init_point`**; la landing **redirige ahí**. Si
+   `{ program, email }`). Esa function **NO llama a la API de MP**: lee el `preapproval_plan_id` del programa
+   de `site_config` y devuelve el **`init_point`** del checkout del plan; la landing **redirige ahí**. Si
    falla → error en el modal (no redirige). (El botón PayPal sigue yendo directo a su link, sin modal.)
 2. MP cobra y manda el **webhook** a la Edge Function **`process-payment`** (external_reference = program).
 3. Con `status='authorized'`, la function **busca en `pending_subscriptions`** el registro más reciente de
@@ -415,12 +418,17 @@ se **crea por API** (`POST /preapproval`) → queda asociada a la app → MP sí
 despliegan a mano en Supabase):
 - **`create-plans`** (uso único): crea los 3 `preapproval_plan` por API con el precio ARS de `site_config`
   (mensual) y guarda los IDs en `site_config` (`mp_plan_crossfit`/`_hybrid`/`_corredores`). Correr 1 vez.
-- **`create-subscription`** (pública, `verify_jwt` OFF): body `{ program, email }` → `POST /preapproval`
-  con `preapproval_plan_id` + `external_reference=program` + `back_url` → devuelve `{ ok, init_point }`.
+- **`create-subscription`** (pública, `verify_jwt` OFF): body `{ program }` → lee `mp_plan_<program>` de
+  `site_config` y devuelve `{ ok, init_point }` = `.../subscriptions/checkout?preapproval_plan_id=<ID>`.
+  **NO llama a la API de MP ni usa MP_ACCESS_TOKEN** (Opción B). Si en site_config estuviera el init_point
+  completo lo usa; si es solo el id, reconstruye la URL.
 - **`process-payment`** (webhook): parseo robusto (subscription_preapproval / subscription_authorized_payment
   / IPN); resuelve la preapproval correcta y hace el alta como en el paso 3.
-⚠️ Secretos en Supabase (nunca hardcodeados): `MP_ACCESS_TOKEN`, `SUPABASE_URL`, `SERVICE_ROLE_KEY`.
+⚠️ Secretos en Supabase (nunca hardcodeados): `MP_ACCESS_TOKEN` (lo usan `create-plans` y `process-payment`,
+NO `create-subscription`), `SUPABASE_URL`, `SERVICE_ROLE_KEY`.
 ⚠️ Las claves `mp_link_<prog>` de `site_config` quedaron **legacy/sin uso** (ya no se redirige a ellas).
+⚠️ Para que `process-payment` rutee bien por programa, el `preapproval_plan` de cada programa debe tener
+`external_reference=program` (el `create-plans` del repo NO lo setea aún — ver CONTEXTO 2026-07-25 tarde).
 
 ## Flujo de cancelación
 1. MP webhook notifica cancelación
