@@ -2094,6 +2094,14 @@
       'asesoria-gonza': 'Asesoría Gonza'
     };
     const STATUS_LABELS = { 'active': 'Activa', 'pending': 'Pendiente', 'cancelled': 'Cancelada' };
+    const PROGRAM_ORDER = ['crossfit', 'hybrid', 'corredores', 'asesoria-erika', 'asesoria-gonza'];
+    const ASESORIA_PROGRAMS = ['asesoria-erika', 'asesoria-gonza'];
+    // <option> del dropdown de programa. `keys` limita qué programas se muestran (default: los 5).
+    function programOptionsHtml(selected, keys) {
+      return (keys || PROGRAM_ORDER)
+        .map(v => `<option value="${v}"${v === selected ? ' selected' : ''}>${PROGRAM_LABELS[v]}</option>`)
+        .join('');
+    }
 
     // ============================================================
     // Helpers
@@ -2391,15 +2399,19 @@
     }
 
     // Abre el modal de alta manual (mismo modal/lógica desde Asesorías y desde Alumnos).
-    function openAssignAthleteModal() {
+    // scope 'asesorias' → el dropdown muestra SOLO las 2 asesorías (evita cargar mal un
+    // atleta de asesoría como programa grupal). scope 'alumnos' → los 5 programas.
+    function openAssignAthleteModal(scope) {
+      const sel = document.getElementById('athleteProgram');
+      sel.innerHTML = programOptionsHtml(null, scope === 'asesorias' ? ASESORIA_PROGRAMS : null);
       // Sincronizar visibilidad del campo de plan de Hybrid con el programa seleccionado
       document.getElementById('fieldHybridVariant').style.display =
-        (document.getElementById('athleteProgram').value === 'hybrid') ? '' : 'none';
+        (sel.value === 'hybrid') ? '' : 'none';
       openModal('modalAthlete');
     }
-    document.getElementById('btnAssignAthlete').addEventListener('click', openAssignAthleteModal);
+    document.getElementById('btnAssignAthlete').addEventListener('click', () => openAssignAthleteModal('asesorias'));
     const btnAssignAthleteAlumnos = document.getElementById('btnAssignAthleteAlumnos');
-    if (btnAssignAthleteAlumnos) btnAssignAthleteAlumnos.addEventListener('click', openAssignAthleteModal);
+    if (btnAssignAthleteAlumnos) btnAssignAthleteAlumnos.addEventListener('click', () => openAssignAthleteModal('alumnos'));
 
     const CREATE_ATHLETE_URL = 'https://frjlafrgdcbomdnentbe.supabase.co/functions/v1/create-athlete';
 
@@ -3590,6 +3602,10 @@
           <input type="text" id="edPhone" value="${esc(a.phone)}" autocomplete="off">
         </div>
         <div class="field">
+          <label for="edProgram">Programa</label>
+          <select id="edProgram">${programOptionsHtml(a.program)}</select>
+        </div>
+        <div class="field">
           <label for="edStatus">Estado de suscripción</label>
           <select id="edStatus">
             <option value="active">Activo</option>
@@ -3601,15 +3617,14 @@
           <label for="edPaidUntil">Pagado hasta <span class="opt">(opcional)</span></label>
           <input type="date" id="edPaidUntil" value="${a.subscription_end ? esc(String(a.subscription_end).slice(0,10)) : ''}" autocomplete="off">
         </div>
-        ${a.program === 'hybrid' ? `
-        <div class="field">
+        <div class="field" id="edHybridVariantWrap" style="display:none;">
           <label for="edHybridVariant">Plan de Hybrid</label>
           <select id="edHybridVariant">
             <option value="">— Sin elegir —</option>
             <option value="3">Hybrid 3 días + 1 corrida</option>
             <option value="4">Hybrid 4 días + 1 corrida</option>
           </select>
-        </div>` : ''}
+        </div>
         <div class="field">
           <label for="edPrice">Precio personalizado <span class="opt">(opcional, ARS)</span></label>
           <input type="number" id="edPrice" value="${a.custom_price != null ? esc(a.custom_price) : ''}" placeholder="Ej: 45000" min="0" step="any" autocomplete="off">
@@ -3619,7 +3634,15 @@
           <button class="btn-ghost" id="edCancel">Cancelar</button>
         </div>`;
       document.getElementById('edStatus').value = statusKey(a.subscription_status);
-      if (a.program === 'hybrid') document.getElementById('edHybridVariant').value = a.hybrid_variant || '';
+      document.getElementById('edHybridVariant').value = a.hybrid_variant || '';
+      // Mostrar el plan de Hybrid solo cuando el programa seleccionado es Hybrid (reacciona al cambio)
+      const edProgramEl = document.getElementById('edProgram');
+      const syncEdHybrid = () => {
+        document.getElementById('edHybridVariantWrap').style.display =
+          (edProgramEl.value === 'hybrid') ? '' : 'none';
+      };
+      syncEdHybrid();
+      edProgramEl.addEventListener('change', syncEdHybrid);
       document.getElementById('spX').addEventListener('click', closePanel);
       document.getElementById('edCancel').addEventListener('click', () => renderPanelView(a));
       document.getElementById('edSave').addEventListener('click', () => saveEdit(a));
@@ -3628,10 +3651,10 @@
     async function saveEdit(a) {
       const full_name = document.getElementById('edName').value.trim();
       const phone = document.getElementById('edPhone').value.trim();
+      const program = document.getElementById('edProgram').value;
       const subscription_status = document.getElementById('edStatus').value;
       const paidUntil = document.getElementById('edPaidUntil').value;         // 'YYYY-MM-DD' o ''
       const priceRaw = document.getElementById('edPrice').value.trim();
-      const variantEl = document.getElementById('edHybridVariant');           // solo existe si program=hybrid
       if (!full_name) {
         const err = document.getElementById('edError');
         err.textContent = 'El nombre no puede quedar vacío.';
@@ -3641,11 +3664,13 @@
       const patch = {
         full_name,
         phone: phone || null,
+        program,
         subscription_status,
         subscription_end: paidUntil || null,
-        custom_price: priceRaw === '' ? null : Number(priceRaw)
+        custom_price: priceRaw === '' ? null : Number(priceRaw),
+        // hybrid_variant solo tiene sentido en Hybrid; si no es Hybrid, se limpia
+        hybrid_variant: program === 'hybrid' ? (document.getElementById('edHybridVariant').value || null) : null
       };
-      if (variantEl) patch.hybrid_variant = variantEl.value || null;
       const btn = document.getElementById('edSave');
       btn.disabled = true; btn.textContent = 'Guardando…';
       const { error } = await sb.from('profiles').update(patch).eq('id', a.id);

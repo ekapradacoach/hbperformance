@@ -1337,3 +1337,22 @@ ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS hybrid_variant text;       
 - El botón de **Asesorías quedó igual** (mismo comportamiento; solo se refactorizó su handler para reusar
   la función). ⚠️ Nota: ese botón **no** preselecciona coach (Erika/Gonza) — abre con 'crossfit' como el
   otro; es un único botón para ambas asesorías. Si se quiere preselección por coach, es un cambio aparte.
+
+## 2026-07-27 (c) — Dropdown de programa por origen + editar programa en la ficha
+Contexto: se cargó por error un alumno de Gonza como `asesoria-erika` desde el modal (el dropdown
+mostraba los 5 programas también al abrir desde Asesorías). Dos cambios (`admin/index.html`):
+1. **Dropdown del modal según origen.** `openAssignAthleteModal(scope)` ahora **reconstruye** las
+   `<option>` del `#athleteProgram` al abrir: desde **Asesorías** (`scope='asesorias'`) muestra **solo
+   "Asesoría Erika" y "Asesoría Gonza"**; desde **Alumnos** (`scope='alumnos'`) muestra los **5**. Mismo
+   modal y misma función/lógica de `create-athlete` (solo cambian las opciones visibles). Helper nuevo
+   `programOptionsHtml(selected, keys)` + consts `PROGRAM_ORDER` / `ASESORIA_PROGRAMS`.
+2. **Editar programa en la ficha** (panel lateral → Editar, `renderPanelEdit`/`saveEdit`): nuevo selector
+   **"Programa"** con los **5 completos** (sin filtrar), preseleccionado en el actual → al guardar
+   actualiza `profiles.program`. Sirve para **corregir cargas mal hechas** (el caso de Gonza). El campo
+   **"Plan de Hybrid"** (`hybrid_variant`) ahora se renderiza siempre pero **se muestra/oculta según el
+   programa elegido** (visible solo si es Hybrid) y reacciona al cambio; si el programa final NO es Hybrid,
+   `hybrid_variant` se guarda como `null`.
+- **No se tocó** el flujo de pago/checkout ni `create-athlete`.
+- ⚠️ Nota: cambiar `program` desde la ficha **no migra la planificación** existente (los `planning_days`
+  quedan bajo el `program_slug`/`athlete_id` viejo). Pensado para corregir altas recién hechas sin plan
+  cargado; si el atleta ya tenía planificación, hay que recargarla en el programa correcto.
