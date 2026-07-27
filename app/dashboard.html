@@ -812,9 +812,33 @@
     .greeting { font-size: 2rem; }
     .toast { bottom: 24px; }
   }
+
+  /* ================= Pantalla: suscripción vencida (acceso cortado) ================= */
+  .expired-screen { display: none; position: fixed; inset: 0; z-index: 3000; background: var(--bg); align-items: center; justify-content: center; padding: 24px; text-align: center; }
+  .expired-screen.show { display: flex; }
+  .expired-card { width: 100%; max-width: 420px; }
+  .expired-logo { height: 44px; margin: 0 auto 24px; display: block; opacity: 0.9; }
+  .expired-icon { font-size: 3.4rem; line-height: 1; margin-bottom: 16px; }
+  .expired-card h1 { font-family: var(--font-display); font-weight: 800; font-size: 1.8rem; letter-spacing: -1px; margin-bottom: 12px; }
+  .expired-card p { color: var(--text-secondary); font-size: 1rem; line-height: 1.5; margin-bottom: 26px; }
+  .expired-card .btn { display: inline-block; }
+  .expired-logout { display: block; margin: 18px auto 0; background: none; border: none; color: var(--text-secondary); font-family: var(--font-body); font-size: 0.9rem; cursor: pointer; text-decoration: underline; }
+  .expired-logout:hover { color: var(--text); }
 </style>
 </head>
 <body>
+  <!-- ===== Pantalla: suscripción vencida (reemplaza al dashboard si venció el acceso) ===== -->
+  <div class="expired-screen" id="expiredScreen">
+    <div class="expired-card">
+      <img class="expired-logo" src="../logo.png" alt="HB Performance" onerror="this.style.display='none';">
+      <div class="expired-icon">⏳</div>
+      <h1>Tu suscripción venció</h1>
+      <p>Tu período de acceso terminó. Para seguir entrenando, volvé a suscribirte.</p>
+      <a class="btn btn-filled" id="expiredResubBtn" href="#">Volver a suscribirme</a>
+      <button class="expired-logout" id="expiredLogout">Cerrar sesión</button>
+    </div>
+  </div>
+
   <!-- ===== Topbar ===== -->
   <header class="topbar">
     <a class="topbar-logo" href="dashboard.html">
@@ -2947,6 +2971,18 @@
     // ============================================================
     // Auth guard + arranque
     // ============================================================
+    // Pantalla de suscripción vencida: reemplaza el dashboard (no carga vistas ni notifs)
+    function showExpiredScreen() {
+      const rb = document.getElementById('expiredResubBtn');
+      if (rb) rb.href = PROGRAM_LANDING[ATHLETE.program] || 'index.html';
+      const lo = document.getElementById('expiredLogout');
+      if (lo) lo.addEventListener('click', async () => {
+        await sb.auth.signOut();
+        window.location.replace('login.html');
+      });
+      document.getElementById('expiredScreen').classList.add('show');
+    }
+
     async function init() {
       const { data: { session } } = await sb.auth.getSession();
       if (!session || !session.user) { window.location.replace('login.html'); return; }
@@ -2958,6 +2994,14 @@
       ATHLETE = profile;
       IS_ASESORIA = isAsesoriaProgram(profile.program);
       progDate = TODAY;
+
+      // Corte de acceso: cancelada Y con la fecha de fin ya vencida (anterior a hoy) → pantalla de vencido.
+      // (Activa, o cancelada-pero-todavía-dentro-del-período, siguen viendo el dashboard normal.)
+      const endDs = ATHLETE.subscription_end ? String(ATHLETE.subscription_end).slice(0, 10) : null;
+      if (ATHLETE.subscription_status === 'cancelled' && endDs && endDs < TODAY) {
+        showExpiredScreen();
+        return;
+      }
 
       const firstName = (profile.full_name || '').split(' ')[0] || 'atleta';
       document.getElementById('greeting').innerHTML = `Hola, ${esc(firstName)} 👋`;

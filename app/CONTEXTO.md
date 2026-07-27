@@ -224,7 +224,9 @@ CREATE POLICY "Admin actualiza mensajes" ON public.messages
   `cancel-subscription` (deployada, verify_jwt ON) → cancela en MP (PUT `status:cancelled`) + `UPDATE profiles`
   (`subscription_status='cancelled'`, `subscription_end=next_payment_date`). Probado de punta a punta con una
   suscripción real (botón → MP → DB → UI "activa hasta <fecha>"). Ver Historial 2026-07-26 (tarde) + 2026-07-27.
-  ⚠️ Pendiente aparte (NO es parte de este flujo): **corte de acceso al vencer `subscription_end`** (guard en login).
+  ✅ **Corte de acceso al vencer `subscription_end` — HECHO (2026-07-27):** guard en `dashboard.html` (ver
+  Historial 2026-07-27 (3)). Si el atleta está `cancelled` y `subscription_end` ya pasó → pantalla "Tu
+  suscripción venció" en vez del dashboard.
 - **Edge Function webhook de MP** que reciba la notificación de cancelación de suscripción y haga
   `UPDATE profiles SET subscription_status='cancelled'` para el `mp_subscription_id` correspondiente
   (ver "Flujo de cancelación" en CLAUDE.md). Hoy la baja se hace **manual** desde la sección Alumnos
@@ -273,6 +275,29 @@ Lista textual dejada por el usuario para que quede registrada:
   cortarle el acceso. Es un flujo **distinto** al de la cancelación voluntaria (que ya se implementó).
 
 ## Historial
+### 2026-07-27 (3) — Caja "Tu portal de entrenamiento" en landings + corte de acceso al vencer la suscripción
+Dos cambios en un commit. **No se tocó el flujo de pago/checkout.**
+1. **`.wodup-box` de las 3 landing** (`crossfit`/`hybrid`/`fuerza-corredores`): el título del eyebrow pasó de
+   "La plataforma — WodUp" a **"La plataforma — Tu portal de entrenamiento"**. Se **eliminó** la línea
+   "Disponible en iOS y desde el navegador para Android" (se accede desde cualquier navegador, no aplica la
+   distinción). Se **cambió "en la app" → "en tu portal"** en la línea de planificación (confirmado con el
+   usuario): crossfit "Recibís la planificación diaria lista en **tu portal**"; hybrid/corredores
+   "Planificación diaria en **tu portal**". El resto de las líneas (comentar semana / chat con entrenadores)
+   quedó igual. (La sección sigue con la clase `.wodup-box` y el 📱, solo cambió el texto.)
+2. **Corte de acceso al vencer `subscription_end`** (`app/dashboard.html`) — pendiente que había quedado de la
+   tarea de cancelación. En `init()`, apenas se carga el `profile`: si `subscription_status === 'cancelled'`
+   **Y** `subscription_end` (YYYY-MM-DD) es **anterior a hoy** (`< TODAY`) → se llama `showExpiredScreen()` y se
+   **corta** (return) antes de cargar vistas/notifs/realtime. `showExpiredScreen` muestra el overlay
+   **`#expiredScreen`** (fixed, z-index 3000, cubre topbar/tabbar): logo + ⏳ + "Tu suscripción venció" + texto
+   + botón **"Volver a suscribirme"** (href = `PROGRAM_LANDING[program]`, el mismo del flujo de cancelación) +
+   link "Cerrar sesión" (signOut → login). **NO se toca** el caso activo ni el cancelado-todavía-dentro-del-
+   período (esos ven el dashboard normal); si `subscription_end` es null tampoco corta.
+- **Verificado** con harness temporal (fake de Supabase parametrizado por status+end, borrado; **sin errores de
+  consola**): **cancelled + fin 2020-01-01** → overlay visible (z-index 3000 > topbar 50), "Tu suscripción
+  venció", "Volver a suscribirme" → `../crossfit.html`, dashboard NO cargado (greeting sigue "Hola 👋");
+  **active** → sin overlay, dashboard cargado ("Hola, Juan 👋", vista Inicio activa); **cancelled + fin
+  2027-12-31 (futuro)** → sin overlay, dashboard cargado. Las 4 páginas pasan `new Function` (syntax OK).
+
 ### 2026-07-27 (2) — 3 cambios de UI en las landing (WodUp, WhatsApp, avisos de demora del mail)
 Solo texto/UI, agrupados en un commit para minimizar deploys de Netlify. **No se tocó el flujo de
 pago/checkout** (`create-subscription`/`process-payment`/`cancel-subscription` intactos).

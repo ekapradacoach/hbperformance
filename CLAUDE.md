@@ -41,12 +41,13 @@ solo queda la nota y el CTA de WhatsApp. (Las reglas CSS `.price-box` quedaron s
 ### Sub-páginas de programas (crossfit / hybrid / fuerza-corredores)
 Mismo navbar/footer/estilo que `index.html`. Estructura: hero corto (back-link "← Volver a
 programas" + badge + título con acento + subtítulo) → layout 2 columnas (izq: 2 placeholders
-"foto programa" 4:3 · der: descripción, listas con check dorado, caja WodUp, caja de precio) →
+"foto programa" 4:3 · der: descripción, listas con check dorado, caja de la plataforma/portal, caja de precio) →
 banda CTA "¿Tenés dudas? Escribinos" (`#whatsapp`).
 - **WhatsApp flotante** (`.wa-float`, `#waFloat`, fijo abajo-derecha, "💬 ¿Dudas? Escribinos"): href desde
   `whatsapp_erika` de `site_config` (no hardcodeado). Se agregó 2026-07-27 (además del CTA del help-band).
 - ⚠️ **Footer sin aviso WodUp**: el `.notice-box` del footer se eliminó de las 3 landing (2026-07-27), igual
-  que en index.html. La sección `.wodup-box` "La plataforma — WodUp" del cuerpo **sí** sigue.
+  que en index.html. La sección `.wodup-box` del cuerpo **sí** sigue, pero su título pasó a
+  **"La plataforma — Tu portal de entrenamiento"** (2026-07-27) y ya no menciona WodUp/iOS/Android ni "la app".
 - **Aviso de demora del mail** (2026-07-27): línea `.pay-note` en el `#payModal` ("el mail tarda hasta 5 min,
   revisar spam"); mismo aviso + botón WhatsApp en `pago-exitoso.html`.
 - **Precio con DOS botones**: MP `btn-filled` "Suscribirme — $XX.000 ARS" (`#btn-mp`) +

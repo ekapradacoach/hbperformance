@@ -142,8 +142,8 @@ como en admin: grupal filtra por `program_slug`; asesoría además por `athlete_
   ⚠️ La Edge Function **`cancel-subscription`** (`supabase/functions/`, deploy con `verify_jwt` ON): identifica
   al atleta por su JWT (`getUser`), toma `mp_subscription_id`, hace GET+PUT `status:cancelled` a MP, y setea
   `subscription_status='cancelled'` + `subscription_end` = `next_payment_date` (fallback: `subscription_start`
-  + ciclos mensuales). El **corte de acceso al vencer `subscription_end` NO está hecho** (paso aparte, guard
-  en login). **Seguridad**
+  + ciclos mensuales). ✅ El **corte de acceso al vencer `subscription_end` YA está hecho** (guard en
+  `init()`: cancelada + `subscription_end < hoy` → pantalla `#expiredScreen` "Tu suscripción venció"). **Seguridad**
   ("Cambiar contraseña" → `resetPasswordForEmail` + toast; "Cerrar sesión" → `signOut` → `login.html`,
   botón outline rojo al hover).
 - Vista **Comunidad** (✅ desarrollada): NO es un tab — se entra desde el botón "Ver comunidad →" de la
@@ -444,8 +444,10 @@ NO `create-subscription`), `SUPABASE_URL`, `SERVICE_ROLE_KEY`.
    `subscription_end` = `next_payment_date`).
 2. El atleta **mantiene acceso hasta `subscription_end`** (el período ya pagado). La UI muestra
    "Cancelada. Seguís con acceso hasta el <fecha>".
-3. ⚠️ **Corte de acceso al vencer `subscription_end` = PENDIENTE** (paso aparte, guard en el login). Hoy
-   el atleta cancelado sigue entrando aunque haya vencido.
+3. ✅ **Corte de acceso al vencer `subscription_end` (hecho 2026-07-27)**: guard en `init()` de
+   `dashboard.html` — si el atleta está `cancelled` y `subscription_end < hoy`, en vez del dashboard ve la
+   pantalla `#expiredScreen` "Tu suscripción venció" + "Volver a suscribirme". (El caso activo o
+   cancelado-dentro-del-período no se toca.)
 4. (Alternativa server-side) Si MP manda el webhook `subscription_preapproval` con status cancelled,
    `process-payment` también pone `subscription_status='cancelled'` por `mp_subscription_id`.
 
