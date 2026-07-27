@@ -104,6 +104,17 @@
     transform: translateY(-2px);
   }
 
+  .success-help { margin-top: 28px; }
+  .success-help p { color: var(--text-secondary); font-size: 0.92rem; margin-bottom: 12px; }
+  .btn-wa {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-family: var(--font-display); font-weight: 700; font-size: 0.95rem; letter-spacing: 0.3px;
+    padding: 12px 24px; border-radius: 6px;
+    border: 2px solid var(--accent); background: transparent; color: var(--accent);
+    transition: background .2s ease, color .2s ease;
+  }
+  .btn-wa:hover { background: var(--accent); color: #0A0A0A; }
+
   @media (max-width: 420px) {
     h1 { font-size: 1.65rem; }
     .success-icon { font-size: 3.8rem; }
@@ -120,10 +131,29 @@
 
     <div class="success-icon">✅</div>
     <h1>¡Gracias por <span class="accent">suscribirte</span>!</h1>
-    <p class="success-text">En los próximos minutos vas a recibir un email en tu casilla con el link para activar tu cuenta y acceder a tu portal de entrenamiento.</p>
-    <p class="success-note">Si no lo ves en tu bandeja de entrada, revisá la carpeta de spam.</p>
+    <p class="success-text">En unos minutos vas a recibir un email en tu casilla con el link para activar tu cuenta y acceder a tu portal de entrenamiento. Puede demorar <b>hasta 5 minutos</b>.</p>
+    <p class="success-note">Si no lo ves en tu bandeja de entrada, revisá la carpeta de <b>spam</b>.</p>
 
     <a href="index.html" class="btn-home">Volver al inicio →</a>
+
+    <div class="success-help">
+      <p>¿Alguna duda mientras esperás el email? Escribinos:</p>
+      <a id="waHelp" class="btn-wa" href="#whatsapp" target="_blank" rel="noopener">💬 Escribir por WhatsApp</a>
+    </div>
   </div>
+
+  <!-- WhatsApp de contacto desde site_config (whatsapp_erika) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase.js"></script>
+  <script>
+    (async function () {
+      try {
+        const { data, error } = await sb.from('site_config').select('key, value').eq('key', 'whatsapp_erika');
+        const num = (!error && data && data[0]) ? data[0].value : null;
+        const wa = document.getElementById('waHelp');
+        if (wa && num) wa.href = 'https://wa.me/' + num + '?text=' + encodeURIComponent('Hola! Acabo de suscribirme y tengo una duda.');
+      } catch (e) { /* silencioso: si falla, el botón queda sin número (raro: se acaba de pagar vía Supabase) */ }
+    })();
+  </script>
 </body>
 </html>

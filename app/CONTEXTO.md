@@ -243,7 +243,9 @@ CREATE POLICY "Admin actualiza mensajes" ON public.messages
 
 ## 📋 Backlog de negocio (pendientes — NO para resolver ahora, registrados 2026-07-26)
 Lista textual dejada por el usuario para que quede registrada:
-- Sacar el cartel de "WOD UP" de las páginas de programas.
+- ✅ **HECHO (2026-07-27):** Sacar el cartel de "WOD UP" de las páginas de programas. Se eliminó el
+  `.notice-box` del footer de las 3 landing (el mismo aviso que ya se sacó de index.html). La sección
+  `.wodup-box` "La plataforma — WodUp" del cuerpo se dejó intacta (mismo criterio que index.html).
 - Cancelar tanto en MP como en la base de datos al mismo tiempo (✅ ya cubierto en la tarea de cancelación
   del 2026-07-26); el acceso se corta cuando vence el último día pagado.
 - Los planes de MP creados a mano en el panel (no-code) quedaron obsoletos, evaluar si borrarlos.
@@ -252,9 +254,14 @@ Lista textual dejada por el usuario para que quede registrada:
 - Definir qué pasa si alguien cancela y quiere reactivar después.
 - Adjuntar en el mail de bienvenida un video mostrando cómo agregar acceso directo a la pantalla de inicio,
   para iPhone y Android.
-- Agregar botón de WhatsApp en cada página de programa.
-- Avisar antes y después del pago (en la página de redirección post-pago) que el mail puede tardar hasta 5
-  minutos, revisar spam, y dejar el WhatsApp de contacto visible en esa pantalla.
+- ✅ **HECHO (2026-07-27):** Agregar botón de WhatsApp en cada página de programa. **Botón flotante**
+  (`.wa-float`, fijo abajo-derecha, dorado, "💬 ¿Dudas? Escribinos") en las 3 landing; el href se setea
+  desde `whatsapp_erika` de `site_config` (no hardcodeado). (Se mantuvo también el `#btn-whatsapp` del
+  help-band que ya existía.)
+- ✅ **HECHO (2026-07-27):** Avisar antes y después del pago la demora del mail. **Antes**: línea
+  `.pay-note` en el `#payModal` de las 3 landing ("tras pagar el mail puede demorar hasta 5 min, revisar
+  spam"). **Después**: `pago-exitoso.html` ahora dice "hasta 5 minutos" + revisar spam + **botón de WhatsApp
+  visible** (`#waHelp`, href desde `whatsapp_erika` de `site_config`).
 - Hybrid Evolution es un plan de 3 o 4 días — quien lo compra debe poder ver ambas variantes; falta definir cómo.
 - Sistema para que alguien que compra más de un programa pueda verlos en simultáneo (ej. un desplegable para
   cambiar entre programas).
@@ -266,6 +273,29 @@ Lista textual dejada por el usuario para que quede registrada:
   cortarle el acceso. Es un flujo **distinto** al de la cancelación voluntaria (que ya se implementó).
 
 ## Historial
+### 2026-07-27 (2) — 3 cambios de UI en las landing (WodUp, WhatsApp, avisos de demora del mail)
+Solo texto/UI, agrupados en un commit para minimizar deploys de Netlify. **No se tocó el flujo de
+pago/checkout** (`create-subscription`/`process-payment`/`cancel-subscription` intactos).
+1. **WodUp**: se eliminó el `.notice-box` del footer de `crossfit.html` / `hybrid.html` /
+   `fuerza-corredores.html` (el mismo aviso "📱 …WodUp… app.wodup.com" que ya se había sacado de
+   `index.html`), **sin reemplazo**. Se dejó intacta la sección `.wodup-box` "La plataforma — WodUp" del
+   cuerpo (mismo criterio que se usó en index.html; ver 2026-07-23). La regla CSS `.notice-box` quedó sin uso.
+2. **WhatsApp flotante**: nuevo botón `.wa-float` (posición fija abajo-derecha, dorado, pill, "💬 ¿Dudas?
+   Escribinos", `target=_blank`) en las 3 landing. El href lo setea el script de `site_config` desde
+   `whatsapp_erika` (`#waFloat`, con un `?text=` pre-cargado) — **no hardcodeado** (mismo patrón que el
+   `#btn-whatsapp` existente). Estilo consistente con los botones de WhatsApp del proyecto.
+3. **Avisos de demora del mail**:
+   - **Antes de pagar**: línea `.pay-note` dentro del `#payModal` de las 3 landing: "Después de pagar te
+     llega un email… puede demorar **hasta 5 minutos** — si no, revisá **spam**".
+   - **Después de pagar**: `pago-exitoso.html` — el texto pasó a "hasta 5 minutos" (antes "en los próximos
+     minutos"), se remarcó "spam", y se agregó un **botón de WhatsApp visible** (`#waHelp`, "💬 Escribir por
+     WhatsApp"). Para eso se sumó a `pago-exitoso.html` el CDN de Supabase + `supabase.js` + un fetch que
+     setea el href desde `whatsapp_erika` de `site_config`.
+- **Verificado** en el navegador (DOM, sin errores de consola): las 3 landing → `.notice-box` eliminado,
+  `.wodup-box` intacto, `.pay-note` con "hasta 5 minutos", botón `.wa-float` fijo abajo-derecha dorado.
+  `pago-exitoso.html` → texto "hasta 5 minutos", nota de spam, botón "💬 Escribir por WhatsApp" (target
+  _blank), "Volver al inicio" → index.html. Las 4 páginas pasan `new Function` (syntax OK).
+
 ### 2026-07-27 — ✅ Pago y cancelación PROBADOS DE PUNTA A PUNTA EN PRODUCCIÓN (con suscripción real)
 - **✅ Flujo de pago / alta — COMPLETO Y PROBADO**: landing → modal de datos → INSERT en
   `pending_subscriptions` → `create-subscription` devuelve el `init_point` del **checkout del plan** → el

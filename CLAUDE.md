@@ -43,6 +43,12 @@ Mismo navbar/footer/estilo que `index.html`. Estructura: hero corto (back-link "
 programas" + badge + título con acento + subtítulo) → layout 2 columnas (izq: 2 placeholders
 "foto programa" 4:3 · der: descripción, listas con check dorado, caja WodUp, caja de precio) →
 banda CTA "¿Tenés dudas? Escribinos" (`#whatsapp`).
+- **WhatsApp flotante** (`.wa-float`, `#waFloat`, fijo abajo-derecha, "💬 ¿Dudas? Escribinos"): href desde
+  `whatsapp_erika` de `site_config` (no hardcodeado). Se agregó 2026-07-27 (además del CTA del help-band).
+- ⚠️ **Footer sin aviso WodUp**: el `.notice-box` del footer se eliminó de las 3 landing (2026-07-27), igual
+  que en index.html. La sección `.wodup-box` "La plataforma — WodUp" del cuerpo **sí** sigue.
+- **Aviso de demora del mail** (2026-07-27): línea `.pay-note` en el `#payModal` ("el mail tarda hasta 5 min,
+  revisar spam"); mismo aviso + botón WhatsApp en `pago-exitoso.html`.
 - **Precio con DOS botones**: MP `btn-filled` "Suscribirme — $XX.000 ARS" (`#btn-mp`) +
   PayPal `btn-outline` "Subscribe — USD XX" (`#btn-paypal`). Lado a lado; apilados en ≤600px.
   ⚠️ Desde **2026-07-24** el botón de MP **ya NO va directo a MP**: abre un **modal** (`#payModal`,
