@@ -275,6 +275,17 @@ Lista textual dejada por el usuario para que quede registrada:
   cortarle el acceso. Es un flujo **distinto** al de la cancelación voluntaria (que ya se implementó).
 
 ## Historial
+### 2026-07-27 (4) — Fix: reactivación limpia `subscription_end` en process-payment
+- En `supabase/functions/process-payment/index.ts`, rama de **reactivación de usuario existente**
+  (`if (existingProfile)`): el `UPDATE` ponía `subscription_status='active'` + `mp_subscription_id` +
+  `subscription_start`, pero **NO tocaba `subscription_end`**, así que si el atleta había cancelado antes,
+  quedaba con la **fecha de vencimiento vieja** aunque volviera a estar activo (y el guard del dashboard lo
+  hubiera cortado el acceso al toque, o mostraría "activa hasta <fecha pasada>").
+- **Fix**: se agregó **`subscription_end: null`** a ese `UPDATE` — mismo criterio que un alta nueva (donde
+  `subscription_end` es null mientras la suscripción está activa). Un solo campo agregado; **no se tocó nada
+  más** (`resolveProgram`, el resto del parseo/alta, la rama de usuario nuevo, todo igual).
+- Syntax OK (de-tipado `new Function`). ⚠️ Redeployar `process-payment` en Supabase.
+
 ### 2026-07-27 (3) — Caja "Tu portal de entrenamiento" en landings + corte de acceso al vencer la suscripción
 Dos cambios en un commit. **No se tocó el flujo de pago/checkout.**
 1. **`.wodup-box` de las 3 landing** (`crossfit`/`hybrid`/`fuerza-corredores`): el título del eyebrow pasó de

@@ -154,7 +154,8 @@ Deno.serve(async (req) => {
           .update({
             subscription_status: 'active',
             mp_subscription_id: mpSubscriptionId,
-            subscription_start: new Date().toISOString().split('T')[0]
+            subscription_start: new Date().toISOString().split('T')[0],
+            subscription_end: null // limpiar el vencimiento de una cancelación previa (mismo criterio que un alta nueva)
           })
           .eq('email', email)
       } else {
