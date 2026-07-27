@@ -66,8 +66,9 @@ Para la foto de perfil del atleta (vista Perfil) hace falta:
 El path es `{athlete_id}/avatar.jpg` (fijo, `upsert:true` → sobrescribe). Sin la columna, el `UPDATE`
 falla y avisa por toast; sin el bucket/policies, la subida falla y avisa. La UI degrada a iniciales.
 
-### ⚠️ Checkout con datos previos — tabla `pending_subscriptions` (pendiente en Supabase)
-Para el modal de datos previo al pago (crossfit/hybrid/fuerza-corredores) hace falta:
+### ✅ Checkout con datos previos — tabla `pending_subscriptions` (CREADA y en producción, 2026-07-27)
+La tabla ya está creada y el flujo de pago funciona de punta a punta (ver Historial 2026-07-27). SQL de
+referencia (por si hay que recrearla) — para el modal de datos previo al pago (crossfit/hybrid/fuerza-corredores):
 ```sql
 CREATE TABLE public.pending_subscriptions (
   id uuid default gen_random_uuid() primary key,
@@ -219,11 +220,11 @@ CREATE POLICY "Admin actualiza mensajes" ON public.messages
   (dominio del sitio) para que no la reutilicen. Ideal a futuro: moverla a una Edge Function.
 
 ## ⚠️ Pendiente (documentado, NO codeado) — cancelación de suscripciones vía MercadoPago
-- ✅ **Cancelación implementada (2026-07-26 tarde):** front conectado + Edge Function `cancel-subscription`
-  **codeada** en `supabase/functions/cancel-subscription/index.ts` (cancela en MP con PUT `status:cancelled`
-  + `UPDATE profiles` con `subscription_status='cancelled'` y `subscription_end=next_payment_date`). Ver
-  detalle en Historial 2026-07-26 (tarde). **Falta solo deployarla** en Supabase (verify_jwt ON).
-  ⚠️ Pendiente aparte: **corte de acceso al vencer `subscription_end`** (guard en login).
+- ✅✅ **Cancelación COMPLETA y PROBADA EN PRODUCCIÓN (2026-07-27):** front + Edge Function
+  `cancel-subscription` (deployada, verify_jwt ON) → cancela en MP (PUT `status:cancelled`) + `UPDATE profiles`
+  (`subscription_status='cancelled'`, `subscription_end=next_payment_date`). Probado de punta a punta con una
+  suscripción real (botón → MP → DB → UI "activa hasta <fecha>"). Ver Historial 2026-07-26 (tarde) + 2026-07-27.
+  ⚠️ Pendiente aparte (NO es parte de este flujo): **corte de acceso al vencer `subscription_end`** (guard en login).
 - **Edge Function webhook de MP** que reciba la notificación de cancelación de suscripción y haga
   `UPDATE profiles SET subscription_status='cancelled'` para el `mp_subscription_id` correspondiente
   (ver "Flujo de cancelación" en CLAUDE.md). Hoy la baja se hace **manual** desde la sección Alumnos
@@ -265,6 +266,22 @@ Lista textual dejada por el usuario para que quede registrada:
   cortarle el acceso. Es un flujo **distinto** al de la cancelación voluntaria (que ya se implementó).
 
 ## Historial
+### 2026-07-27 — ✅ Pago y cancelación PROBADOS DE PUNTA A PUNTA EN PRODUCCIÓN (con suscripción real)
+- **✅ Flujo de pago / alta — COMPLETO Y PROBADO**: landing → modal de datos → INSERT en
+  `pending_subscriptions` → `create-subscription` devuelve el `init_point` del **checkout del plan** → el
+  atleta paga en MP → MP dispara el **webhook** a `process-payment` → identifica el `program` por
+  `preapproval_plan_id` (mapeo contra `site_config`) → **crea el atleta** (invite + `profiles`) y borra el
+  pending → email de activación → `set-password.html` → `dashboard.html`. Verificado con una **compra real**.
+- **✅ Flujo de cancelación — COMPLETO Y PROBADO**: botón "Cancelar suscripción" (Perfil) → `cancel-subscription`
+  (identifica al atleta por su JWT) → **PUT `status:cancelled` a MP** → `UPDATE profiles`
+  (`subscription_status='cancelled'`, `subscription_end=next_payment_date`) → UI "Cancelada. Seguís con acceso
+  hasta el <fecha>". Verificado con una **suscripción real** (botón → MP → DB → UI).
+- Todas las Edge Functions del pago están **deployadas y funcionando**: `create-plans` (corrida 1 vez, IDs en
+  `site_config`), `create-subscription`, `process-payment`, `cancel-subscription`. El webhook de MP apunta a
+  `process-payment` y llega en ventas reales (el problema original de asociación a la app quedó resuelto).
+- ⚠️ Único pendiente relacionado (aparte, en backlog): **corte de acceso al vencer `subscription_end`** (guard
+  en el login) y el manejo de **cancelación involuntaria por pago fallido** (ver "📋 Backlog de negocio").
+
 ### 2026-07-26 (tarde) — Cancelación real de suscripción (MP + DB) + UI "activa hasta <fecha>"
 - **Edge Function nueva `cancel-subscription`** (`supabase/functions/cancel-subscription/index.ts`, deploy con
   **`verify_jwt` ON**):
