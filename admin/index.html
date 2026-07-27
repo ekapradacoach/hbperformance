@@ -2496,8 +2496,16 @@
 
     async function deleteAthlete(a) {
       if (!confirm(`¿Eliminar a "${a.full_name || a.email}"? Esta acción no se puede deshacer.`)) return;
-      const { error } = await sb.from('profiles').delete().eq('id', a.id);
-      if (error) { alert('No se pudo eliminar: ' + error.message); return; }
+      // .select() para detectar 0 filas afectadas: si una policy RLS bloquea el DELETE,
+      // Supabase no devuelve error pero tampoco filas → tratarlo como fallo real (si no,
+      // parecería eliminado sin haber borrado nada en la base).
+      const { data: deleted, error } = await sb.from('profiles').delete().eq('id', a.id).select();
+      if (error || !deleted || deleted.length === 0) {
+        alert(error
+          ? ('No se pudo eliminar: ' + error.message)
+          : 'No se pudo eliminar: no tenés permiso para eliminar este perfil (o la fila ya no existe).');
+        return;
+      }
       loadAthletes();
     }
 
@@ -3508,8 +3516,15 @@
     // -------- Eliminar perfil (solo cancelados) --------
     async function deleteAthleteProfile(a) {
       if (!confirm(`¿Eliminar a ${a.full_name || a.email}? Sus datos se eliminarán permanentemente.`)) return;
-      const { error } = await sb.from('profiles').delete().eq('id', a.id);
-      if (error) { alert('No se pudo eliminar: ' + error.message); return; }
+      // .select() para detectar 0 filas afectadas (RLS que bloquea el DELETE sin devolver error):
+      // sin esto, mostraría "eliminado" en falso sin borrar nada en la base.
+      const { data: deleted, error } = await sb.from('profiles').delete().eq('id', a.id).select();
+      if (error || !deleted || deleted.length === 0) {
+        alert(error
+          ? ('No se pudo eliminar: ' + error.message)
+          : 'No se pudo eliminar: no tenés permiso para eliminar este perfil (o la fila ya no existe).');
+        return;
+      }
       closePanel();
       await loadAlumnos();
       flash('🗑️ Alumno eliminado.');

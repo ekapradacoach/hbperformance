@@ -1386,8 +1386,24 @@ el caso admin→cualquier fila. Las policies permisivas se combinan con OR.)
 otros (`saveEdit` de la ficha y `darDeBaja`): ahora el UPDATE lleva **`.select()`** y se trata **0 filas
 devueltas como error real** (muestra "no tenés permiso para editar este perfil…") en vez del éxito falso.
 Así, aunque a futuro una policy vuelva a bloquear, el fallo se ve en vez de mentir.
-- ⚠️ Pendiente/nota: hay **2 `DELETE` de `profiles`** con el mismo patrón sin `.select()` (eliminar atleta
-  en la lista de Asesorías y en la ficha). Hoy dependen de que exista policy de DELETE para admin; si el
-  borrado falla por RLS también sería silencioso. No se tocaron ahora (fuera del alcance pedido); conviene
-  blindarlos igual y/o confirmar la policy de DELETE de admin.
 - **No se tocó** el flujo de pago/checkout.
+
+## 2026-07-27 (e) — Blindaje de los 2 DELETE de profiles + policy de DELETE admin
+Continuación de (d): se aplicó el mismo blindaje a los **dos `DELETE` de `profiles`** del admin —
+`deleteAthlete` (eliminar en la lista de Asesorías) y `deleteAthleteProfile` (eliminar desde la ficha).
+Ahora ambos usan **`.delete().eq('id', a.id).select()`** y tratan **0 filas devueltas como error real**
+(muestran "no tenés permiso para eliminar este perfil…" en vez de un "eliminado" falso). Así, si falta la
+policy de DELETE para admin, el fallo se ve en vez de ser silencioso.
+
+**SQL de la policy de DELETE para admin (correr a mano en Supabase, mismo criterio que la de UPDATE):**
+```sql
+create policy "Admin elimina cualquier perfil"
+on public.profiles
+for delete
+using (get_my_role() = 'admin');
+```
+(DELETE no lleva `with check` — solo `using`.)
+
+Recordatorio: para que el fix de (d) y (e) funcione hay que correr **ambas** policies en Supabase
+(la de UPDATE de (d) y esta de DELETE). Sin ellas, el admin ve el mensaje de error correcto pero no puede
+editar/eliminar perfiles de otros atletas.
