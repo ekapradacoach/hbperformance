@@ -1326,3 +1326,14 @@ ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS hybrid_variant text;       
 - Conectar `custom_price` a Métricas (Parte B, tarea aparte).
 - Si hay planificación de Hybrid ya cargada bajo `program_slug='hybrid'` (viejo), migrarla a `hybrid-3`/
   `hybrid-4` según corresponda (o recargarla), ya que el editor y el dashboard ahora usan esos slugs.
+
+## 2026-07-27 (b) — Segundo punto de entrada al modal "Asignar atleta" (sección Alumnos)
+- Como el alta manual ahora sirve para los 5 programas, se agregó un **botón "+ Asignar atleta" en la
+  cabecera de la sección Alumnos** (`#view-alumnos > .al-header`, id `btnAssignAthleteAlumnos`, entre el
+  título y el buscador). Abre **el mismo modal** `#modalAthlete` que el botón de Asesorías, **sin
+  preseleccionar programa** (queda el default 'crossfit'; el admin elige cualquiera de los 5).
+- **No se duplicó** ni el modal ni la lógica: se extrajo la apertura a la función `openAssignAthleteModal()`
+  y **ambos** botones (`btnAssignAthlete` de Asesorías + `btnAssignAthleteAlumnos` de Alumnos) la usan.
+- El botón de **Asesorías quedó igual** (mismo comportamiento; solo se refactorizó su handler para reusar
+  la función). ⚠️ Nota: ese botón **no** preselecciona coach (Erika/Gonza) — abre con 'crossfit' como el
+  otro; es un único botón para ambas asesorías. Si se quiere preselección por coach, es un cambio aparte.

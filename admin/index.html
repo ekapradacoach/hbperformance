@@ -1655,6 +1655,8 @@
       <section id="view-alumnos" class="view">
         <div class="al-header">
           <h2 class="section-title">Alumnos</h2>
+          <!-- Segundo punto de entrada al modal de alta manual (mismo modal que Asesorías, sin preseleccionar programa) -->
+          <button class="btn-primary" id="btnAssignAthleteAlumnos">+ Asignar atleta</button>
           <input type="text" id="alSearch" class="al-search" placeholder="Buscar por nombre o email…" autocomplete="off">
         </div>
 
@@ -2388,12 +2390,16 @@
       });
     }
 
-    document.getElementById('btnAssignAthlete').addEventListener('click', () => {
+    // Abre el modal de alta manual (mismo modal/lógica desde Asesorías y desde Alumnos).
+    function openAssignAthleteModal() {
       // Sincronizar visibilidad del campo de plan de Hybrid con el programa seleccionado
       document.getElementById('fieldHybridVariant').style.display =
         (document.getElementById('athleteProgram').value === 'hybrid') ? '' : 'none';
       openModal('modalAthlete');
-    });
+    }
+    document.getElementById('btnAssignAthlete').addEventListener('click', openAssignAthleteModal);
+    const btnAssignAthleteAlumnos = document.getElementById('btnAssignAthleteAlumnos');
+    if (btnAssignAthleteAlumnos) btnAssignAthleteAlumnos.addEventListener('click', openAssignAthleteModal);
 
     const CREATE_ATHLETE_URL = 'https://frjlafrgdcbomdnentbe.supabase.co/functions/v1/create-athlete';
 
