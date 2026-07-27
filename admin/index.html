@@ -3487,9 +3487,16 @@
         `Dejá la de hoy si corta ahora:`, hoy);
       if (fecha === null) return; // canceló
       const end = /^\d{4}-\d{2}-\d{2}$/.test(fecha.trim()) ? fecha.trim() : hoy;
-      const { error } = await sb.from('profiles')
-        .update({ subscription_status: 'cancelled', subscription_end: end }).eq('id', a.id);
-      if (error) { alert('No se pudo dar de baja: ' + error.message); return; }
+      // .select() para detectar 0 filas afectadas (RLS que bloquea el UPDATE sin devolver error):
+      // sin esto, mostraría "dado de baja" en falso sin cambiar nada en la base.
+      const { data: updated, error } = await sb.from('profiles')
+        .update({ subscription_status: 'cancelled', subscription_end: end }).eq('id', a.id).select();
+      if (error || !updated || updated.length === 0) {
+        alert(error
+          ? ('No se pudo dar de baja: ' + error.message)
+          : 'No se pudo dar de baja: no tenés permiso para modificar este perfil (o la fila ya no existe).');
+        return;
+      }
       await loadAlumnos();
       if (currentPanelAthlete && currentPanelAthlete.id === a.id) {
         const fresh = allAthletes.find(x => x.id === a.id);
@@ -3673,11 +3680,16 @@
       };
       const btn = document.getElementById('edSave');
       btn.disabled = true; btn.textContent = 'Guardando…';
-      const { error } = await sb.from('profiles').update(patch).eq('id', a.id);
-      if (error) {
+      // .select() para detectar 0 filas afectadas: si una policy RLS bloquea el UPDATE,
+      // Supabase no devuelve error pero tampoco filas → hay que tratarlo como fallo real
+      // (si no, el toast diría "guardado" sin haber cambiado nada en la base).
+      const { data: updated, error } = await sb.from('profiles').update(patch).eq('id', a.id).select();
+      if (error || !updated || updated.length === 0) {
         btn.disabled = false; btn.textContent = 'Guardar';
         const err = document.getElementById('edError');
-        err.textContent = 'No se pudo guardar: ' + error.message;
+        err.textContent = error
+          ? ('No se pudo guardar: ' + error.message)
+          : 'No se pudo guardar: no tenés permiso para editar este perfil (o la fila ya no existe).';
         err.classList.add('show');
         return;
       }

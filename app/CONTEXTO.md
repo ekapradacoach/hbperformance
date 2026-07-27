@@ -1356,3 +1356,38 @@ mostraba los 5 programas también al abrir desde Asesorías). Dos cambios (`admi
 - ⚠️ Nota: cambiar `program` desde la ficha **no migra la planificación** existente (los `planning_days`
   quedan bajo el `program_slug`/`athlete_id` viejo). Pensado para corregir altas recién hechas sin plan
   cargado; si el atleta ya tenía planificación, hay que recargarla en el programa correcto.
+
+## 2026-07-27 (d) — Bug: editar perfil de atleta desde el admin no guardaba (RLS) + blindaje
+**Síntoma:** en la ficha (`#view-alumnos` → panel Editar), cambiar "Programa" (u otros campos) mostraba
+"✓ Cambios guardados" pero **no persistía** (ni tras recargar), **sin error en consola**. Mismo problema
+en "Dar de baja".
+
+**Diagnóstico (causa raíz):** faltaba la **policy RLS de UPDATE para admin** en `public.profiles`. Las
+policies existentes eran: SELECT propio (`auth.uid()=id`), UPDATE propio (`auth.uid()=id`) y SELECT admin
+(`auth.uid()=id OR get_my_role()='admin'`) — **pero ninguna de UPDATE para admin**. Resultado: el admin
+**podía leer** a todos los atletas (por eso se ven en la lista) pero el `UPDATE` sobre la fila de *otro*
+usuario **matcheaba 0 filas** (lo filtra RLS). En Supabase/PostgREST un UPDATE que afecta 0 filas devuelve
+**204 sin `error`** → el código caía en la rama de éxito y mostraba un toast **falso**. El código incluía
+bien `program` en el payload y el filtro `.eq('id', a.id)` era correcto: el problema era 100% RLS +
+que el UPDATE no verificaba filas afectadas.
+
+**Fix parte 1 — SQL (lo corre el usuario a mano en Supabase):**
+```sql
+create policy "Admin actualiza cualquier perfil"
+on public.profiles
+for update
+using (get_my_role() = 'admin')
+with check (get_my_role() = 'admin');
+```
+(El UPDATE del propio perfil sigue cubierto por la policy "Usuario actualiza su propio perfil"; esta suma
+el caso admin→cualquier fila. Las policies permisivas se combinan con OR.)
+
+**Fix parte 2 — código (`admin/index.html`):** se blindaron los dos UPDATE del admin sobre perfiles de
+otros (`saveEdit` de la ficha y `darDeBaja`): ahora el UPDATE lleva **`.select()`** y se trata **0 filas
+devueltas como error real** (muestra "no tenés permiso para editar este perfil…") en vez del éxito falso.
+Así, aunque a futuro una policy vuelva a bloquear, el fallo se ve en vez de mentir.
+- ⚠️ Pendiente/nota: hay **2 `DELETE` de `profiles`** con el mismo patrón sin `.select()` (eliminar atleta
+  en la lista de Asesorías y en la ficha). Hoy dependen de que exista policy de DELETE para admin; si el
+  borrado falla por RLS también sería silencioso. No se tocaron ahora (fuera del alcance pedido); conviene
+  blindarlos igual y/o confirmar la policy de DELETE de admin.
+- **No se tocó** el flujo de pago/checkout.
