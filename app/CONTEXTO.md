@@ -275,6 +275,30 @@ Lista textual dejada por el usuario para que quede registrada:
   cortarle el acceso. Es un flujo **distinto** al de la cancelación voluntaria (que ya se implementó).
 
 ## Historial
+### 2026-07-27 (5) — Mail de reactivación (Resend) en process-payment
+- En `supabase/functions/process-payment/index.ts`, rama **`if (existingProfile)`** (usuario que había
+  cancelado y vuelve a pagar): antes NO mandaba ningún mail (a diferencia del alta nueva, que manda el invite
+  de Supabase Auth). Ahora, **después de actualizar el profile**, envía un mail vía **Resend**
+  (`POST https://api.resend.com/emails`, `Authorization: Bearer RESEND_API_KEY`, JSON):
+  - **From**: `HB Performance <noreply@hbperformance.fit>` (mismo remitente del SMTP).
+  - **To**: el email del atleta. **Subject**: "Tu suscripción fue reactivada".
+  - **Body** (HTML): mensaje corto de que se reactivó + que entre con **su usuario y contraseña de siempre**,
+    con link directo al **LOGIN real** → **`https://hbperformance.fit/app/login.html`** (NO a `set-password.html`,
+    porque ya tiene contraseña). Personalizado con el primer nombre.
+  - **Manejo de errores** (no rompe el alta): el `UPDATE` del profile se hace **antes** del mail; el envío va en
+    `try/catch` — si falta `RESEND_API_KEY` → `console.warn` y no manda; si Resend responde no-2xx → `console.error`
+    con el status/body; si el `fetch` tira → se captura. En todos los casos la reactivación queda igual (el dato
+    en la DB es lo prioritario).
+- **NO se tocó** la rama de usuario nuevo (invite), ni `resolveProgram`, ni el resto de la lógica. Se agregó
+  **`RESEND_API_KEY`** a la lista de secretos del encabezado.
+- **Verificado**: syntax de-tipado OK (`new Function`); test unitario en Node (11/11 PASS) del bloque de mail —
+  request correcto (URL/POST/Bearer/from/to/subject), body linkea al **login** (no set-password) y personaliza
+  con el nombre; y el manejo de errores (no-2xx logueado, sin key avisa y no llama fetch, fetch que tira se
+  captura) **sin romper** el flujo. Diff acotado a la rama existingProfile + comentario de secretos.
+- ⚠️ **Para deployar**: agregar el secret **`RESEND_API_KEY`** en Supabase → Edge Functions → Secrets, y
+  **redeployar `process-payment`**. (El dominio `hbperformance.fit` debe estar verificado en Resend para
+  poder enviar desde `noreply@hbperformance.fit`.)
+
 ### 2026-07-27 (4) — Fix: reactivación limpia `subscription_end` en process-payment
 - En `supabase/functions/process-payment/index.ts`, rama de **reactivación de usuario existente**
   (`if (existingProfile)`): el `UPDATE` ponía `subscription_status='active'` + `mp_subscription_id` +

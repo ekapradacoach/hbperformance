@@ -25,7 +25,12 @@
 //    external_reference se usa solo como respaldo/validación. Se eliminó el fallback
 //    peligroso a 'crossfit' (mandaba todo a crossfit si no había external_reference).
 //
-// Secretos: MP_ACCESS_TOKEN, SUPABASE_URL, SERVICE_ROLE_KEY.
+// Cambio 2026-07-27 (mail de reactivación): en la rama existingProfile, tras actualizar
+//   el profile, se manda un mail vía Resend avisando que la suscripción se reactivó y que
+//   entre con su usuario/contraseña de siempre (link al LOGIN, NO a set-password). El fallo
+//   del mail se loguea pero NO rompe la reactivación.
+//
+// Secretos: MP_ACCESS_TOKEN, SUPABASE_URL, SERVICE_ROLE_KEY, RESEND_API_KEY.
 // ============================================================================
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
@@ -158,6 +163,43 @@ Deno.serve(async (req) => {
             subscription_end: null // limpiar el vencimiento de una cancelación previa (mismo criterio que un alta nueva)
           })
           .eq('email', email)
+
+        // Mail de reactivación (el usuario YA existe y YA tiene contraseña → va al LOGIN, no a set-password).
+        // Si el envío falla, se loguea pero NO rompe la reactivación (el dato en la DB es lo prioritario).
+        try {
+          const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
+          if (!RESEND_API_KEY) {
+            console.warn('RESEND_API_KEY no configurada → no se envía el mail de reactivación')
+          } else {
+            const firstName = full_name ? String(full_name).split(' ')[0] : ''
+            const resendRes = await fetch('https://api.resend.com/emails', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${RESEND_API_KEY}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                from: 'HB Performance <noreply@hbperformance.fit>',
+                to: email,
+                subject: 'Tu suscripción fue reactivada',
+                html: `<p>¡Hola${firstName ? ' ' + firstName : ''}!</p>
+<p>Tu suscripción a <strong>HB Performance</strong> se reactivó. ¡Ya podés volver a entrenar! 💪</p>
+<p>Entrá a tu portal con <strong>tu mismo usuario y contraseña de siempre</strong>:</p>
+<p><a href="https://hbperformance.fit/app/login.html">https://hbperformance.fit/app/login.html</a></p>
+<p>Si no te acordás la contraseña, desde esa misma pantalla podés recuperarla.</p>
+<p>— El equipo de HB Performance</p>`
+              })
+            })
+            if (!resendRes.ok) {
+              const errBody = await resendRes.text().catch(() => '')
+              console.error('Resend (reactivación) falló:', resendRes.status, errBody)
+            } else {
+              console.log('Mail de reactivación enviado a:', email)
+            }
+          }
+        } catch (mailErr) {
+          console.error('Error enviando el mail de reactivación:', mailErr)
+        }
       } else {
         // Crear usuario nuevo con invite (email para set-password)
         const { data: inviteData, error: inviteError } = await adminClient.auth.admin.inviteUserByEmail(email, {
