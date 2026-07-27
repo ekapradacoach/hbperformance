@@ -1245,3 +1245,84 @@ pago/checkout** (`create-subscription`/`process-payment`/`cancel-subscription` i
 - Próximo paso: correr en Supabase todos los pendientes (esquema **+ `post_likes`** + policies RLS
   atleta/admin + Realtime de messages/community) + Edge Functions (`create-athlete` + webhook MP +
   `cancel-subscription`) + `set-password.html`. **Con la comunidad, el portal del atleta queda completo.**
+
+---
+
+## 2026-07-27 — Alta manual en programas grupales + custom_price + Hybrid 3/4 días (Partes A/B/C)
+
+> ⚠️ **REQUIERE 2 PASOS MANUALES EN SUPABASE (los corre el usuario):**
+> 1. **Correr el SQL** de las columnas nuevas (abajo).
+> 2. **Redeployar la Edge Function `create-athlete`** con el código actualizado del repo
+>    (`supabase/functions/create-athlete/index.ts` — ahora **versionado en el repo**). Sin esto, las altas
+>    manuales fallan al setear los campos nuevos.
+
+### 🗄️ SQL a correr a mano en Supabase
+```sql
+-- subscription_end YA EXISTE (no hace falta crearla).
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS custom_price numeric;      -- precio manual por atleta
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS hybrid_variant text;       -- '3' | '4' (solo si program='hybrid')
+```
+
+### PARTE A — Alta manual de atleta en los 3 programas grupales (no solo asesorías)
+- **`supabase/functions/create-athlete/index.ts`** (⚠️ **ahora en el repo**; redeployar en Supabase):
+  ahora acepta y setea en el INSERT de `profiles`: `subscription_end` ("pagado hasta"), `custom_price`
+  y `hybrid_variant` (normalizado: solo '3'/'4' y solo si program='hybrid'). Valida que `program` sea
+  uno de los 5 válidos. **El invite (`inviteUserByEmail`) se manda SIEMPRE, para cualquier programa**
+  (ya era así) → todos reciben el mail para crear su contraseña (Parte A3 ✅, era correcto ya).
+- **Admin — modal "Asignar atleta"** (`admin/index.html`): reemplazado el select "Asesoría de" (erika/gonza)
+  por un **select "Programa" de 5 opciones** (crossfit / hybrid / corredores / asesoría-erika / asesoría-gonza).
+  Nuevos campos: **"Pagado hasta"** (date, opcional → `subscription_end`), **"Precio personalizado"**
+  (number, opcional → `custom_price`) y **"Plan de Hybrid"** (select 3/4, visible solo si el programa es
+  Hybrid → `hybrid_variant`). El handler `athleteAssign` manda todo eso a `create-athlete`. Al asignar,
+  limpia el formulario y refresca tanto asesorías como alumnos. `subscription_status` queda **'active'**
+  (los atletas manuales **no** se autocortan: la guarda de vencimiento solo corta si status='cancelled').
+- **Admin — lista de alumnos**: badge de **aviso de vencimiento** (solo visual, NO corta acceso) al lado
+  del estado: **amarillo** "Vence en N días" (≤5 días) / **rojo** "Vencido hace N días" / "Vence hoy".
+  Helpers `vencInfo(a)` / `vencBadge(a)`. También aparece en el panel lateral (fila "Pagado hasta").
+- **Admin — "Dar de baja"** (`darDeBaja`): ahora disponible para **cualquier atleta activo** (antes solo
+  asesorías) tanto en la fila de la tabla como en el panel lateral. Pide una **fecha** (prompt, default hoy)
+  y setea `subscription_status='cancelled'` + `subscription_end` **directo en la base, SIN llamar a MP**.
+  (Distinta de la baja que hace el propio atleta desde su portal, que sí llama a MP y no se tocó.)
+
+### PARTE B — custom_price por atleta
+- Columna `profiles.custom_price` (numeric, nullable). Editable desde: el **modal de alta** y el **form de
+  edición del panel lateral** (`renderPanelEdit` / `saveEdit`). Se muestra en la ficha (panel) si tiene valor.
+  ⚠️ **Solo se guarda el campo** — todavía NO se conecta a Métricas (backlog, tarea aparte).
+
+### PARTE C — Hybrid Evolution en 2 variantes (3 / 4 días), un solo pago
+- Columna `profiles.hybrid_variant` (text '3'|'4', solo aplica si `program='hybrid'`). **`profiles.program`
+  NO cambia** (sigue 'hybrid' para precio, acceso, comunidad/chat).
+- **Planificación separada por slug:** la planificación de Hybrid vive en **`program_slug='hybrid-3'`** y
+  **`'hybrid-4'`** (en vez de `'hybrid'`).
+- **Dashboard atleta** (`app/dashboard.html`):
+  - `HYBRID_VARIANT` global + helpers `isHybrid()` / `planningSlug()` (devuelve `hybrid-<n>` para Hybrid).
+    `dayScope()` ahora filtra por `planningSlug()` → afecta a Inicio (hoy/próximos), Mi programa (día/mes)
+    y el aviso de planificación de hoy, todos automáticamente.
+  - **Selector de plan** en "Mi programa" (dropdown "Hybrid 3/4 días + 1 corrida", visible solo para Hybrid).
+    Al cambiar: persiste en `profiles.hybrid_variant` y recarga la vista actual.
+  - **Pantalla de elección la primera vez** (`showHybridChooser`): si `hybrid_variant` es null, se muestra
+    un overlay a pantalla completa para elegir 3 o 4 **antes** de ver contenido (no asume default). Guarda
+    la elección en la base. (Los ~12 atletas de Hybrid cargados a mano la verán en su próximo login.)
+  - **Estadísticas** (`loadStatsData`): para Hybrid, los totales por día suman **AMBOS** slugs
+    (`hybrid-3` + `hybrid-4`), así el progreso cuenta junto y cambiar de plan no "pierde" lo entrenado en el
+    otro. Las `block_completions` ya son por `athlete_id` (incluyen todo sin importar el slug).
+    ⚠️ *Consideración conocida:* si el coach carga planificación en ambos planes el mismo día, el
+    denominador de adherencia suma los dos. Se priorizó la instrucción explícita "sumar ambos".
+  - **Comunidad y chat de Hybrid siguen compartidos** entre ambas variantes (usan `program_slug='hybrid'`
+    tal cual, sin cambios — Parte C4 ✅).
+- **Admin — editor de planificación**: al entrar a planificar **Hybrid** (desde la lista de Programas o
+  desde "Ir a planificación" de un atleta de Hybrid) aparece un **modal intermedio** (`#modalHybridPlan`)
+  con 2 opciones: "Plan 3 días" / "Plan 4 días" → el editor trabaja sobre `hybrid-3` o `hybrid-4`
+  (helper `enterProgramPlanning`). "Últimos días con planificación" del panel lee de ambos slugs para Hybrid.
+- **Modal de alta manual**: incluye el campo `hybrid_variant` cuando el programa elegido es Hybrid (Parte C7 ✅).
+
+### Verificación
+- Sintaxis de los scripts embebidos de `admin/index.html` y `app/dashboard.html` validada con `new Function`
+  (sin errores de parseo). `create-athlete/index.ts` validado de-tipado. **No se pudo probar el flujo vivo**
+  (requiere sesión autenticada de admin/atleta contra Supabase real).
+
+### Pendiente / backlog
+- ⚠️ Correr el SQL de arriba y **redeployar `create-athlete`** en Supabase.
+- Conectar `custom_price` a Métricas (Parte B, tarea aparte).
+- Si hay planificación de Hybrid ya cargada bajo `program_slug='hybrid'` (viejo), migrarla a `hybrid-3`/
+  `hybrid-4` según corresponda (o recargarla), ya que el editor y el dashboard ahora usan esos slugs.

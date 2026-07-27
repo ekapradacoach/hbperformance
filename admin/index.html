@@ -1925,15 +1925,50 @@
         <input type="text" id="athletePhone" placeholder="+54 9 11 ..." autocomplete="off">
       </div>
       <div class="field">
-        <label for="athleteCoach">Asesoría de</label>
-        <select id="athleteCoach">
-          <option value="erika">Erika Prada</option>
-          <option value="gonza">Gonza Gonda</option>
+        <label for="athleteProgram">Programa</label>
+        <select id="athleteProgram">
+          <option value="crossfit">CrossFit</option>
+          <option value="hybrid">Hybrid Evolution</option>
+          <option value="corredores">Fuerza corredores</option>
+          <option value="asesoria-erika">Asesoría Erika</option>
+          <option value="asesoria-gonza">Asesoría Gonza</option>
         </select>
+      </div>
+      <div class="field" id="fieldHybridVariant" style="display:none;">
+        <label for="athleteHybridVariant">Plan de Hybrid</label>
+        <select id="athleteHybridVariant">
+          <option value="3">Hybrid 3 días + 1 corrida</option>
+          <option value="4">Hybrid 4 días + 1 corrida</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="athletePaidUntil">Pagado hasta <span class="opt">(opcional)</span></label>
+        <input type="date" id="athletePaidUntil" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="athletePrice">Precio personalizado <span class="opt">(opcional, ARS)</span></label>
+        <input type="number" id="athletePrice" placeholder="Ej: 45000" min="0" step="any" autocomplete="off">
       </div>
       <div class="modal-actions">
         <button class="btn-ghost" data-close="modalAthlete">Cancelar</button>
         <button class="btn-primary" id="athleteAssign">Asignar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =============== Modal: Elegir plan de Hybrid (3 / 4 días) =============== -->
+  <div class="modal-backdrop" id="modalHybridPlan">
+    <div class="modal">
+      <div class="modal-head">
+        <h3>Hybrid Evolution — ¿qué plan querés planificar?</h3>
+        <button class="modal-close" data-close="modalHybridPlan">✕</button>
+      </div>
+      <p style="color:#AAA;margin:0 0 16px;font-size:.92rem;">
+        Cada plan tiene su propia planificación. El atleta puede entrenar cualquiera de los dos.
+      </p>
+      <div class="modal-actions" style="flex-direction:column;gap:12px;">
+        <button class="btn-primary" id="hybridPlan3" style="width:100%;">📅 Plan 3 días + 1 corrida</button>
+        <button class="btn-primary" id="hybridPlan4" style="width:100%;">📅 Plan 4 días + 1 corrida</button>
       </div>
     </div>
   </div>
@@ -2258,7 +2293,7 @@
         const id = item.dataset.id;
         const p = data.find(x => String(x.id) === String(id));
         item.querySelector('.act-plan-prog').addEventListener('click', () => {
-          enterEditor({
+          enterProgramPlanning({
             programSlug: p.slug,
             athleteId: null,
             title: p.name,
@@ -2353,18 +2388,32 @@
       });
     }
 
-    document.getElementById('btnAssignAthlete').addEventListener('click', () => openModal('modalAthlete'));
+    document.getElementById('btnAssignAthlete').addEventListener('click', () => {
+      // Sincronizar visibilidad del campo de plan de Hybrid con el programa seleccionado
+      document.getElementById('fieldHybridVariant').style.display =
+        (document.getElementById('athleteProgram').value === 'hybrid') ? '' : 'none';
+      openModal('modalAthlete');
+    });
 
     const CREATE_ATHLETE_URL = 'https://frjlafrgdcbomdnentbe.supabase.co/functions/v1/create-athlete';
+
+    // Mostrar/ocultar el selector de plan de Hybrid según el programa elegido
+    document.getElementById('athleteProgram').addEventListener('change', (e) => {
+      document.getElementById('fieldHybridVariant').style.display =
+        (e.target.value === 'hybrid') ? '' : 'none';
+    });
 
     document.getElementById('athleteAssign').addEventListener('click', async () => {
       const full_name = document.getElementById('athleteName').value.trim();
       const email = document.getElementById('athleteEmail').value.trim();
       const phone = document.getElementById('athletePhone').value.trim();
-      const coachKey = document.getElementById('athleteCoach').value;
+      const program = document.getElementById('athleteProgram').value;
+      const paidUntil = document.getElementById('athletePaidUntil').value;   // 'YYYY-MM-DD' o ''
+      const priceRaw = document.getElementById('athletePrice').value.trim();
+      const hybridVariant = document.getElementById('athleteHybridVariant').value; // '3' | '4'
       if (!full_name) { modalError('athleteError', 'Poné el nombre del atleta.'); return; }
       if (!email) { modalError('athleteError', 'Poné el email del atleta.'); return; }
-      const coach = COACHES[coachKey];
+      if (!PROGRAM_LABELS[program]) { modalError('athleteError', 'Elegí un programa válido.'); return; }
 
       const btn = document.getElementById('athleteAssign');
       btn.disabled = true;
@@ -2385,7 +2434,10 @@
             full_name,
             email,
             phone: phone || null,
-            program: coach.slug,
+            program,
+            subscription_end: paidUntil || null,                 // "Pagado hasta" → profiles.subscription_end
+            custom_price: priceRaw === '' ? null : Number(priceRaw),
+            hybrid_variant: program === 'hybrid' ? hybridVariant : null,
             // URL de producción a la que debe apuntar el invite del email.
             // ⚠️ La Edge Function create-athlete (en Supabase, fuera de este repo) debe usar este
             // valor como redirectTo del inviteUserByEmail (o tenerlo hardcodeado ahí mismo).
@@ -2400,12 +2452,20 @@
         }
 
         closeModal('modalAthlete');
+        // Refrescar la lista relevante: asesorías o alumnos (según qué vista esté activa)
         loadAthletes();
+        if (typeof loadAlumnos === 'function') loadAlumnos();
+        // Limpiar el formulario para la próxima alta
+        ['athleteName', 'athleteEmail', 'athletePhone', 'athletePaidUntil', 'athletePrice'].forEach(id => {
+          const el = document.getElementById(id); if (el) el.value = '';
+        });
+        document.getElementById('athleteProgram').value = 'crossfit';
+        document.getElementById('fieldHybridVariant').style.display = 'none';
         // Notificar a todos los admins del alta
         getAdminIds().then(ids => notify(ids, {
           type: 'new_athlete',
           title: 'Nuevo atleta registrado',
-          body: `${full_name} se unió a ${programLabel(coach.slug)}`,
+          body: `${full_name} se unió a ${programLabel(program)}`,
           link: '#alumnos'
         }));
       } catch (e) {
@@ -2426,6 +2486,30 @@
     // ============================================================
     // EDITOR DE BLOQUES (compartido programas / asesorías)
     // ============================================================
+    // Hybrid Evolution tiene DOS planificaciones separadas: program_slug 'hybrid-3'
+    // y 'hybrid-4'. Al entrar a planificar "Hybrid" mostramos un chooser intermedio.
+    // (profiles.program sigue siendo 'hybrid' — esto solo afecta program_slug de planning_days.)
+    let _hybridPlanCtx = null;
+    function enterProgramPlanning(ctx) {
+      if (ctx.programSlug === 'hybrid') {
+        _hybridPlanCtx = ctx;
+        openModal('modalHybridPlan');
+        return;
+      }
+      enterEditor(ctx);
+    }
+    function _pickHybridPlan(days) {
+      const ctx = _hybridPlanCtx; _hybridPlanCtx = null;
+      closeModal('modalHybridPlan');
+      if (!ctx) return;
+      enterEditor(Object.assign({}, ctx, {
+        programSlug: days === 3 ? 'hybrid-3' : 'hybrid-4',
+        subtitle: (ctx.subtitle || 'Hybrid Evolution') + ` · Plan ${days} días`
+      }));
+    }
+    document.getElementById('hybridPlan3').addEventListener('click', () => _pickHybridPlan(3));
+    document.getElementById('hybridPlan4').addEventListener('click', () => _pickHybridPlan(4));
+
     function enterEditor(ctx) {
       editorCtx = ctx;
       currentDay = null;
@@ -3267,6 +3351,26 @@
       const t = tipoDe(program);
       return `<span class="type-badge ${isAsesoria(program) ? 'tipo-asesoria' : ''}">${t}</span>`;
     }
+    // Aviso de vencimiento (solo visual para el admin — NO corta el acceso).
+    // Amarillo si vence dentro de ≤5 días; rojo si ya venció / vence hoy.
+    function vencInfo(a) {
+      if (!a || !a.subscription_end) return null;
+      const end = new Date(String(a.subscription_end).slice(0, 10) + 'T00:00:00');
+      if (isNaN(end)) return null;
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const days = Math.round((end - today) / 86400000);
+      if (days < 0) return { color: 'red', txt: `Vencido hace ${Math.abs(days)} día${Math.abs(days) === 1 ? '' : 's'}` };
+      if (days === 0) return { color: 'red', txt: 'Vence hoy' };
+      if (days <= 5) return { color: 'yellow', txt: `Vence en ${days} día${days === 1 ? '' : 's'}` };
+      return null;
+    }
+    function vencBadge(a) {
+      const v = vencInfo(a);
+      if (!v) return '';
+      const bg = v.color === 'red' ? '#3a1414' : '#3a2f14';
+      const fg = v.color === 'red' ? '#e05252' : '#F5A800';
+      return `<span title="Vencimiento del pago (aviso, no corta acceso)" style="display:inline-block;margin-left:6px;padding:2px 8px;border-radius:999px;font-size:.72rem;font-weight:700;background:${bg};color:${fg};border:1px solid ${fg};white-space:nowrap;">${esc(v.txt)}</span>`;
+    }
     // Un alumno es "activo" si subscription_status='active'; inactivo si cancelled/pending
     function matchesStatusTab(a) {
       if (alStatus === 'active') return a.subscription_status === 'active';
@@ -3312,14 +3416,14 @@
         return;
       }
       body.innerHTML = rows.map(a => {
-        const bajaBtn = (isAsesoria(a.program) && a.subscription_status === 'active')
+        const bajaBtn = (a.subscription_status === 'active')
           ? '<button class="btn-sm danger act-baja">🚫 Dar de baja</button>' : '';
         return `<tr data-id="${esc(a.id)}">
           <td>${esc(a.full_name) || '—'}</td>
           <td>${esc(a.email) || '—'}</td>
           <td>${esc(a.phone) || '—'}</td>
           <td>${progBadge(a.program)}</td>
-          <td>${estadoBadge(a.subscription_status)}</td>
+          <td>${estadoBadge(a.subscription_status)}${vencBadge(a)}</td>
           <td>${tipoBadge(a.program)}</td>
           <td>${fmtDayOnly(a.subscription_start)}</td>
           <td><div class="al-actions">
@@ -3354,11 +3458,19 @@
       renderAlumnos();
     });
 
-    // -------- Dar de baja manual (asesorías activas) --------
+    // -------- Dar de baja manual (cualquier atleta, sin tocar MP) --------
+    // Setea subscription_status='cancelled' y subscription_end directamente en la base.
+    // NO llama a la API de Mercado Pago (eso es la baja que hace el propio atleta).
     async function darDeBaja(a) {
-      if (!confirm(`¿Dar de baja a "${a.full_name || a.email}"? Perderá el acceso a su planificación.`)) return;
+      const hoy = new Date().toISOString().split('T')[0];
+      const fecha = prompt(
+        `Dar de baja a "${a.full_name || a.email}".\n\n` +
+        `Fecha de baja / hasta cuándo tuvo acceso pago (YYYY-MM-DD).\n` +
+        `Dejá la de hoy si corta ahora:`, hoy);
+      if (fecha === null) return; // canceló
+      const end = /^\d{4}-\d{2}-\d{2}$/.test(fecha.trim()) ? fecha.trim() : hoy;
       const { error } = await sb.from('profiles')
-        .update({ subscription_status: 'cancelled' }).eq('id', a.id);
+        .update({ subscription_status: 'cancelled', subscription_end: end }).eq('id', a.id);
       if (error) { alert('No se pudo dar de baja: ' + error.message); return; }
       await loadAlumnos();
       if (currentPanelAthlete && currentPanelAthlete.id === a.id) {
@@ -3401,12 +3513,16 @@
     function renderPanelView(a) {
       currentPanelAthlete = a;
       const spInner = document.getElementById('spInner');
-      const bajaBtn = (isAsesoria(a.program) && a.subscription_status === 'active')
+      const bajaBtn = (a.subscription_status === 'active')
         ? '<button class="btn-sm danger" id="spBaja">🚫 Dar de baja manual</button>' : '';
       const delBtn = (a.subscription_status === 'cancelled')
         ? '<button class="btn-sm danger" id="spDelete">🗑️ Eliminar</button>' : '';
       const mpRow = a.mp_subscription_id
         ? `<div><dt>ID suscripción MP</dt><dd>${esc(a.mp_subscription_id)}</dd></div>` : '';
+      const priceRow = (a.custom_price != null && a.custom_price !== '')
+        ? `<div><dt>Precio personalizado</dt><dd>$${esc(a.custom_price)} ARS</dd></div>` : '';
+      const variantRow = (a.program === 'hybrid' && a.hybrid_variant)
+        ? `<div><dt>Plan de Hybrid</dt><dd>${a.hybrid_variant} días + 1 corrida</dd></div>` : '';
 
       spInner.innerHTML = `
         <div class="sp-top">
@@ -3424,7 +3540,9 @@
         <dl class="sp-data">
           <div><dt>Teléfono</dt><dd>${esc(a.phone) || '—'}</dd></div>
           <div><dt>Fecha de inicio</dt><dd>${fmtDayOnly(a.subscription_start)}</dd></div>
-          <div><dt>Fecha de vencimiento</dt><dd>${fmtDayOnly(a.subscription_end)}</dd></div>
+          <div><dt>Pagado hasta</dt><dd>${fmtDayOnly(a.subscription_end)} ${vencBadge(a)}</dd></div>
+          ${variantRow}
+          ${priceRow}
           ${mpRow}
         </dl>
         <div class="sp-recent">
@@ -3473,11 +3591,29 @@
             <option value="cancelled">Cancelado</option>
           </select>
         </div>
+        <div class="field">
+          <label for="edPaidUntil">Pagado hasta <span class="opt">(opcional)</span></label>
+          <input type="date" id="edPaidUntil" value="${a.subscription_end ? esc(String(a.subscription_end).slice(0,10)) : ''}" autocomplete="off">
+        </div>
+        ${a.program === 'hybrid' ? `
+        <div class="field">
+          <label for="edHybridVariant">Plan de Hybrid</label>
+          <select id="edHybridVariant">
+            <option value="">— Sin elegir —</option>
+            <option value="3">Hybrid 3 días + 1 corrida</option>
+            <option value="4">Hybrid 4 días + 1 corrida</option>
+          </select>
+        </div>` : ''}
+        <div class="field">
+          <label for="edPrice">Precio personalizado <span class="opt">(opcional, ARS)</span></label>
+          <input type="number" id="edPrice" value="${a.custom_price != null ? esc(a.custom_price) : ''}" placeholder="Ej: 45000" min="0" step="any" autocomplete="off">
+        </div>
         <div class="sp-actions">
           <button class="btn-primary" id="edSave">Guardar</button>
           <button class="btn-ghost" id="edCancel">Cancelar</button>
         </div>`;
       document.getElementById('edStatus').value = statusKey(a.subscription_status);
+      if (a.program === 'hybrid') document.getElementById('edHybridVariant').value = a.hybrid_variant || '';
       document.getElementById('spX').addEventListener('click', closePanel);
       document.getElementById('edCancel').addEventListener('click', () => renderPanelView(a));
       document.getElementById('edSave').addEventListener('click', () => saveEdit(a));
@@ -3487,16 +3623,26 @@
       const full_name = document.getElementById('edName').value.trim();
       const phone = document.getElementById('edPhone').value.trim();
       const subscription_status = document.getElementById('edStatus').value;
+      const paidUntil = document.getElementById('edPaidUntil').value;         // 'YYYY-MM-DD' o ''
+      const priceRaw = document.getElementById('edPrice').value.trim();
+      const variantEl = document.getElementById('edHybridVariant');           // solo existe si program=hybrid
       if (!full_name) {
         const err = document.getElementById('edError');
         err.textContent = 'El nombre no puede quedar vacío.';
         err.classList.add('show');
         return;
       }
+      const patch = {
+        full_name,
+        phone: phone || null,
+        subscription_status,
+        subscription_end: paidUntil || null,
+        custom_price: priceRaw === '' ? null : Number(priceRaw)
+      };
+      if (variantEl) patch.hybrid_variant = variantEl.value || null;
       const btn = document.getElementById('edSave');
       btn.disabled = true; btn.textContent = 'Guardando…';
-      const { error } = await sb.from('profiles')
-        .update({ full_name, phone: phone || null, subscription_status }).eq('id', a.id);
+      const { error } = await sb.from('profiles').update(patch).eq('id', a.id);
       if (error) {
         btn.disabled = false; btn.textContent = 'Guardar';
         const err = document.getElementById('edError');
@@ -3505,7 +3651,7 @@
         return;
       }
       await loadAlumnos();
-      const fresh = allAthletes.find(x => x.id === a.id) || Object.assign({}, a, { full_name, phone: phone || null, subscription_status });
+      const fresh = allAthletes.find(x => x.id === a.id) || Object.assign({}, a, patch);
       renderPanelView(fresh);
       loadRecentPlanning(fresh);
       flash('✓ Cambios guardados.');
@@ -3515,7 +3661,12 @@
     async function loadRecentPlanning(a) {
       const box = document.getElementById('spRecent');
       if (!box) return;
-      let q = sb.from('planning_days').select('date').eq('program_slug', a.program);
+      let q = sb.from('planning_days').select('date');
+      if (a.program === 'hybrid') {
+        q = q.in('program_slug', ['hybrid-3', 'hybrid-4']);   // Hybrid vive en dos slugs
+      } else {
+        q = q.eq('program_slug', a.program);
+      }
       if (isAsesoria(a.program)) q = q.eq('athlete_id', a.id);
       q = q.order('date', { ascending: false }).limit(3);
       const { data, error } = await q;
@@ -3529,7 +3680,7 @@
     function goToAthletePlanning(a) {
       closePanel();
       showView('planificacion');
-      enterEditor({
+      enterProgramPlanning({
         programSlug: a.program,
         athleteId: isAsesoria(a.program) ? a.id : null,
         title: a.full_name || 'Atleta',

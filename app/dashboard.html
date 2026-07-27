@@ -839,6 +839,18 @@
     </div>
   </div>
 
+  <!-- ===== Elegir plan de Hybrid (primera vez, si hybrid_variant es null) ===== -->
+  <div class="expired-screen" id="hybridChooser">
+    <div class="expired-card">
+      <img class="expired-logo" src="../logo.png" alt="HB Performance" onerror="this.style.display='none';">
+      <div class="expired-icon">🏋️</div>
+      <h1>Elegí tu plan de Hybrid</h1>
+      <p>Tu suscripción te da acceso a los dos. Elegí con cuál querés arrancar; podés cambiar cuando quieras desde “Mi programa”.</p>
+      <button class="btn btn-filled" id="hcPick3" style="width:100%;margin-bottom:12px;">Hybrid 3 días + 1 corrida</button>
+      <button class="btn btn-filled" id="hcPick4" style="width:100%;">Hybrid 4 días + 1 corrida</button>
+    </div>
+  </div>
+
   <!-- ===== Topbar ===== -->
   <header class="topbar">
     <a class="topbar-logo" href="dashboard.html">
@@ -920,6 +932,14 @@
         <div class="view-toggle">
           <button class="vt-btn active" id="progModeDay" data-mode="day">📅 Vista día</button>
           <button class="vt-btn" id="progModeMonth" data-mode="month">🗓️ Vista mes</button>
+        </div>
+        <!-- Solo Hybrid: elegir qué plan entrenar (persistido en profiles.hybrid_variant) -->
+        <div id="hybridVariantWrap" style="display:none;align-items:center;gap:8px;">
+          <label for="hybridVariantSel" style="font-size:.85rem;color:var(--muted,#AAA);">Plan:</label>
+          <select id="hybridVariantSel" style="background:#1A1A1A;color:#fff;border:1px solid #F5A800;border-radius:8px;padding:8px 10px;font-size:.9rem;">
+            <option value="3">Hybrid 3 días + 1 corrida</option>
+            <option value="4">Hybrid 4 días + 1 corrida</option>
+          </select>
         </div>
       </div>
 
@@ -1226,9 +1246,22 @@
 
     const TODAY = todayStr();
 
+    // -------- Hybrid Evolution: variante 3 / 4 días --------
+    // Un atleta de Hybrid (profiles.program === 'hybrid') puede entrenar dos planes:
+    // '3' (3 días + 1 corrida) o '4' (4 días + 1 corrida). Cada plan tiene su propia
+    // planificación bajo program_slug 'hybrid-3' / 'hybrid-4'. profiles.program NO cambia
+    // (sigue 'hybrid' para precios, acceso, comunidad/chat). HYBRID_VARIANT es la elección
+    // actual, persistida en profiles.hybrid_variant.
+    let HYBRID_VARIANT = null;               // '3' | '4' | null
+    function isHybrid() { return ATHLETE && ATHLETE.program === 'hybrid'; }
+    // Slug de planificación a usar en planning_days (para Hybrid, depende de la variante)
+    function planningSlug() {
+      return isHybrid() ? ('hybrid-' + (HYBRID_VARIANT || '3')) : ATHLETE.program;
+    }
+
     // Filtro de planning_days para el atleta actual (asesoría filtra por athlete_id; grupal no)
     function dayScope(q) {
-      q = q.eq('program_slug', ATHLETE.program);
+      q = q.eq('program_slug', planningSlug());
       if (IS_ASESORIA) q = q.eq('athlete_id', ATHLETE.id);
       return q;
     }
@@ -1367,11 +1400,31 @@
     // MI PROGRAMA (planificación del atleta)
     // ============================================================
     function enterPrograma() {
+      // Selector de plan de Hybrid (solo visible para atletas de Hybrid)
+      const wrap = document.getElementById('hybridVariantWrap');
+      if (wrap) {
+        if (isHybrid()) {
+          wrap.style.display = 'flex';
+          document.getElementById('hybridVariantSel').value = HYBRID_VARIANT || '3';
+        } else {
+          wrap.style.display = 'none';
+        }
+      }
       setProgMode(progMode);
       if (progMode === 'day') loadProgramaDay();
       else loadProgramaMonth();
       maybeNotifyTodayPlanning();
     }
+
+    // Cambiar de plan de Hybrid → persistir en profiles.hybrid_variant y recargar la vista actual
+    document.getElementById('hybridVariantSel').addEventListener('change', async (e) => {
+      const v = e.target.value;
+      const prev = HYBRID_VARIANT;
+      const { error } = await sb.from('profiles').update({ hybrid_variant: v }).eq('id', ATHLETE.id);
+      if (error) { alert('No se pudo cambiar de plan: ' + error.message); e.target.value = prev || '3'; return; }
+      HYBRID_VARIANT = v; ATHLETE.hybrid_variant = v;
+      if (progMode === 'day') loadProgramaDay(); else loadProgramaMonth();
+    });
     function setProgMode(mode) {
       progMode = mode;
       document.getElementById('progDayView').style.display = mode === 'day' ? 'block' : 'none';
@@ -1879,10 +1932,13 @@
       statsActiveDays = new Set(statsComps.map(c => String(c.completed_at).slice(0, 10)));
       const completedSet = new Set(statsComps.map(c => c.block_id));
 
-      // 2) Bloques del programa del atleta, con la fecha de su día (embed), para totales por día
+      // 2) Bloques del programa del atleta, con la fecha de su día (embed), para totales por día.
+      //    Hybrid: sumar AMBOS planes ('hybrid-3' y 'hybrid-4') para que el progreso cuente junto
+      //    sin importar qué plan esté viendo (cambiar de plan no "pierde" lo entrenado en el otro).
       let q = sb.from('planning_blocks')
-        .select('id, planning_days!inner(date, program_slug, athlete_id)')
-        .eq('planning_days.program_slug', ATHLETE.program);
+        .select('id, planning_days!inner(date, program_slug, athlete_id)');
+      if (isHybrid()) q = q.in('planning_days.program_slug', ['hybrid-3', 'hybrid-4']);
+      else q = q.eq('planning_days.program_slug', ATHLETE.program);
       if (IS_ASESORIA) q = q.eq('planning_days.athlete_id', ATHLETE.id);
       const { data: blocks, error: bErr } = await q;
 
@@ -2983,6 +3039,29 @@
       document.getElementById('expiredScreen').classList.add('show');
     }
 
+    // Pantalla para elegir plan de Hybrid la primera vez (hybrid_variant null).
+    // No muestra el dashboard hasta que el atleta elige; persiste la elección en la base.
+    function showHybridChooser(onDone) {
+      const ov = document.getElementById('hybridChooser');
+      const pick = async (v) => {
+        document.getElementById('hcPick3').disabled = true;
+        document.getElementById('hcPick4').disabled = true;
+        const { error } = await sb.from('profiles').update({ hybrid_variant: v }).eq('id', ATHLETE.id);
+        if (error) {
+          alert('No se pudo guardar tu elección: ' + error.message);
+          document.getElementById('hcPick3').disabled = false;
+          document.getElementById('hcPick4').disabled = false;
+          return;
+        }
+        HYBRID_VARIANT = v; ATHLETE.hybrid_variant = v;
+        ov.classList.remove('show');
+        if (onDone) onDone();
+      };
+      document.getElementById('hcPick3').addEventListener('click', () => pick('3'));
+      document.getElementById('hcPick4').addEventListener('click', () => pick('4'));
+      ov.classList.add('show');
+    }
+
     async function init() {
       const { data: { session } } = await sb.auth.getSession();
       if (!session || !session.user) { window.location.replace('login.html'); return; }
@@ -2993,6 +3072,7 @@
 
       ATHLETE = profile;
       IS_ASESORIA = isAsesoriaProgram(profile.program);
+      HYBRID_VARIANT = profile.hybrid_variant || null;
       progDate = TODAY;
 
       // Corte de acceso: cancelada Y con la fecha de fin ya vencida (anterior a hoy) → pantalla de vencido.
@@ -3010,6 +3090,12 @@
 
       loadNotifs();
       subscribeNotifs();
+
+      // Hybrid sin plan elegido todavía → pantalla de elección antes de mostrar contenido
+      if (isHybrid() && !HYBRID_VARIANT) {
+        showHybridChooser(() => { showView('inicio'); loadInicio(); });
+        return;
+      }
 
       showView('inicio');
       loadInicio();

@@ -169,10 +169,14 @@ y `community_comments` de su programa + **DELETE** de los propios posts + `post_
 Realtime en `community_posts` y `community_comments`. Si faltan, las vistas degradan a estados vacíos /
 avisan el error.
 
-Alta de atleta (asesorías): el modal "Asignar atleta" NO hace INSERT directo en `profiles`. Llama a
-la **Edge Function `create-athlete`** (`POST /functions/v1/create-athlete`, Bearer = access_token del
-admin, body `{ full_name, email, phone, program }`) que crea el user en Auth + el profile y responde
-`{ ok }` o `{ ok:false, error }`. ⚠️ Falta implementar/deployar esa function (ver CONTEXTO.md).
+Alta de atleta (⚠️ ahora **los 5 programas**, no solo asesorías): el modal "Asignar atleta" NO hace INSERT
+directo en `profiles`. Llama a la **Edge Function `create-athlete`** (`POST /functions/v1/create-athlete`,
+Bearer = access_token del admin, body `{ full_name, email, phone, program, subscription_end, custom_price,
+hybrid_variant, redirectTo }`) que crea el user en Auth (invite **siempre**) + el profile y responde
+`{ ok }` o `{ ok:false, error }`. El modal permite elegir cualquiera de los 5 programas + "Pagado hasta"
+(→`subscription_end`) + precio manual (→`custom_price`) + plan de Hybrid (→`hybrid_variant`, solo si hybrid).
+El código de la function **ya está versionado en el repo** (`supabase/functions/create-athlete/index.ts`);
+⚠️ **falta (re)deployarla en Supabase** tras cambios (ver CONTEXTO.md 2026-07-27).
 
 **Dominio de producción:** el sitio vive en **`https://hbperformance.fit`**. Todos los `redirectTo` de
 `resetPasswordForEmail` (login "¿Olvidaste tu contraseña?" y Perfil "Cambiar contraseña") apuntan
@@ -246,6 +250,8 @@ subscription_end date
 subscription_status text ('active' | 'cancelled' | 'pending')
 mp_subscription_id text
 avatar_url text   ← ⚠️ AGREGAR en Supabase. URL pública de la foto de perfil (bucket `avatars`). NULL = usa iniciales.
+custom_price numeric   ← ⚠️ AGREGAR en Supabase (2026-07-27). Precio manual por atleta. NULL = usa el de site_config. (Aún NO conectado a Métricas.)
+hybrid_variant text   ← ⚠️ AGREGAR en Supabase (2026-07-27). '3' | '4'. Solo aplica si program='hybrid' (qué plan entrena; la planificación vive en program_slug 'hybrid-3'/'hybrid-4').
 created_at timestamptz
 
 ### programs
@@ -256,7 +262,7 @@ description text
 
 ### planning_days
 id uuid
-program_slug text
+program_slug text   ← ⚠️ Hybrid usa DOS slugs: 'hybrid-3' y 'hybrid-4' (no 'hybrid'). El resto: crossfit/corredores/asesoria-*.
 date date
 athlete_id uuid (FK profiles.id, nullable)  ← ⚠️ AGREGAR en Supabase. NULL = programa grupal; seteado = asesoría 1a1
 created_by uuid (FK profiles.id)
