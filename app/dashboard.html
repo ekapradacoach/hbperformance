@@ -2253,11 +2253,15 @@
     async function renderSubscription() {
       const box = document.getElementById('pfSubscription');
       const status = ['active', 'pending', 'cancelled'].includes(ATHLETE.subscription_status) ? ATHLETE.subscription_status : 'pending';
-      const info = {
-        active: 'Tu suscripción se renueva automáticamente.',
-        cancelled: 'Tu suscripción está cancelada. ¿Querés volver? Contactanos.',
-        pending: 'Tu pago está siendo procesado.'
-      }[status];
+      // Cancelada pero todavía dentro del período pagado → mantiene acceso hasta subscription_end
+      const endDs = ATHLETE.subscription_end ? String(ATHLETE.subscription_end).slice(0, 10) : null;
+      const stillCovered = status === 'cancelled' && endDs && endDs >= TODAY;
+      let info;
+      if (status === 'active') info = 'Tu suscripción se renueva automáticamente.';
+      else if (status === 'pending') info = 'Tu pago está siendo procesado.';
+      else info = stillCovered
+        ? `Cancelada. Seguís con acceso hasta el ${fmtDayOnly(endDs)}.`
+        : 'Tu suscripción está cancelada. ¿Querés volver? Contactanos.';
       const endRow = ATHLETE.subscription_end
         ? `<div class="pf-srow"><span class="k">Fecha de vencimiento</span><span class="v">${fmtDayOnly(ATHLETE.subscription_end)}</span></div>` : '';
       const backBtn = status === 'cancelled'
@@ -2329,12 +2333,17 @@
         const result = await response.json();
 
         if (result && result.ok) {
-          // Actualizar la UI: estado → Cancelado, ocultar "Cancelar", mostrar "Volver a suscribirme"
+          // Actualizar la UI: estado → Cancelado, guardar hasta cuándo tiene acceso,
+          // ocultar "Cancelar", mostrar "Volver a suscribirme"
           ATHLETE.subscription_status = 'cancelled';
+          if (result.subscription_end) ATHLETE.subscription_end = result.subscription_end;
           renderSubscription();
+          const untilTxt = result.subscription_end
+            ? `Listo, cancelamos tu suscripción. Seguís con acceso hasta el <b>${fmtDayOnly(result.subscription_end)}</b>.`
+            : 'Tu suscripción fue cancelada.';
           card.innerHTML = `
             <h3 class="cm-title">Suscripción cancelada</h3>
-            <p class="cm-text">Tu suscripción fue cancelada.</p>
+            <p class="cm-text">${untilTxt}</p>
             <div class="cm-actions col">
               <button class="btn btn-filled" id="cmClose2">Cerrar</button>
             </div>`;

@@ -132,13 +132,18 @@ como en admin: grupal filtra por `program_slug`; asesoría además por `athlete_
   / mes"; texto informativo según estado; si cancelado → botón "Volver a suscribirme" al landing del
   programa; si **activo** → botón "Cancelar suscripción" (outline rojo) que abre un modal de confirmación
   → "Sí, cancelar" muestra "Procesando cancelación…" (spinner) y llama a la **Edge Function real**
-  `POST /functions/v1/cancel-subscription` (Bearer = access_token de la sesión). Si `result.ok` → modal
-  "Tu suscripción fue cancelada." + se pone `ATHLETE.subscription_status='cancelled'` y se **re-renderiza**
-  la card (`renderSubscription`): badge → **Cancelado**, se oculta "Cancelar", aparece "Volver a
-  suscribirme". Si error (o `ok:false`) → `showCancelError`: "No se pudo cancelar" + el `result.error` en
-  rojo + botón de **WhatsApp** `wa.me/5491136433379` (fallback) + "Cerrar" (sin tocar el estado).
-  ⚠️ La Edge Function `cancel-subscription` (en Supabase, fuera de este repo) es la que cancela en MP y
-  pone `subscription_status='cancelled'` server-side. **Seguridad**
+  `POST /functions/v1/cancel-subscription` (Bearer = access_token de la sesión). Si `result.ok` → guarda
+  `result.subscription_end` en `ATHLETE`, pone `subscription_status='cancelled'`, **re-renderiza** la card y
+  el modal dice "…**Seguís con acceso hasta el <fecha>**". `renderSubscription`: cancelado + `subscription_end
+  >= hoy` → info **"Cancelada. Seguís con acceso hasta el <fecha>."** (badge Cancelado, se oculta "Cancelar",
+  aparece "Volver a suscribirme"); si ya venció → texto genérico de cancelada. Si error (o `ok:false`) →
+  `showCancelError`: "No se pudo cancelar" + `result.error` en rojo + botón **WhatsApp** `wa.me/5491136433379`
+  + "Cerrar" (sin tocar el estado).
+  ⚠️ La Edge Function **`cancel-subscription`** (`supabase/functions/`, deploy con `verify_jwt` ON): identifica
+  al atleta por su JWT (`getUser`), toma `mp_subscription_id`, hace GET+PUT `status:cancelled` a MP, y setea
+  `subscription_status='cancelled'` + `subscription_end` = `next_payment_date` (fallback: `subscription_start`
+  + ciclos mensuales). El **corte de acceso al vencer `subscription_end` NO está hecho** (paso aparte, guard
+  en login). **Seguridad**
   ("Cambiar contraseña" → `resetPasswordForEmail` + toast; "Cerrar sesión" → `signOut` → `login.html`,
   botón outline rojo al hover).
 - Vista **Comunidad** (✅ desarrollada): NO es un tab — se entra desde el botón "Ver comunidad →" de la
@@ -434,9 +439,15 @@ NO `create-subscription`), `SUPABASE_URL`, `SERVICE_ROLE_KEY`.
 ⚠️ Las claves `mp_link_<prog>` de `site_config` quedaron **legacy/sin uso** (ya no se redirige a ellas).
 
 ## Flujo de cancelación
-1. MP webhook notifica cancelación
-2. Edge Function actualiza profiles.subscription_status = 'cancelled'
-3. Atleta pierde acceso (RLS lo bloquea)
+1. El atleta toca "Cancelar suscripción" en Perfil → Edge Function **`cancel-subscription`** (lo identifica
+   por su JWT) → **PUT `status:cancelled`** a MP + `UPDATE profiles` (`subscription_status='cancelled'`,
+   `subscription_end` = `next_payment_date`).
+2. El atleta **mantiene acceso hasta `subscription_end`** (el período ya pagado). La UI muestra
+   "Cancelada. Seguís con acceso hasta el <fecha>".
+3. ⚠️ **Corte de acceso al vencer `subscription_end` = PENDIENTE** (paso aparte, guard en el login). Hoy
+   el atleta cancelado sigue entrando aunque haya vencido.
+4. (Alternativa server-side) Si MP manda el webhook `subscription_preapproval` con status cancelled,
+   `process-payment` también pone `subscription_status='cancelled'` por `mp_subscription_id`.
 
 ## Identidad visual
 Misma que la landing:

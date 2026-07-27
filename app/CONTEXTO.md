@@ -219,9 +219,11 @@ CREATE POLICY "Admin actualiza mensajes" ON public.messages
   (dominio del sitio) para que no la reutilicen. Ideal a futuro: moverla a una Edge Function.
 
 ## ⚠️ Pendiente (documentado, NO codeado) — cancelación de suscripciones vía MercadoPago
-- ✅ **Front conectado (2026-07-24):** el botón "Cancelar suscripción" del Perfil ya llama a la Edge
-  Function real `POST /functions/v1/cancel-subscription` (ver más abajo). Falta tener **deployada** esa
-  function en Supabase (cancela en MP + pone `subscription_status='cancelled'`).
+- ✅ **Cancelación implementada (2026-07-26 tarde):** front conectado + Edge Function `cancel-subscription`
+  **codeada** en `supabase/functions/cancel-subscription/index.ts` (cancela en MP con PUT `status:cancelled`
+  + `UPDATE profiles` con `subscription_status='cancelled'` y `subscription_end=next_payment_date`). Ver
+  detalle en Historial 2026-07-26 (tarde). **Falta solo deployarla** en Supabase (verify_jwt ON).
+  ⚠️ Pendiente aparte: **corte de acceso al vencer `subscription_end`** (guard en login).
 - **Edge Function webhook de MP** que reciba la notificación de cancelación de suscripción y haga
   `UPDATE profiles SET subscription_status='cancelled'` para el `mp_subscription_id` correspondiente
   (ver "Flujo de cancelación" en CLAUDE.md). Hoy la baja se hace **manual** desde la sección Alumnos
@@ -238,7 +240,64 @@ CREATE POLICY "Admin actualiza mensajes" ON public.messages
   `{ full_name, email, phone, program }` (program = 'asesoria-erika' | 'asesoria-gonza').
   Esto reemplaza al INSERT directo en `profiles` (que fallaba por la FK id→auth.users).
 
+## 📋 Backlog de negocio (pendientes — NO para resolver ahora, registrados 2026-07-26)
+Lista textual dejada por el usuario para que quede registrada:
+- Sacar el cartel de "WOD UP" de las páginas de programas.
+- Cancelar tanto en MP como en la base de datos al mismo tiempo (✅ ya cubierto en la tarea de cancelación
+  del 2026-07-26); el acceso se corta cuando vence el último día pagado.
+- Los planes de MP creados a mano en el panel (no-code) quedaron obsoletos, evaluar si borrarlos.
+- Para subir precios: el precio en MP queda fijo en el plan al momento de crearlo — cambiar el precio en
+  Configuración del admin NO afecta lo que ya se cobra. Subir precio real requiere crear un plan nuevo por API.
+- Definir qué pasa si alguien cancela y quiere reactivar después.
+- Adjuntar en el mail de bienvenida un video mostrando cómo agregar acceso directo a la pantalla de inicio,
+  para iPhone y Android.
+- Agregar botón de WhatsApp en cada página de programa.
+- Avisar antes y después del pago (en la página de redirección post-pago) que el mail puede tardar hasta 5
+  minutos, revisar spam, y dejar el WhatsApp de contacto visible en esa pantalla.
+- Hybrid Evolution es un plan de 3 o 4 días — quien lo compra debe poder ver ambas variantes; falta definir cómo.
+- Sistema para que alguien que compra más de un programa pueda verlos en simultáneo (ej. un desplegable para
+  cambiar entre programas).
+- **Cancelación INVOLUNTARIA por pago fallido**: cuando la tarjeta de un atleta falla en el cobro automático
+  (vencida, sin fondos, etc.), Mercado Pago hace varios reintentos de cobro a lo largo de algunos días antes
+  de dar la suscripción por cancelada. Falta definir: cómo nos enteramos (webhook de
+  `subscription_authorized_payment` con status rechazado, o el cambio de status del preapproval a algo
+  distinto de `'authorized'`), si le avisamos al atleta, y cuánto período de gracia le damos antes de
+  cortarle el acceso. Es un flujo **distinto** al de la cancelación voluntaria (que ya se implementó).
+
 ## Historial
+### 2026-07-26 (tarde) — Cancelación real de suscripción (MP + DB) + UI "activa hasta <fecha>"
+- **Edge Function nueva `cancel-subscription`** (`supabase/functions/cancel-subscription/index.ts`, deploy con
+  **`verify_jwt` ON**):
+  - Identifica al atleta por su **JWT** (`admin.auth.getUser(token)` del header Authorization — NO confía en
+    ningún id del front). Lee su `profiles` (`mp_subscription_id`, `subscription_start`, `program`).
+  - Si no tiene `mp_subscription_id` → error claro para el front.
+  - MP: **GET** `/preapproval/{id}` (captura `next_payment_date` + `auto_recurring` **antes** de cancelar) →
+    **PUT** `/preapproval/{id}` `{ status: 'cancelled' }` con `MP_ACCESS_TOKEN` de Secrets.
+  - Si MP confirma → **UPDATE profiles**: `subscription_status='cancelled'`, `subscription_end` =
+    **`next_payment_date`** (decisión confirmada con el usuario: el atleta mantiene acceso hasta la fecha del
+    próximo cobro que ya no se cobra). **Fallback** si MP no manda `next_payment_date`: avanzar de a 1 ciclo
+    mensual (`auto_recurring.frequency/frequency_type`) desde `subscription_start` hasta la primera fecha > hoy.
+  - Manejo de errores con mensajes claros para el front: sin JWT (401), sin perfil (404), sin
+    `mp_subscription_id`, error de MP (usa `message` de MP), o "cancelamos en MP pero no se actualizó la DB".
+    Devuelve `{ ok, subscription_end }` o `{ ok:false, error }`.
+- **Front (`app/dashboard.html`, Perfil)**: el botón ya llamaba a `cancel-subscription` (commit 3554b66);
+  ahora `confirmCancel` **toma `subscription_end` de la respuesta**, lo guarda en `ATHLETE` y el modal de éxito
+  dice "Listo, cancelamos… **Seguís con acceso hasta el <fecha>**". `renderSubscription`: si el estado es
+  `cancelled` y `subscription_end >= hoy` → info **"Cancelada. Seguís con acceso hasta el <fecha>."**; si ya
+  venció (o no hay fecha) → "Tu suscripción está cancelada. ¿Querés volver? Contactanos.". Badge "Cancelado",
+  se oculta "Cancelar" y aparece "Volver a suscribirme" (como ya estaba).
+- **NO se implementó el corte de acceso al vencer `subscription_end`** (punto 4 del pedido — es un paso
+  aparte, probablemente un chequeo en el login/guard). Por ahora el atleta cancelado sigue entrando.
+- **Verificado** (front) con harness temporal (fake de Supabase + `fetch` stubeado, borrado; **sin errores de
+  consola**): **éxito** (`{ok:true, subscription_end:'2026-08-15'}`) → fetch correcto (URL de la función,
+  POST, `Bearer <token>`), modal "Seguís con acceso hasta el 15/08/2026", badge→Cancelado, info con la fecha,
+  botón "Cancelar" desaparece, aparece "Volver a suscribirme"; **fecha pasada** (`2020-01-01`) → info genérica
+  "está cancelada" (NO dice "seguís con acceso"); **error** (`{ok:false, error}`) → "No se pudo cancelar" + el
+  error + WhatsApp, y el estado queda **Activo** (no se toca). La Edge Function de-tipada parsea OK; el
+  `dashboard.html` real pasa `new Function`.
+- ⚠️ **Deploy**: subir `cancel-subscription` a Supabase (`verify_jwt` ON). Ya usa `MP_ACCESS_TOKEN`/
+  `SUPABASE_URL`/`SERVICE_ROLE_KEY` de Secrets.
+
 ### 2026-07-26 — process-payment identifica el programa por preapproval_plan_id (no por external_reference)
 - **Motivo**: se detectó que los `preapproval_plan` actuales **NO tienen `external_reference` seteado**
   (el `create-plans` del repo tampoco lo setea). Entonces la suscripción que MP crea al pagar por el checkout
