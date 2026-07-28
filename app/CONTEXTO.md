@@ -1574,3 +1574,9 @@ Dos cambios de frontend (un commit):
      `site_config` (ese valor 150 estaba en site_config, no hardcodeado en el código). No se tocó `site_config`
      ni la función `priceLabel` (queda inofensiva); solo se omite la fila y se saltea el fetch de `site_config`
      cuando es asesoría (la rama de asesoría de `priceLabel` queda sin uso desde el dashboard).
+
+## 2026-07-28 (d) — Acortar la nota de asesorías
+En `asesoria-erika.html` / `asesoria-gonza.html`, la nota `.asesoria-nota` pasó de
+"Las asesorías son personalizadas. El valor se coordina directamente con tu coach." a solo
+**"Las asesorías son personalizadas."**. Se quitó la 2ª oración porque ya no aplica: ahora se muestra un
+precio fijo (USD 100/mes, agregado en (c)). No se tocó nada más (precio, CTA ni botón de WhatsApp).
