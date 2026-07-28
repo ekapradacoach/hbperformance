@@ -2367,6 +2367,12 @@
       // Cancelar suscripción: solo si está activa
       const cancelBtn = status === 'active'
         ? `<button class="pf-cancel-btn" id="pfCancelSubBtn">Cancelar suscripción</button>` : '';
+      // En asesorías el precio es un arreglo individual con el coach → no mostramos un número genérico.
+      // Solo los 3 programas grupales muestran la fila "Precio del plan".
+      const isAse = ATHLETE.program === 'asesoria-erika' || ATHLETE.program === 'asesoria-gonza';
+      const priceRow = isAse
+        ? ''
+        : `<div class="pf-srow"><span class="k">Precio del plan</span><span class="v" id="pfPrice">…</span></div>`;
 
       box.innerHTML = `
         <div class="card-h">💳 Mi suscripción</div>
@@ -2377,7 +2383,7 @@
         <div class="pf-sub-rows">
           <div class="pf-srow"><span class="k">Fecha de inicio</span><span class="v">${fmtDayOnly(ATHLETE.subscription_start)}</span></div>
           ${endRow}
-          <div class="pf-srow"><span class="k">Precio del plan</span><span class="v" id="pfPrice">…</span></div>
+          ${priceRow}
         </div>
         <div class="pf-sub-info info-${status}">${info}</div>
         ${backBtn}
@@ -2386,12 +2392,14 @@
       const cancelEl = document.getElementById('pfCancelSubBtn');
       if (cancelEl) cancelEl.addEventListener('click', openCancelModal);
 
-      // Precio desde site_config
-      const { data, error } = await sb.from('site_config').select('key, value');
-      const config = {};
-      if (!error && data) data.forEach(r => { config[r.key] = r.value; });
-      const pEl = document.getElementById('pfPrice');
-      if (pEl) pEl.textContent = priceLabel(ATHLETE.program, config);
+      // Precio desde site_config (solo programas grupales; en asesorías no se muestra la fila)
+      if (!isAse) {
+        const { data, error } = await sb.from('site_config').select('key, value');
+        const config = {};
+        if (!error && data) data.forEach(r => { config[r.key] = r.value; });
+        const pEl = document.getElementById('pfPrice');
+        if (pEl) pEl.textContent = priceLabel(ATHLETE.program, config);
+      }
     }
 
     // -------- Cancelar suscripción (confirmación) --------

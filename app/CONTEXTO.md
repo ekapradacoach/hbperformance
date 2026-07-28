@@ -1554,3 +1554,23 @@ profiles con la negación de la condición (ver chat/tarea). Rollback: `drop pol
   conviene limpiarlas en algún momento. Y **`programs` no tiene policy de SELECT para atletas** (solo admin):
   el portal del atleta no lee esa tabla (usa slugs/labels hardcodeados), así que no rompe nada hoy, pero si
   alguna feature futura necesitara leer `programs` desde el portal, faltaría esa policy.
+
+## 2026-07-28 (c) — Precio de asesorías: referencia en la landing + ocultar fila genérica en el dashboard
+Dos cambios de frontend (un commit):
+
+1. **Landing de asesorías (`asesoria-erika.html` / `asesoria-gonza.html`):** se agregó una línea de precio de
+   referencia **"USD 100 / mes"** (`.asesoria-precio`, dorado `var(--accent)`, inline-styled) **arriba** de la
+   nota `.asesoria-nota` ("Las asesorías son personalizadas…"). **No se agregaron botones de pago** (MP/PayPal):
+   la venta se cierra por WhatsApp; el botón "Quiero mi asesoría — Hablemos" quedó **exactamente igual**.
+   Verificado en el navegador (ambas páginas): precio visible en dorado, nota intacta, CTA sin cambios,
+   0 botones de pago, y el WhatsApp de Gonza sigue apuntando a su número.
+
+2. **Dashboard atleta (`app/dashboard.html`, `renderSubscription`):** la fila **"Precio del plan"** de la card
+   "Mi suscripción" ahora **se oculta cuando el programa es una asesoría** (`asesoria-erika`/`asesoria-gonza`),
+   porque cada asesorado arregla el precio individualmente con su coach (no corresponde un número genérico).
+   Para los **3 programas grupales** (crossfit/hybrid/corredores) la fila **queda igual que hoy**.
+   - **Investigación (de dónde salía el "USD 150"):** la fila la llenaba `priceLabel(program, config)`, que para
+     asesorías devuelve `USD ${config['price_asesoria_usd']} / mes` leyendo la clave **`price_asesoria_usd`** de
+     `site_config` (ese valor 150 estaba en site_config, no hardcodeado en el código). No se tocó `site_config`
+     ni la función `priceLabel` (queda inofensiva); solo se omite la fila y se saltea el fetch de `site_config`
+     cuando es asesoría (la rama de asesoría de `priceLabel` queda sin uso desde el dashboard).
