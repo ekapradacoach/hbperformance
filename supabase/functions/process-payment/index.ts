@@ -30,6 +30,13 @@
 //   entre con su usuario/contraseña de siempre (link al LOGIN, NO a set-password). El fallo
 //   del mail se loguea pero NO rompe la reactivación.
 //
+// Cambio 2026-07-28 (cobro fallido): en la rama subscription_authorized_payment, ahora se mira
+//   el estado del cobro puntual (ap.payment.status / ap.status). Si el cobro fue RECHAZADO
+//   (rejected / invoice 'recycling') → se setea profiles.payment_failed_at = now (solo la 1ª vez,
+//   idempotente) y se manda un mail avisando que tiene 3 días para regularizar; NO se cancela la
+//   suscripción. Si el cobro fue APROBADO y había una falla previa → se limpia payment_failed_at
+//   (recuperación automática). El corte de acceso a los 3 días lo hace el guard del dashboard.
+//
 // Secretos: MP_ACCESS_TOKEN, SUPABASE_URL, SERVICE_ROLE_KEY, RESEND_API_KEY.
 // ============================================================================
 
@@ -76,7 +83,7 @@ Deno.serve(async (req) => {
       // subscription_preapproval / preapproval → data.id ES la preapproval
       preapprovalId = String(resourceId)
     } else if (type.includes('authorized_payment')) {
-      // subscription_authorized_payment → data.id es un authorized_payment
+      // subscription_authorized_payment → data.id es un authorized_payment (una "cuota"/invoice)
       const apRes = await fetch(`${MP_API}/authorized_payments/${resourceId}`, {
         headers: { 'Authorization': `Bearer ${MP_TOKEN}` }
       })
@@ -85,6 +92,59 @@ Deno.serve(async (req) => {
       if (!preapprovalId) {
         console.log('authorized_payment sin preapproval_id → skip:', JSON.stringify(ap))
         return json({ ok: true, skipped: 'no-preapproval-in-authorized-payment' })
+      }
+
+      // --- Cobro recurrente: ¿este cobro puntual falló o salió OK? ---
+      // OJO: el status de la preapproval sigue 'authorized' aunque un cobro falle; la señal
+      // real del cobro está en el authorized_payment: payment.status (approved|rejected) y el
+      // status de la invoice (scheduled|recycling|processed). 'recycling' = rechazado y reintentando.
+      const chargeStatus = ap?.payment?.status ? String(ap.payment.status) : null
+      const invoiceStatus = ap?.status ? String(ap.status) : null
+      const chargeFailed = chargeStatus === 'rejected' || invoiceStatus === 'recycling'
+      const chargeApproved = chargeStatus === 'approved'
+
+      if (chargeFailed) {
+        // Buscar al atleta por su suscripción
+        const { data: prof } = await adminClient
+          .from('profiles')
+          .select('id, email, full_name, payment_failed_at')
+          .eq('mp_subscription_id', preapprovalId)
+          .maybeSingle()
+        if (!prof) {
+          console.log('Cobro fallido pero no hay profile para la suscripción → skip:', preapprovalId)
+          return json({ ok: true, skipped: 'payment-failed-no-profile' })
+        }
+        if (prof.payment_failed_at) {
+          // Ya estaba marcado → idempotente: no reenvío mail ni reinicio el contador de 3 días
+          console.log('Cobro fallido ya registrado (sin cambios):', prof.email)
+          return json({ ok: true, status: 'payment_failed_already_flagged' })
+        }
+        // Primer cobro fallido del episodio: marcar el timestamp + avisar por mail.
+        // NO se toca subscription_status (sigue 'active'); el corte a los 3 días lo hace el guard del dashboard.
+        await adminClient
+          .from('profiles')
+          .update({ payment_failed_at: new Date().toISOString() })
+          .eq('id', prof.id)
+        await sendPaymentFailedEmail(prof.email, prof.full_name)
+        console.log('Cobro fallido registrado + mail enviado:', prof.email)
+        return json({ ok: true, status: 'payment_failed_flagged' })
+      }
+
+      if (chargeApproved) {
+        // Cobro exitoso: si venía de una falla, limpiar el flag (recuperación automática).
+        const { data: prof } = await adminClient
+          .from('profiles')
+          .select('id, email, payment_failed_at')
+          .eq('mp_subscription_id', preapprovalId)
+          .maybeSingle()
+        if (prof && prof.payment_failed_at) {
+          await adminClient
+            .from('profiles')
+            .update({ payment_failed_at: null })
+            .eq('id', prof.id)
+          console.log('Cobro recuperado → payment_failed_at limpiado:', prof.email)
+        }
+        // Sigo al flujo normal de abajo (por si fuese el alta inicial que llega como authorized_payment).
       }
     } else {
       // payment u otros topics → no aplican al alta por suscripción
@@ -160,7 +220,8 @@ Deno.serve(async (req) => {
             subscription_status: 'active',
             mp_subscription_id: mpSubscriptionId,
             subscription_start: new Date().toISOString().split('T')[0],
-            subscription_end: null // limpiar el vencimiento de una cancelación previa (mismo criterio que un alta nueva)
+            subscription_end: null, // limpiar el vencimiento de una cancelación previa (mismo criterio que un alta nueva)
+            payment_failed_at: null // reactivación arranca con la ficha de pago limpia
           })
           .eq('email', email)
 
@@ -247,6 +308,46 @@ function json(body: unknown, status = 200) {
     status,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' }
   })
+}
+
+// Mail de aviso de cobro fallido (mismo mecanismo Resend que el de reactivación).
+// Falla silenciosa: si Resend no está o responde error, se loguea pero no rompe el webhook.
+async function sendPaymentFailedEmail(email: string, full_name: string | null) {
+  try {
+    const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
+    if (!RESEND_API_KEY) {
+      console.warn('RESEND_API_KEY no configurada → no se envía el mail de cobro fallido')
+      return
+    }
+    const firstName = full_name ? String(full_name).split(' ')[0] : ''
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${RESEND_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        from: 'HB Performance <noreply@hbperformance.fit>',
+        to: email,
+        subject: 'No pudimos procesar tu pago — regularizalo en 3 días',
+        html: `<p>¡Hola${firstName ? ' ' + firstName : ''}!</p>
+<p>Intentamos cobrar tu suscripción a <strong>HB Performance</strong> y el pago fue <strong>rechazado</strong>.</p>
+<p>Mercado Pago va a reintentar el cobro automáticamente. Si no se regulariza en los próximos <strong>3 días</strong>, tu acceso al portal se va a suspender hasta que el pago se acredite.</p>
+<p>Para evitarlo, revisá que tu medio de pago tenga fondos y esté vigente. Si necesitás cambiarlo o tenés dudas, escribinos y te ayudamos.</p>
+<p>Podés entrar a tu portal cuando quieras:</p>
+<p><a href="https://hbperformance.fit/app/login.html">https://hbperformance.fit/app/login.html</a></p>
+<p>— El equipo de HB Performance</p>`
+      })
+    })
+    if (!res.ok) {
+      const errBody = await res.text().catch(() => '')
+      console.error('Resend (cobro fallido) falló:', res.status, errBody)
+    } else {
+      console.log('Mail de cobro fallido enviado a:', email)
+    }
+  } catch (mailErr) {
+    console.error('Error enviando el mail de cobro fallido:', mailErr)
+  }
 }
 
 // Si en site_config quedó guardado el init_point completo en vez del id pelado,

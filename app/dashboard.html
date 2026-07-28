@@ -824,6 +824,9 @@
   .expired-card .btn { display: inline-block; }
   .expired-logout { display: block; margin: 18px auto 0; background: none; border: none; color: var(--text-secondary); font-family: var(--font-body); font-size: 0.9rem; cursor: pointer; text-decoration: underline; }
   .expired-logout:hover { color: var(--text); }
+  /* Banner de aviso por cobro fallido (durante los 3 días de gracia) */
+  .pay-banner { background: #3a2f14; color: #F5A800; border: 1px solid #F5A800; border-radius: 10px; padding: 12px 16px; margin-bottom: 18px; font-size: 0.9rem; line-height: 1.45; }
+  .pay-banner a { color: #F5A800; font-weight: 700; text-decoration: underline; white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -848,6 +851,18 @@
       <p>Tu suscripción te da acceso a los dos. Elegí con cuál querés arrancar; podés cambiar cuando quieras desde “Mi programa”.</p>
       <button class="btn btn-filled" id="hcPick3" style="width:100%;margin-bottom:12px;">Hybrid 3 días + 1 corrida</button>
       <button class="btn btn-filled" id="hcPick4" style="width:100%;">Hybrid 4 días + 1 corrida</button>
+    </div>
+  </div>
+
+  <!-- ===== Corte por cobro fallido sin regularizar (pasados los 3 días) ===== -->
+  <div class="expired-screen" id="paymentFailedScreen">
+    <div class="expired-card">
+      <img class="expired-logo" src="../logo.png" alt="HB Performance" onerror="this.style.display='none';">
+      <div class="expired-icon">💳</div>
+      <h1>Regularizá tu pago</h1>
+      <p>No pudimos cobrar tu suscripción y pasaron los 3 días para regularizarlo. Para volver a entrenar, volvé a suscribirte o escribinos si ya lo resolviste.</p>
+      <a class="btn btn-filled" id="payFailedResubBtn" href="#">Volver a suscribirme</a>
+      <button class="expired-logout" id="payFailedLogout">Cerrar sesión</button>
     </div>
   </div>
 
@@ -894,6 +909,9 @@
 
   <!-- ===== Main ===== -->
   <main>
+    <!-- Banner de aviso durante los 3 días de gracia por cobro fallido (se muestra por JS) -->
+    <div id="paymentGraceBanner" class="pay-banner" style="display:none;"></div>
+
     <!-- ===== VIEW: INICIO ===== -->
     <section id="view-inicio" class="view active">
       <h1 class="greeting" id="greeting">Hola 👋</h1>
@@ -3039,6 +3057,31 @@
       document.getElementById('expiredScreen').classList.add('show');
     }
 
+    // Cobro fallido: días de gracia antes de cortar el acceso.
+    const PAYMENT_GRACE_MS = 3 * 24 * 60 * 60 * 1000; // 3 días desde el primer cobro fallido
+
+    // Pantalla de corte por cobro fallido sin regularizar (pasados los 3 días).
+    function showPaymentFailedScreen() {
+      const rb = document.getElementById('payFailedResubBtn');
+      if (rb) rb.href = PROGRAM_LANDING[ATHLETE.program] || 'index.html';
+      const lo = document.getElementById('payFailedLogout');
+      if (lo) lo.addEventListener('click', async () => {
+        await sb.auth.signOut();
+        window.location.replace('login.html');
+      });
+      document.getElementById('paymentFailedScreen').classList.add('show');
+    }
+
+    // Banner de aviso durante los 3 días de gracia (no bloquea, el dashboard sigue funcionando).
+    function showPaymentGraceBanner(deadlineMs) {
+      const b = document.getElementById('paymentGraceBanner');
+      if (!b) return;
+      const fecha = new Date(deadlineMs).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' });
+      const landing = PROGRAM_LANDING[ATHLETE.program] || 'index.html';
+      b.innerHTML = `⚠️ Tu último cobro no se pudo procesar. Mercado Pago va a reintentar; regularizá tu pago antes del <b>${fecha}</b> para no perder el acceso. <a href="${landing}">Volver a suscribirme →</a>`;
+      b.style.display = 'block';
+    }
+
     // Pantalla para elegir plan de Hybrid la primera vez (hybrid_variant null).
     // No muestra el dashboard hasta que el atleta elige; persiste la elección en la base.
     function showHybridChooser(onDone) {
@@ -3081,6 +3124,21 @@
       if (ATHLETE.subscription_status === 'cancelled' && endDs && endDs < TODAY) {
         showExpiredScreen();
         return;
+      }
+
+      // Corte por cobro fallido: si pasaron > 3 días desde el primer cobro rechazado y todavía
+      // no llegó un pago exitoso (payment_failed_at seguiría seteado) → pantalla de corte.
+      // Dentro de los 3 días → banner de aviso y acceso normal. La recuperación (pago OK) limpia
+      // payment_failed_at en process-payment, así que el acceso vuelve solo.
+      if (ATHLETE.payment_failed_at) {
+        const failedMs = new Date(ATHLETE.payment_failed_at).getTime();
+        if (!isNaN(failedMs)) {
+          if (Date.now() - failedMs > PAYMENT_GRACE_MS) {
+            showPaymentFailedScreen();
+            return;
+          }
+          showPaymentGraceBanner(failedMs + PAYMENT_GRACE_MS);
+        }
       }
 
       const firstName = (profile.full_name || '').split(' ')[0] || 'atleta';

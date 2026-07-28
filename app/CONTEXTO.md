@@ -1433,3 +1433,52 @@ Dos cambios de frontend (un commit):
        evolución, top-5, chats), que **no se tocaron**.
      · Se agregó una nota bajo las cards aclarando que solo cuenta los 3 grupales.
    - **No se tocó** el flujo de pago/checkout ni la conexión pendiente de `custom_price` en otras vistas.
+
+## 2026-07-28 — Manejo de cobro fallido en suscripciones (aviso + 3 días de gracia + recuperación)
+**Problema:** `process-payment` sólo reaccionaba al `status` de la **preapproval** (`authorized`/`cancelled`).
+Un cobro rechazado NO cambia ese status (sigue `authorized` mientras MP reintenta ~4 veces en ~10 días y
+recién tras 3 cuotas rechazadas cancela), así que el atleta seguía con acceso completo sin que nadie se
+entere. La señal real del cobro está en el **`authorized_payment`** (la invoice de cada cobro), no en la
+preapproval.
+
+**Investigación MP (payload real, confirmado en docs):** el `authorized_payment` trae
+`status` (scheduled | **recycling** | processed) y un objeto anidado `payment` con `status`
+(**approved** | **rejected**) + `status_detail`. `recycling` = rechazado y reintentando.
+
+### 🗄️ SQL a correr a mano en Supabase
+```sql
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS payment_failed_at timestamptz;
+```
+`null` = todo normal. Se setea con el timestamp del **primer** cobro rechazado; se limpia a `null` al primer
+cobro aprobado (recuperación). No cambia `subscription_status`.
+
+### Edge Function `process-payment` (⚠️ redeployar en Supabase)
+En la rama `subscription_authorized_payment`, además de sacar el `preapproval_id`, ahora mira el estado del
+cobro puntual:
+- **Rechazado** (`payment.status==='rejected'` **o** invoice `status==='recycling'`): busca el profile por
+  `mp_subscription_id`. Si `payment_failed_at` está en `null` → lo setea a `now()` y manda un **mail** (Resend,
+  mismo mecanismo que reactivación) avisando que tiene **3 días** para regularizar. Si ya estaba seteado →
+  **idempotente**: no reenvía mail ni reinicia el contador (el plazo corre desde la 1ª falla). **No** toca
+  `subscription_status`. Corta ahí (no sigue al alta).
+- **Aprobado** (`payment.status==='approved'`): si el profile tenía `payment_failed_at` seteado → lo limpia a
+  `null` (**recuperación automática**, sin intervención de la admin). Luego sigue el flujo normal (por si fuese
+  el alta inicial que llega como authorized_payment).
+- La reactivación (rama `existingProfile`) ahora también setea `payment_failed_at: null` (ficha limpia).
+- El resto (alta, `cancelled`) queda igual. Helper nuevo `sendPaymentFailedEmail`.
+
+### Dashboard (`app/dashboard.html`) — corte + banner
+Guard en `init()` (mismo patrón que el corte por `subscription_end`, **sin cron**):
+- Si `payment_failed_at` seteado y pasaron **> 3 días** (`PAYMENT_GRACE_MS`) → `showPaymentFailedScreen()`
+  (pantalla `#paymentFailedScreen` "Regularizá tu pago", con botón re-suscribirse + logout) y no carga el resto.
+- Dentro de los 3 días → `showPaymentGraceBanner()`: banner `.pay-banner` arriba del contenido ("tu último
+  cobro no se pudo procesar, regularizá antes del DD/MM", con link a re-suscribirse) y **acceso normal**.
+- Si MP cobra después (aunque ya se haya cortado), el evento aprobado limpia `payment_failed_at` → el próximo
+  ingreso ya lo deja pasar. El profile se lee con `select('*')`, así que toma la columna nueva sin cambios extra.
+
+### Notas
+- El corte es a nivel UI (igual que el guard de vencimiento existente), no revoca RLS.
+- El `payment.status` es la señal primaria; `recycling` es respaldo. `process-payment` ya loguea el
+  `authorized_payment` completo → con el primer cobro fallido real en producción se pueden confirmar los
+  valores exactos y ajustar si hiciera falta.
+- **Pendiente de deploy:** correr el `ALTER TABLE` de arriba + **redeployar `process-payment`** en Supabase.
+  (El cambio del dashboard sí se publica por Netlify como cualquier cambio del portal.)
