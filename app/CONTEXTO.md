@@ -1482,3 +1482,75 @@ Guard en `init()` (mismo patrón que el corte por `subscription_end`, **sin cron
   valores exactos y ajustar si hiciera falta.
 - **Pendiente de deploy:** correr el `ALTER TABLE` de arriba + **redeployar `process-payment`** en Supabase.
   (El cambio del dashboard sí se publica por Netlify como cualquier cambio del portal.)
+
+## 2026-07-28 (b) — Refuerzo del corte de acceso a nivel RLS (además del guard del dashboard)
+**Objetivo:** que el corte por suscripción vencida/cancelada **y** por cobro fallido (>3 días) no dependa
+solo del guard del dashboard (cliente), sino que la propia base **no devuelva datos** de un atleta cortado
+aunque llamen directo a la API de Supabase. Es **solo SQL** en Supabase (no toca el repo salvo esta bitácora).
+⚠️ El usuario revisa el SQL antes de correrlo (no ejecutar masivo sin revisión).
+
+### Diseño
+- Función reusable **`public.is_active_athlete()`** (`security definer`, `stable`, `search_path=public`):
+  lee el profile de `auth.uid()` y devuelve `true` si es admin **o** si el atleta NO está vencido y NO está
+  cortado por cobro fallido. Reproduce exactamente los dos cortes del guard del dashboard:
+  · no vencido = `subscription_status != 'cancelled' OR subscription_end IS NULL OR subscription_end >= hoy(AR)`
+  · no cobro-cortado = `payment_failed_at IS NULL OR payment_failed_at >= now() - interval '3 days'`
+  · "hoy" en zona **America/Argentina/Buenos_Aires** (para coincidir con el dashboard). El branch `role='admin'`
+    es red de seguridad: el admin nunca se bloquea.
+- Se aplica con **una policy `RESTRICTIVE FOR SELECT TO authenticated USING (is_active_athlete())` por tabla**.
+  Restrictive se combina con **AND** sobre las permissive existentes → **no toco ninguna policy actual** (ni las
+  duplicadas ni las de admin), es aditivo y reversible con un `drop policy`. El `service_role` (Edge Functions)
+  saltea RLS, así que no se ve afectado.
+- **Tablas gateadas (SELECT):** planning_days, planning_blocks, exercise_links, block_completions,
+  community_posts, community_comments, post_likes, messages, notifications, block_images, community_images.
+- **NO se tocan:** `profiles` (el dashboard necesita leer el propio profile aunque esté cortado, para saberlo
+  y mostrar la pantalla / detectar reactivación), `site_config` (SELECT público), `programs`, y todas las
+  policies de admin.
+
+### SQL (pendiente de correr en Supabase, tras revisión del usuario)
+```sql
+-- 1) Función
+create or replace function public.is_active_athlete()
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from public.profiles p
+    where p.id = auth.uid()
+      and (
+        p.role = 'admin'
+        or (
+          ( p.subscription_status is distinct from 'cancelled'
+            or p.subscription_end is null
+            or p.subscription_end >= (now() at time zone 'America/Argentina/Buenos_Aires')::date )
+          and
+          ( p.payment_failed_at is null
+            or p.payment_failed_at >= now() - interval '3 days' )
+        )
+      )
+  );
+$$;
+grant execute on function public.is_active_athlete() to authenticated, anon;
+
+-- 2) Una policy restrictive de SELECT por tabla (idempotente)
+--    (repetido para: planning_days, planning_blocks, exercise_links, block_completions,
+--     community_posts, community_comments, post_likes, messages, notifications,
+--     block_images, community_images)
+drop policy if exists "Solo atleta activo puede leer" on public.<tabla>;
+create policy "Solo atleta activo puede leer" on public.<tabla>
+  as restrictive for select to authenticated
+  using (public.is_active_athlete());
+```
+Pre-chequeo (no cambia nada) para ver **qué atletas quedarían cortados** antes de aplicar: `SELECT` sobre
+profiles con la negación de la condición (ver chat/tarea). Rollback: `drop policy ...` en las 11 + `drop function`.
+
+### Backlog (registrado a pedido)
+- **Extender a escritura:** hoy el gate es **solo SELECT**. En una 2ª pasada se podría sumar el mismo criterio
+  a **INSERT/UPDATE/DELETE** de las tablas propias del atleta (block_completions, community_posts/comments,
+  post_likes, messages, imágenes) para que un atleta cortado tampoco pueda **escribir** por API.
+- **Imágenes de verdad:** `block-images` y `community-images` son **buckets públicos**, así que gatear la tabla
+  oculta el listado/metadata pero la imagen sigue accesible por URL directa. Para protegerlas de verdad habría
+  que pasar los buckets a **privados + URLs firmadas** (cambio aparte).
+- **Observaciones del dump (no de esta tarea):** varias tablas tienen **policies duplicadas** remanentes de
+  versiones viejas (ej. community_posts/planning_days/messages tienen dos SELECT de atleta con distinto nombre);
+  conviene limpiarlas en algún momento. Y **`programs` no tiene policy de SELECT para atletas** (solo admin):
+  el portal del atleta no lee esa tabla (usa slugs/labels hardcodeados), así que no rompe nada hoy, pero si
+  alguna feature futura necesitara leer `programs` desde el portal, faltaría esa policy.
