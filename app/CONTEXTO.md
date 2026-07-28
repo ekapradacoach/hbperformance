@@ -1627,3 +1627,31 @@ create policy "Admin gestiona la biblioteca" on public.exercise_library
   flujo vivo es auth-gated (admin), no reproducible sin sesión.
 - ⚠️ **Pendiente de deploy:** correr el SQL de arriba en Supabase (crea la tabla; sin ella, el buscador
   degrada a vacío y "+ Añadir" avisaría el error, sin romper el resto del editor).
+
+## 2026-07-28 (f) — Reorg visual del panel de ejercicios + "usados recientemente"
+Solo UX/layout del panel "+ Agregar ejercicio" (la lógica de guardado/dedup **no** se tocó).
+
+### 🗄️ SQL a correr a mano en Supabase (columna nueva)
+```sql
+alter table public.exercise_library add column if not exists last_used_at timestamptz;
+```
+
+### Cambios (admin/index.html)
+- **Layout en dos columnas** (`.ex-panel-grid`, `grid-template-columns: 1fr 250px`): izquierda el formulario
+  (`.ex-form`: Nombre, URL, Buscar en YouTube, Guardar ejercicio, "+ Añadir a biblioteca", Cancelar); derecha
+  angosta la biblioteca (`.ex-lib`: título + buscador + lista). En **≤640px** cae a una columna apilada
+  (biblioteca **debajo** del formulario, por orden en el DOM). Verificado en el navegador: desktop 2 columnas
+  lado a lado; media query `640px` → `1fr`.
+- **`last_used_at`** (timestamptz, nullable): se setea con `touchLibraryUsage()` **cada vez que el coach elige
+  un ejercicio de la biblioteca** (autocompletar) — UPDATE en la base + cache local. NO se setea al crear.
+- **Lista según el buscador** (`renderLibList`): vacío → solo los **3 con `last_used_at` más reciente**
+  (excluye los `null`; si hay menos de 3 con uso, muestra los que haya), bajo el label **"Usados
+  recientemente"**. Con texto → lista completa filtrada por nombre (cap 50, ignora recencia). Al borrar el
+  texto → vuelve a los 3 recientes. La lista ahora vive fija en su columna (se sacó el show/hide por foco).
+- **"Cancelar"** pasó de botón (`.btn-ghost`) a **link de texto liviano** (`.ex-cancel-link`, sin fondo/borde,
+  subrayado) para bajarle el peso visual frente a "Guardar ejercicio". Mismo handler (`.ex-cancel-btn`).
+- **No se tocó:** `exercise_links`, el dedup por nombre, el botón "+ Añadir a biblioteca" (solo cambió de
+  lugar en el layout) ni el buscador de YouTube.
+- Verificado: syntax-check + unit-test (orden de recientes desc sin nulls, <3 con uso, filtro incluye
+  null-used, cap 50) + chequeo del grid responsive en el navegador. Flujo vivo auth-gated (admin).
+- ⚠️ **Pendiente de deploy:** correr el `ALTER TABLE ... add column last_used_at` de arriba.

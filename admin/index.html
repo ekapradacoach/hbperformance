@@ -802,7 +802,11 @@
   .btn-add-ex:hover { border-color: var(--accent); color: var(--accent); }
 
   /* ---- Biblioteca de ejercicios (dentro del panel) ---- */
-  .ex-lib { position: relative; }
+  .ex-panel-grid { display: grid; grid-template-columns: 1fr 250px; gap: 16px; align-items: start; }
+  .ex-form { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .ex-lib { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .ex-lib-title { font-size: 0.82rem; font-weight: 700; color: var(--text-secondary); }
+  @media (max-width: 640px) { .ex-panel-grid { grid-template-columns: 1fr; } }
   .ex-lib-search {
     width: 100%;
     background: var(--bg);
@@ -845,6 +849,10 @@
   .ex-lib-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .ex-lib-has { flex-shrink: 0; opacity: 0.8; }
   .ex-lib-empty { padding: 10px 12px; color: var(--text-secondary); font-size: 0.86rem; }
+  .ex-lib-head { padding: 8px 12px 6px; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: #7a7a7a; }
+  /* Cancelar como link liviano (no botón con peso) */
+  .ex-cancel-link { background: none; border: none; color: var(--text-secondary); text-decoration: underline; cursor: pointer; font-family: var(--font-body); font-size: 0.88rem; padding: 8px 6px; }
+  .ex-cancel-link:hover { color: var(--text); }
 
   /* ---- Calendario (vista mes) ---- */
   .cal-header { display: flex; align-items: center; justify-content: center; gap: 18px; margin-bottom: 16px; }
@@ -2767,19 +2775,26 @@
             <div class="ex-label">Ejercicios</div>
             <div class="ex-chips">${exerciseChipsHtml(b)}</div>
             <div class="ex-panel" style="display:none;">
-              <div class="ex-lib">
-                <input class="ex-lib-search" placeholder="🔎 Buscar en la biblioteca de ejercicios…" autocomplete="off">
-                <div class="ex-lib-list" style="display:none;"></div>
-              </div>
-              <div class="ex-panel-row">
-                <input class="ex-name" placeholder="Nombre del ejercicio" autocomplete="off">
-                <input class="ex-url" placeholder="URL de YouTube (pegá el link)" autocomplete="off">
-              </div>
-              <div class="ex-panel-actions">
-                <button class="btn-sm ex-search-btn">🔍 Buscar en YouTube</button>
-                <button class="btn-primary ex-save-btn">Guardar ejercicio</button>
-                <button class="btn-sm ex-lib-add-btn" style="display:none;">+ Añadir a biblioteca</button>
-                <button class="btn-ghost ex-cancel-btn">Cancelar</button>
+              <div class="ex-panel-grid">
+                <!-- Columna izquierda: formulario del ejercicio -->
+                <div class="ex-form">
+                  <div class="ex-panel-row">
+                    <input class="ex-name" placeholder="Nombre del ejercicio" autocomplete="off">
+                    <input class="ex-url" placeholder="URL de YouTube (pegá el link)" autocomplete="off">
+                  </div>
+                  <div class="ex-panel-actions">
+                    <button class="btn-sm ex-search-btn">🔍 Buscar en YouTube</button>
+                    <button class="btn-primary ex-save-btn">Guardar ejercicio</button>
+                    <button class="btn-sm ex-lib-add-btn" style="display:none;">+ Añadir a biblioteca</button>
+                    <button class="ex-cancel-link ex-cancel-btn">Cancelar</button>
+                  </div>
+                </div>
+                <!-- Columna derecha (angosta): biblioteca de ejercicios -->
+                <div class="ex-lib">
+                  <div class="ex-lib-title">Biblioteca de ejercicios</div>
+                  <input class="ex-lib-search" placeholder="🔎 Buscar…" autocomplete="off">
+                  <div class="ex-lib-list"></div>
+                </div>
               </div>
             </div>
             <button class="btn-add-ex ex-add-btn">+ Agregar ejercicio</button>
@@ -2871,20 +2886,21 @@
         panel.style.display = open ? 'none' : 'block';
         if (!open) {
           nameEl.focus();
+          libList.innerHTML = '<div class="ex-lib-empty">Cargando…</div>';
           await loadExerciseLibrary(); // precarga la cache global de la biblioteca
+          renderLibList(card, libSearch.value); // vacío → "Usados recientemente" (top 3)
           refreshLibAddBtn(card);
         }
       });
       card.querySelector('.ex-cancel-btn').addEventListener('click', () => {
         panel.style.display = 'none'; nameEl.value = ''; urlEl.value = '';
-        libSearch.value = ''; libList.style.display = 'none';
+        libSearch.value = '';
         refreshLibAddBtn(card);
       });
       card.querySelector('.ex-search-btn').addEventListener('click', () => openYtSearch(b.id));
       card.querySelector('.ex-save-btn').addEventListener('click', () => saveExercise(b, card));
 
       // Biblioteca de ejercicios (búsqueda global + click para autocompletar)
-      libSearch.addEventListener('focus', async () => { await loadExerciseLibrary(); renderLibList(card, libSearch.value); });
       libSearch.addEventListener('input', () => renderLibList(card, libSearch.value));
       // Estado del botón "+ Añadir a biblioteca" según el nombre tipeado
       nameEl.addEventListener('input', () => refreshLibAddBtn(card));
@@ -2901,7 +2917,7 @@
       if (exerciseLibraryLoading) return exerciseLibraryLoading;
       exerciseLibraryLoading = (async () => {
         const { data, error } = await sb.from('exercise_library')
-          .select('id, name, video_url').order('name', { ascending: true });
+          .select('id, name, video_url, last_used_at').order('name', { ascending: true });
         if (error) console.warn('exercise_library no disponible:', error.message);
         exerciseLibrary = error ? [] : (data || []);
         exerciseLibraryLoading = null;
@@ -2924,36 +2940,64 @@
       if (libHasName(name)) { btn.disabled = true; btn.textContent = '✓ En biblioteca'; }
       else { btn.disabled = false; btn.textContent = '+ Añadir a biblioteca'; }
     }
-    // Lista filtrada de la biblioteca (todos capados a 50 si no hay query)
+    // Lista de la biblioteca:
+    //  · buscador vacío → solo los 3 con last_used_at más reciente ("Usados recientemente"),
+    //    excluyendo los que nunca se usaron (last_used_at null).
+    //  · con texto → lista completa filtrada por nombre (cap 50), ignorando la recencia.
     function renderLibList(card, query) {
       const listEl = card.querySelector('.ex-lib-list');
       const all = exerciseLibrary || [];
       const q = String(query || '').trim().toLowerCase();
-      const filtered = (q ? all.filter(e => String(e.name || '').toLowerCase().includes(q)) : all).slice(0, 50);
+      let items, header = '';
+      if (q) {
+        items = all.filter(e => String(e.name || '').toLowerCase().includes(q)).slice(0, 50);
+      } else {
+        items = all.filter(e => e.last_used_at)
+          .sort((a, c) => new Date(c.last_used_at) - new Date(a.last_used_at))
+          .slice(0, 3);
+        if (items.length) header = '<div class="ex-lib-head">Usados recientemente</div>';
+      }
       if (!all.length) {
         listEl.innerHTML = '<div class="ex-lib-empty">La biblioteca está vacía todavía. Cargá un ejercicio y tocá “+ Añadir a biblioteca”.</div>';
-      } else if (!filtered.length) {
-        listEl.innerHTML = '<div class="ex-lib-empty">Sin resultados para “' + esc(query) + '”.</div>';
-      } else {
-        listEl.innerHTML = filtered.map(e =>
-          `<button type="button" class="ex-lib-item" data-id="${esc(e.id)}">
-             <span class="ex-lib-name">${esc(e.name)}</span>
-             ${e.video_url ? '<span class="ex-lib-has">🎥</span>' : ''}
-           </button>`).join('');
-        listEl.querySelectorAll('.ex-lib-item').forEach(it => {
-          it.addEventListener('click', () => {
-            const ex = (exerciseLibrary || []).find(x => String(x.id) === String(it.dataset.id));
-            if (!ex) return;
-            card.querySelector('.ex-name').value = ex.name || '';
-            card.querySelector('.ex-url').value = ex.video_url || '';
-            listEl.style.display = 'none';
-            card.querySelector('.ex-lib-search').value = '';
-            refreshLibAddBtn(card);
-            card.querySelector('.ex-name').focus();
-          });
-        });
+        return;
       }
-      listEl.style.display = 'block';
+      if (!items.length) {
+        listEl.innerHTML = q
+          ? '<div class="ex-lib-empty">Sin resultados para “' + esc(query) + '”.</div>'
+          : '<div class="ex-lib-empty">Escribí para buscar en la biblioteca.</div>';
+        return;
+      }
+      listEl.innerHTML = header + items.map(e =>
+        `<button type="button" class="ex-lib-item" data-id="${esc(e.id)}">
+           <span class="ex-lib-name">${esc(e.name)}</span>
+           ${e.video_url ? '<span class="ex-lib-has">🎥</span>' : ''}
+         </button>`).join('');
+      listEl.querySelectorAll('.ex-lib-item').forEach(it => {
+        it.addEventListener('click', () => {
+          const ex = (exerciseLibrary || []).find(x => String(x.id) === String(it.dataset.id));
+          if (ex) pickFromLibrary(card, ex);
+        });
+      });
+    }
+
+    // Autocompleta nombre+URL desde un ejercicio de la biblioteca y marca su uso reciente.
+    function pickFromLibrary(card, ex) {
+      card.querySelector('.ex-name').value = ex.name || '';
+      card.querySelector('.ex-url').value = ex.video_url || '';
+      card.querySelector('.ex-lib-search').value = '';
+      touchLibraryUsage(ex);          // registra last_used_at (no bloquea el autocompletar)
+      renderLibList(card, '');        // vuelve a "recientes" (este queda arriba)
+      refreshLibAddBtn(card);         // el nombre ya existe → "✓ En biblioteca"
+      card.querySelector('.ex-name').focus();
+    }
+
+    // Marca el ejercicio como usado recientemente (cache local + UPDATE en la base).
+    async function touchLibraryUsage(ex) {
+      const nowIso = new Date().toISOString();
+      ex.last_used_at = nowIso; // cache local para el orden inmediato de "recientes"
+      const { error } = await sb.from('exercise_library')
+        .update({ last_used_at: nowIso }).eq('id', ex.id);
+      if (error) console.warn('No se pudo actualizar last_used_at:', error.message);
     }
     // Guarda explícitamente el par nombre/link en la biblioteca (avisa y no pisa si ya existe)
     async function addToLibrary(b, card) {

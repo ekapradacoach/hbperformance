@@ -291,6 +291,7 @@ name text (not null)   — único case-insensitive: unique index on lower(trim(n
 video_url text
 created_at timestamptz (default now())
 created_by uuid (FK profiles.id, on delete set null)   — admin que lo cargó
+last_used_at timestamptz (nullable)   ← ⚠️ AGREGAR (2026-07-28 (f)). Se actualiza al elegir el ejercicio de la biblioteca (autocompletar). Se usa para el top-3 "Usados recientemente" con el buscador vacío.
 RLS: **solo admin** FOR ALL (get_my_role()='admin'); el atleta NO la usa. Capa opcional sobre exercise_links:
 se llena solo cuando el coach toca "+ Añadir a biblioteca" en el panel de ejercicios; buscar+click autocompleta
 nombre/URL y sigue guardándose en `exercise_links`. ⚠️ Crear en Supabase (SQL en CONTEXTO.md 2026-07-28 (e)).
