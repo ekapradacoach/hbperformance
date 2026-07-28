@@ -1580,3 +1580,50 @@ En `asesoria-erika.html` / `asesoria-gonza.html`, la nota `.asesoria-nota` pasó
 "Las asesorías son personalizadas. El valor se coordina directamente con tu coach." a solo
 **"Las asesorías son personalizadas."**. Se quitó la 2ª oración porque ya no aplica: ahora se muestra un
 precio fijo (USD 100/mes, agregado en (c)). No se tocó nada más (precio, CTA ni botón de WhatsApp).
+
+## 2026-07-28 (e) — Biblioteca de ejercicios reutilizable (capa opcional sobre exercise_links)
+Biblioteca **compartida entre todos los programas** (crossfit/hybrid/corredores/asesorías) para reutilizar
+ejercicios (nombre + link de YouTube) sin volver a buscarlos. Vive en el **panel inline de "+ Agregar
+ejercicio"** del editor de planificación (admin). **No reemplaza `exercise_links`** (que sigue siendo por
+bloque, sin cambios): es una capa nueva y opcional encima.
+
+### 🗄️ SQL a correr a mano en Supabase
+```sql
+create table if not exists public.exercise_library (
+  id         uuid primary key default gen_random_uuid(),
+  name       text not null,
+  video_url  text,
+  created_at timestamptz not null default now(),
+  created_by uuid references public.profiles(id) on delete set null
+);
+
+-- Un solo ejercicio por nombre (case-insensitive, sin espacios de más) → sin duplicados
+create unique index if not exists exercise_library_name_uidx
+  on public.exercise_library (lower(trim(name)));
+
+-- RLS: solo admin (herramienta del coach; el atleta no la usa)
+alter table public.exercise_library enable row level security;
+create policy "Admin gestiona la biblioteca" on public.exercise_library
+  for all to authenticated
+  using (public.get_my_role() = 'admin')
+  with check (public.get_my_role() = 'admin');
+```
+
+### Comportamiento (admin/index.html)
+- **Buscador** (`.ex-lib-search` + `.ex-lib-list`) arriba de los campos Nombre/URL del panel: filtra por
+  nombre a medida que se escribe sobre una **cache global** (`exerciseLibrary`, se carga **una sola vez** con
+  `loadExerciseLibrary()` y se reusa en todos los bloques). Input vacío → muestra **todos capados a 50**.
+  Click en un ítem → autocompleta **Nombre + URL** del bloque (después "Guardar ejercicio" inserta en
+  `exercise_links` como siempre).
+- **Botón "+ Añadir a biblioteca"** (`.ex-lib-add-btn`, en la fila de acciones) con estado según el nombre:
+  oculto si no hay nombre; **"✓ En biblioteca"** (deshabilitado) si el nombre ya existe o vino de la
+  biblioteca; **"+ Añadir a biblioteca"** si es nuevo. Al tocarlo inserta `{name, video_url, created_by:
+  CURRENT_ADMIN_ID}` en `exercise_library`. **Duplicados: avisa y NO pisa** el video existente (índice único
+  `lower(trim(name))`; el código chequea la cache y además maneja el 23505 por carrera). El ejercicio se
+  guarda igual en `exercise_links` aunque no se toque este botón.
+- **No se tocó** `exercise_links`, `saveExercise`, ni el buscador de YouTube (solo se agregó
+  `refreshLibAddBtn` tras autocompletar desde YouTube).
+- Verificado: syntax-check OK + unit-test de la lógica (dedup case-insensitive/trim, filtro, cap 50). El
+  flujo vivo es auth-gated (admin), no reproducible sin sesión.
+- ⚠️ **Pendiente de deploy:** correr el SQL de arriba en Supabase (crea la tabla; sin ella, el buscador
+  degrada a vacío y "+ Añadir" avisaría el error, sin romper el resto del editor).

@@ -285,6 +285,16 @@ youtube_url text
 created_at timestamptz (default now())
 RLS: admin FOR ALL vía public.get_my_role()='admin'; athlete SELECT si el bloque pertenece a su programa/asesoría.
 
+### exercise_library   ← ✅ (2026-07-28) biblioteca reutilizable de ejercicios, COMPARTIDA entre todos los programas
+id uuid (default gen_random_uuid())
+name text (not null)   — único case-insensitive: unique index on lower(trim(name))
+video_url text
+created_at timestamptz (default now())
+created_by uuid (FK profiles.id, on delete set null)   — admin que lo cargó
+RLS: **solo admin** FOR ALL (get_my_role()='admin'); el atleta NO la usa. Capa opcional sobre exercise_links:
+se llena solo cuando el coach toca "+ Añadir a biblioteca" en el panel de ejercicios; buscar+click autocompleta
+nombre/URL y sigue guardándose en `exercise_links`. ⚠️ Crear en Supabase (SQL en CONTEXTO.md 2026-07-28 (e)).
+
 ### block_completions
 id uuid
 athlete_id uuid (FK profiles.id)

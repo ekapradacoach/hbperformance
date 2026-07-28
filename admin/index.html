@@ -801,6 +801,51 @@
   }
   .btn-add-ex:hover { border-color: var(--accent); color: var(--accent); }
 
+  /* ---- Biblioteca de ejercicios (dentro del panel) ---- */
+  .ex-lib { position: relative; }
+  .ex-lib-search {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 10px 12px;
+    color: var(--text);
+    font-family: var(--font-body);
+    font-size: 0.92rem;
+  }
+  .ex-lib-search:focus { outline: none; border-color: var(--accent); }
+  .ex-lib-search::placeholder { color: #555; }
+  .ex-lib-list {
+    margin-top: 6px;
+    max-height: 190px;
+    overflow-y: auto;
+    background: var(--bg);
+    border: 1px solid #333;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+  }
+  .ex-lib-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid #262626;
+    color: var(--text);
+    text-align: left;
+    padding: 9px 12px;
+    font-family: var(--font-body);
+    font-size: 0.9rem;
+    cursor: pointer;
+  }
+  .ex-lib-item:last-child { border-bottom: none; }
+  .ex-lib-item:hover { background: rgba(245,168,0,0.08); color: var(--accent); }
+  .ex-lib-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ex-lib-has { flex-shrink: 0; opacity: 0.8; }
+  .ex-lib-empty { padding: 10px 12px; color: var(--text-secondary); font-size: 0.86rem; }
+
   /* ---- Calendario (vista mes) ---- */
   .cal-header { display: flex; align-items: center; justify-content: center; gap: 18px; margin-bottom: 16px; }
   .cal-title {
@@ -2722,6 +2767,10 @@
             <div class="ex-label">Ejercicios</div>
             <div class="ex-chips">${exerciseChipsHtml(b)}</div>
             <div class="ex-panel" style="display:none;">
+              <div class="ex-lib">
+                <input class="ex-lib-search" placeholder="🔎 Buscar en la biblioteca de ejercicios…" autocomplete="off">
+                <div class="ex-lib-list" style="display:none;"></div>
+              </div>
               <div class="ex-panel-row">
                 <input class="ex-name" placeholder="Nombre del ejercicio" autocomplete="off">
                 <input class="ex-url" placeholder="URL de YouTube (pegá el link)" autocomplete="off">
@@ -2729,6 +2778,7 @@
               <div class="ex-panel-actions">
                 <button class="btn-sm ex-search-btn">🔍 Buscar en YouTube</button>
                 <button class="btn-primary ex-save-btn">Guardar ejercicio</button>
+                <button class="btn-sm ex-lib-add-btn" style="display:none;">+ Añadir a biblioteca</button>
                 <button class="btn-ghost ex-cancel-btn">Cancelar</button>
               </div>
             </div>
@@ -2813,19 +2863,124 @@
       const panel = card.querySelector('.ex-panel');
       const nameEl = card.querySelector('.ex-name');
       const urlEl = card.querySelector('.ex-url');
+      const libSearch = card.querySelector('.ex-lib-search');
+      const libList = card.querySelector('.ex-lib-list');
 
-      card.querySelector('.ex-add-btn').addEventListener('click', () => {
+      card.querySelector('.ex-add-btn').addEventListener('click', async () => {
         const open = panel.style.display !== 'none';
         panel.style.display = open ? 'none' : 'block';
-        if (!open) nameEl.focus();
+        if (!open) {
+          nameEl.focus();
+          await loadExerciseLibrary(); // precarga la cache global de la biblioteca
+          refreshLibAddBtn(card);
+        }
       });
       card.querySelector('.ex-cancel-btn').addEventListener('click', () => {
         panel.style.display = 'none'; nameEl.value = ''; urlEl.value = '';
+        libSearch.value = ''; libList.style.display = 'none';
+        refreshLibAddBtn(card);
       });
       card.querySelector('.ex-search-btn').addEventListener('click', () => openYtSearch(b.id));
       card.querySelector('.ex-save-btn').addEventListener('click', () => saveExercise(b, card));
 
+      // Biblioteca de ejercicios (búsqueda global + click para autocompletar)
+      libSearch.addEventListener('focus', async () => { await loadExerciseLibrary(); renderLibList(card, libSearch.value); });
+      libSearch.addEventListener('input', () => renderLibList(card, libSearch.value));
+      // Estado del botón "+ Añadir a biblioteca" según el nombre tipeado
+      nameEl.addEventListener('input', () => refreshLibAddBtn(card));
+      card.querySelector('.ex-lib-add-btn').addEventListener('click', () => addToLibrary(b, card));
+
       wireChips(b, card);
+    }
+
+    // ---- Biblioteca de ejercicios (tabla exercise_library, compartida entre todos los programas) ----
+    let exerciseLibrary = null;          // cache global (se carga una sola vez)
+    let exerciseLibraryLoading = null;   // promesa en curso, para no duplicar el fetch
+    async function loadExerciseLibrary() {
+      if (exerciseLibrary) return exerciseLibrary;
+      if (exerciseLibraryLoading) return exerciseLibraryLoading;
+      exerciseLibraryLoading = (async () => {
+        const { data, error } = await sb.from('exercise_library')
+          .select('id, name, video_url').order('name', { ascending: true });
+        if (error) console.warn('exercise_library no disponible:', error.message);
+        exerciseLibrary = error ? [] : (data || []);
+        exerciseLibraryLoading = null;
+        return exerciseLibrary;
+      })();
+      return exerciseLibraryLoading;
+    }
+    function libHasName(name) {
+      const key = String(name || '').trim().toLowerCase();
+      if (!key) return false;
+      return (exerciseLibrary || []).some(e => String(e.name || '').trim().toLowerCase() === key);
+    }
+    // Muestra/oculta y ajusta el botón "+ Añadir a biblioteca" según el nombre actual
+    function refreshLibAddBtn(card) {
+      const btn = card.querySelector('.ex-lib-add-btn');
+      if (!btn) return;
+      const name = card.querySelector('.ex-name').value.trim();
+      if (!name) { btn.style.display = 'none'; return; }
+      btn.style.display = '';
+      if (libHasName(name)) { btn.disabled = true; btn.textContent = '✓ En biblioteca'; }
+      else { btn.disabled = false; btn.textContent = '+ Añadir a biblioteca'; }
+    }
+    // Lista filtrada de la biblioteca (todos capados a 50 si no hay query)
+    function renderLibList(card, query) {
+      const listEl = card.querySelector('.ex-lib-list');
+      const all = exerciseLibrary || [];
+      const q = String(query || '').trim().toLowerCase();
+      const filtered = (q ? all.filter(e => String(e.name || '').toLowerCase().includes(q)) : all).slice(0, 50);
+      if (!all.length) {
+        listEl.innerHTML = '<div class="ex-lib-empty">La biblioteca está vacía todavía. Cargá un ejercicio y tocá “+ Añadir a biblioteca”.</div>';
+      } else if (!filtered.length) {
+        listEl.innerHTML = '<div class="ex-lib-empty">Sin resultados para “' + esc(query) + '”.</div>';
+      } else {
+        listEl.innerHTML = filtered.map(e =>
+          `<button type="button" class="ex-lib-item" data-id="${esc(e.id)}">
+             <span class="ex-lib-name">${esc(e.name)}</span>
+             ${e.video_url ? '<span class="ex-lib-has">🎥</span>' : ''}
+           </button>`).join('');
+        listEl.querySelectorAll('.ex-lib-item').forEach(it => {
+          it.addEventListener('click', () => {
+            const ex = (exerciseLibrary || []).find(x => String(x.id) === String(it.dataset.id));
+            if (!ex) return;
+            card.querySelector('.ex-name').value = ex.name || '';
+            card.querySelector('.ex-url').value = ex.video_url || '';
+            listEl.style.display = 'none';
+            card.querySelector('.ex-lib-search').value = '';
+            refreshLibAddBtn(card);
+            card.querySelector('.ex-name').focus();
+          });
+        });
+      }
+      listEl.style.display = 'block';
+    }
+    // Guarda explícitamente el par nombre/link en la biblioteca (avisa y no pisa si ya existe)
+    async function addToLibrary(b, card) {
+      const name = card.querySelector('.ex-name').value.trim();
+      const video_url = card.querySelector('.ex-url').value.trim() || null;
+      if (!name) { card.querySelector('.ex-name').focus(); flash('Poné un nombre para el ejercicio.'); return; }
+      await loadExerciseLibrary();
+      if (libHasName(name)) { flash('Ya está en la biblioteca.'); refreshLibAddBtn(card); return; }
+      const btn = card.querySelector('.ex-lib-add-btn');
+      btn.disabled = true;
+      const { data, error } = await sb.from('exercise_library')
+        .insert({ name, video_url, created_by: CURRENT_ADMIN_ID }).select().single();
+      if (error) {
+        if (error.code === '23505') { // índice único (carrera): ya existía
+          flash('Ya estaba en la biblioteca.');
+          exerciseLibrary = null; await loadExerciseLibrary();
+        } else {
+          alert('No se pudo añadir a la biblioteca: ' + error.message);
+          btn.disabled = false; return;
+        }
+      } else {
+        exerciseLibrary = exerciseLibrary || [];
+        exerciseLibrary.push(data);
+        exerciseLibrary.sort((x, y) => String(x.name).localeCompare(String(y.name)));
+        flash('✓ Añadido a la biblioteca.');
+      }
+      refreshLibAddBtn(card);
     }
 
     function wireChips(b, card) {
@@ -2947,6 +3102,7 @@
           panel.style.display = 'block';
           urlEl.value = 'https://www.youtube.com/watch?v=' + vid;
           if (!nameEl.value.trim()) nameEl.value = title || '';
+          refreshLibAddBtn(card); // el nombre cambió por código → actualizar el botón de biblioteca
           nameEl.focus();
         }
       }
