@@ -1407,3 +1407,29 @@ using (get_my_role() = 'admin');
 Recordatorio: para que el fix de (d) y (e) funcione hay que correr **ambas** policies en Supabase
 (la de UPDATE de (d) y esta de DELETE). Sin ellas, el admin ve el mensaje de error correcto pero no puede
 editar/eliminar perfiles de otros atletas.
+
+## 2026-07-27 (f) — Quitar WodUp de asesorías + Métricas de ingresos solo grupales
+Dos cambios de frontend (un commit):
+
+1. **Footer de `asesoria-erika.html` y `asesoria-gonza.html`:** se eliminó el `.notice-box` de WodUp
+   ("📱 Nuestros programas se gestionan a través de WodUp…"), que había quedado pendiente cuando se sacó
+   de `index.html` y las 3 landing grupales. Mismo criterio: **eliminado sin reemplazo**. Las reglas CSS
+   `.notice-box` quedan sin uso (inofensivas), igual que en las otras páginas.
+
+2. **Métricas → sección Ingresos (`admin/index.html`, `renderIngresos` / `loadMetricas`):**
+   - **Fuera las asesorías de esta sección.** Los ingresos se calculan **solo sobre los 3 programas
+     grupales** (crossfit, hybrid, corredores), atletas con `subscription_status='active'`.
+   - **Se reemplazó el `PRICES` hardcodeado.** Para cada atleta grupal activo: se usa su
+     **`profiles.custom_price`** si tiene uno cargado; si no, el **precio ARS del programa desde
+     `site_config`** (`price_crossfit_ars` / `price_hybrid_ars` / `price_corredores_ars`; se leen con el
+     mismo patrón `{key:value}` que las landing). `loadMetricas` ahora trae `custom_price` en el SELECT de
+     profiles y hace un SELECT de `site_config`, y se lo pasa a `renderIngresos`.
+   - **Decisiones tomadas (por si querés revisarlas):**
+     · Se **eliminó la card "Ingresos USD"** (su sub-label era "Asesorías activas" y el USD venía **solo**
+       de asesorías; sin asesorías queda sin fuente de datos). Los ingresos ahora son **solo ARS**
+       (coherente con que `custom_price` es ARS). Quedan 2 cards: **Ingresos ARS** + **Alumnos activos**.
+     · La card **"Alumnos activos"** de esta sección ahora cuenta **solo atletas grupales activos** (los que
+       generan estos ingresos); las asesorías siguen apareciendo en el resto de secciones (distribución,
+       evolución, top-5, chats), que **no se tocaron**.
+     · Se agregó una nota bajo las cards aclarando que solo cuenta los 3 grupales.
+   - **No se tocó** el flujo de pago/checkout ni la conexión pendiente de `custom_price` en otras vistas.

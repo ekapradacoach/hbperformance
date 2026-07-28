@@ -1746,19 +1746,15 @@
           <div class="card">
             <div class="card-label"><span>💵</span> Ingresos ARS</div>
             <div class="card-value" id="metArs">—</div>
-            <div class="card-sub">Suscripciones activas</div>
-          </div>
-          <div class="card">
-            <div class="card-label"><span>💲</span> Ingresos USD</div>
-            <div class="card-value" id="metUsd">—</div>
-            <div class="card-sub">Asesorías activas</div>
+            <div class="card-sub">Programas grupales activos</div>
           </div>
           <div class="card">
             <div class="card-label"><span>👥</span> Alumnos activos</div>
             <div class="card-value" id="metActive">—</div>
-            <div class="card-sub">Con suscripción activa</div>
+            <div class="card-sub">Con programa grupal activo</div>
           </div>
         </div>
+        <div class="met-note">Solo cuenta los 3 programas grupales (CrossFit, Hybrid, Corredores). Las asesorías de Erika y Gonza se gestionan aparte y no figuran acá.</div>
 
         <!-- Sección 2: Distribución por programa -->
         <div class="met-section-title">📊 Alumnos activos por programa</div>
@@ -4004,12 +4000,14 @@
     // ============================================================
     // MÉTRICAS
     // ============================================================
-    const PRICES = {
-      'crossfit':       { ars: 45000, usd: 0 },
-      'hybrid':         { ars: 45000, usd: 0 },
-      'corredores':     { ars: 40000, usd: 0 },
-      'asesoria-erika': { ars: 0, usd: 150 },
-      'asesoria-gonza': { ars: 0, usd: 150 }
+    // Ingresos: SOLO los 3 programas grupales. El precio de cada atleta activo sale de su
+    // profiles.custom_price (si tiene) o, si no, del precio ARS del programa en site_config.
+    // Las asesorías no entran (Erika/Gonza gestionan esos pagos por su cuenta).
+    const GROUP_PROGRAMS = ['crossfit', 'hybrid', 'corredores'];
+    const GROUP_PRICE_KEY = {
+      crossfit: 'price_crossfit_ars',
+      hybrid: 'price_hybrid_ars',
+      corredores: 'price_corredores_ars'
     };
     function currentMonthStr() { return todayStr().slice(0, 7); } // 'YYYY-MM'
     function addMonths(y, m, delta) { // m 1-based
@@ -4037,12 +4035,17 @@
       const [y, m] = input.value.split('-').map(Number);
 
       const { data: aths, error } = await sb.from('profiles')
-        .select('id, full_name, program, subscription_status, created_at').eq('role', 'athlete');
+        .select('id, full_name, program, subscription_status, created_at, custom_price').eq('role', 'athlete');
       const athletes = error ? [] : (aths || []);
       const athById = {};
       athletes.forEach(a => { athById[a.id] = a; });
 
-      renderIngresos(athletes);
+      // Precios desde site_config (mismo patrón que las landing): { key: value }
+      const { data: cfgRows } = await sb.from('site_config').select('key, value');
+      const config = {};
+      (cfgRows || []).forEach(r => { config[r.key] = r.value; });
+
+      renderIngresos(athletes, config);
       renderDistribucion(athletes);
       renderEvolucion(athletes, y, m);
       renderTopActivos(athById);
@@ -4050,14 +4053,19 @@
     }
     document.getElementById('metMonth').addEventListener('change', loadMetricas);
 
-    // ---- Sección 1: ingresos ----
-    function renderIngresos(athletes) {
-      const active = athletes.filter(a => a.subscription_status === 'active');
-      let ars = 0, usd = 0;
-      active.forEach(a => { const p = PRICES[a.program]; if (p) { ars += p.ars; usd += p.usd; } });
+    // ---- Sección 1: ingresos (SOLO programas grupales, en ARS) ----
+    function renderIngresos(athletes, config) {
+      const activeGroup = athletes.filter(a =>
+        a.subscription_status === 'active' && GROUP_PROGRAMS.includes(a.program));
+      let ars = 0;
+      activeGroup.forEach(a => {
+        const custom = Number(a.custom_price);
+        const hasCustom = a.custom_price != null && a.custom_price !== '' && !isNaN(custom);
+        const price = hasCustom ? custom : (Number(config[GROUP_PRICE_KEY[a.program]]) || 0);
+        ars += price;
+      });
       document.getElementById('metArs').textContent = '$' + ars.toLocaleString('es-AR');
-      document.getElementById('metUsd').textContent = 'USD ' + usd.toLocaleString('es-AR');
-      document.getElementById('metActive').textContent = active.length;
+      document.getElementById('metActive').textContent = activeGroup.length;
     }
 
     // ---- Sección 2: distribución por programa ----
