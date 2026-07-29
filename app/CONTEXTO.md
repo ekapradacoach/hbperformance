@@ -1723,3 +1723,14 @@ Texto libre del bloque, `exercise_links`/videos, ni el guardado de bloques. `ath
 - Syntax-check admin + dashboard OK. Unit-test de `rmKg` (70, 71.75, 66.63, 112, 33.3, 87.75). Flujo vivo
   (editor y bloques) es auth-gated → no reproducible sin sesión.
 - ⚠️ **Pendiente de deploy:** correr el DDL de arriba + las policies (ver chat) en Supabase.
+
+### 2026-07-28 (g bis) — SQL final de policies (hybrid-aware) + fix de exercise_links
+Decisión confirmada: usar el criterio **hybrid-aware** en la policy de atleta de `block_rm_exercises`, y
+**arreglar la policy vieja de `exercise_links`** con el mismo criterio (bug real: hoy los atletas de Hybrid
+no ven sus exercise_links porque `program_slug`='hybrid-3'/'hybrid-4' ≠ `program`='hybrid'). Criterio nuevo:
+`pd.program_slug = p.program OR (p.program='hybrid' AND pd.program_slug IN ('hybrid-3','hybrid-4')) OR pd.athlete_id = auth.uid()`.
+⚠️ Requiere que `is_active_athlete()` ya exista (tarea RLS 2026-07-28 (b)). El SQL final completo (DDL + 7
+policies + ALTER de exercise_links) quedó entregado en el chat para correr a mano.
+⚠️ **Sospecha a verificar (no de esta tarea):** las policies de atleta de `planning_days`/`planning_blocks`
+podrían tener el MISMO bug de Hybrid (si usan `program_slug = program`). Si así fuera, los atletas de Hybrid
+no verían su planificación por API — conviene revisar el `qual` de esas policies y aplicar el mismo fix.
