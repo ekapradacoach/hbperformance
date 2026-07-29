@@ -292,6 +292,26 @@ video_url text
 created_at timestamptz (default now())
 created_by uuid (FK profiles.id, on delete set null)   — admin que lo cargó
 last_used_at timestamptz (nullable)   ← ⚠️ AGREGAR (2026-07-28 (f)). Se actualiza al elegir el ejercicio de la biblioteca (autocompletar). Se usa para el top-3 "Usados recientemente" con el buscador vacío.
+rm_source_id uuid (FK exercise_library.id, nullable, on delete set null)   ← ⚠️ AGREGAR (2026-07-28 (g)). Herencia de RM: si está seteado, esta variante usa el RM del ejercicio referenciado (base = rm_source_id ?? id). Un nivel.
+⚠️ RLS 2026-07-28 (g): además de admin FOR ALL, el **atleta ahora tiene SELECT** (para mostrar nombres de ejercicios con RM y resolver herencia) + gate restrictive is_active_athlete().
+
+### block_rm_exercises   ← ✅ (2026-07-28 (g)) ejercicios con RM por bloque (líneas estructuradas en JSONB)
+id uuid (default gen_random_uuid())
+block_id uuid (FK planning_blocks.id, on delete cascade)
+exercise_id uuid (FK exercise_library.id, on delete cascade)   — qué ejercicio (de la biblioteca)
+lines jsonb (default '[]')   — [{series:int, reps:int, type:'percent'|'rpe', value:number}]
+position int (default 0)
+created_at timestamptz
+RLS: admin FOR ALL; atleta SELECT si el bloque es de su programa (calcado de exercise_links) + gate restrictive is_active_athlete(). ⚠️ Crear en Supabase.
+
+### athlete_rm   ← ✅ (2026-07-28 (g)) RM del atleta (uno por atleta por ejercicio BASE)
+id uuid (default gen_random_uuid())
+athlete_id uuid (FK profiles.id, on delete cascade)
+exercise_id uuid (FK exercise_library.id, on delete cascade)   — ejercicio BASE (rm_source_id resuelto)
+rm_kg numeric (not null)
+created_at timestamptz
+unique(athlete_id, exercise_id)   — guardar = upsert (carga inicial desde un bloque %RM y edición desde "Mis RM")
+RLS: atleta FOR ALL de lo suyo (athlete_id = auth.uid()); admin SELECT. Kilaje = rm_kg × %/100 (tope 2 decimales). ⚠️ Crear en Supabase.
 RLS: **solo admin** FOR ALL (get_my_role()='admin'); el atleta NO la usa. Capa opcional sobre exercise_links:
 se llena solo cuando el coach toca "+ Añadir a biblioteca" en el panel de ejercicios; buscar+click autocompleta
 nombre/URL y sigue guardándose en `exercise_links`. ⚠️ Crear en Supabase (SQL en CONTEXTO.md 2026-07-28 (e)).

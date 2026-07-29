@@ -853,6 +853,30 @@
   /* Cancelar como link liviano (no botón con peso) */
   .ex-cancel-link { background: none; border: none; color: var(--text-secondary); text-decoration: underline; cursor: pointer; font-family: var(--font-body); font-size: 0.88rem; padding: 8px 6px; }
   .ex-cancel-link:hover { color: var(--text); }
+  .ex-lib-row { display: flex; align-items: center; }
+  .ex-lib-row .ex-lib-item { flex: 1; min-width: 0; }
+  .ex-lib-link { flex-shrink: 0; background: none; border: none; cursor: pointer; opacity: 0.55; font-size: 0.85rem; padding: 0 8px; align-self: stretch; }
+  .ex-lib-link:hover { opacity: 1; }
+
+  /* ---- Ejercicios con RM (editor) ---- */
+  .rm-section { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 12px; }
+  .rm-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+  .rm-item { background: var(--bg-input); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+  .rm-item-name { font-weight: 700; font-size: 0.92rem; }
+  .rm-item-lines { color: var(--text-secondary); font-size: 0.84rem; margin-top: 2px; }
+  .rm-item-x { background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1.05rem; flex-shrink: 0; line-height: 1; }
+  .rm-item-x:hover { color: #e05252; }
+  .rm-panel { background: var(--bg-input); border: 1px solid var(--border); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 10px; margin-bottom: 8px; }
+  .rm-pick-name { font-weight: 700; color: var(--accent); }
+  .rm-lib-list { max-height: 150px; overflow-y: auto; background: var(--bg); border: 1px solid #333; border-radius: 8px; }
+  .rm-lib-list:empty { display: none; }
+  .rm-lines { display: flex; flex-direction: column; gap: 6px; }
+  .rm-line { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .rm-line input, .rm-line select { background: var(--bg); border: 1px solid #333; border-radius: 6px; padding: 7px 8px; color: var(--text); font-family: var(--font-body); font-size: 0.88rem; }
+  .rm-line .rm-series, .rm-line .rm-reps, .rm-line .rm-value { width: 76px; }
+  .rm-line-x { background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1rem; }
+  .rm-line-x:hover { color: #e05252; }
+  .rm-panel-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 
   /* ---- Calendario (vista mes) ---- */
   .cal-header { display: flex; align-items: center; justify-content: center; gap: 18px; margin-bottom: 16px; }
@@ -2041,6 +2065,19 @@
     </div>
   </div>
 
+  <!-- =============== Modal: Vincular RM entre variantes =============== -->
+  <div class="modal-backdrop" id="modalRmLink">
+    <div class="modal">
+      <div class="modal-head">
+        <h3 id="rmLinkTitle">Vincular RM</h3>
+        <button class="modal-close" data-close="modalRmLink">✕</button>
+      </div>
+      <p style="color:#AAA;margin:0 0 10px;font-size:.9rem;">Elegí de qué ejercicio hereda el RM (o “Ninguno” para que use el suyo propio).</p>
+      <input type="text" id="rmLinkSearch" class="al-search" placeholder="🔎 Buscar…" autocomplete="off" style="width:100%;margin:0 0 8px;">
+      <div id="rmLinkList" class="ex-lib-list" style="max-height:260px;"></div>
+    </div>
+  </div>
+
   <!-- =============== Modal: Ver ejercicio (embed) =============== -->
   <div class="modal-backdrop" id="modalExercise">
     <div class="modal modal-lg">
@@ -2662,6 +2699,7 @@
       }
       blocks = data || [];
       await attachExercises(blocks);
+      await attachRmExercises(blocks);
       await attachAthleteComments(blocks);
       renderBlocks();
     }
@@ -2723,6 +2761,48 @@
       const byBlock = {};
       (data || []).forEach(e => { (byBlock[e.block_id] = byBlock[e.block_id] || []).push(e); });
       blockList.forEach(b => { b.exercises = byBlock[b.id] || []; });
+    }
+
+    // Carga los ejercicios con RM (block_rm_exercises) y los adjunta como b.rmExercises.
+    // El nombre del ejercicio se resuelve contra la cache de la biblioteca. Degrada si no existe la tabla.
+    async function attachRmExercises(blockList) {
+      blockList.forEach(b => { b.rmExercises = []; });
+      const ids = blockList.map(b => b.id);
+      if (!ids.length) return;
+      const { data, error } = await sb.from('block_rm_exercises')
+        .select('id, block_id, exercise_id, lines, position').in('block_id', ids)
+        .order('position', { ascending: true });
+      if (error) { console.warn('block_rm_exercises no disponible:', error.message); return; }
+      await loadExerciseLibrary();
+      const nameById = {};
+      (exerciseLibrary || []).forEach(e => { nameById[e.id] = e.name; });
+      const byBlock = {};
+      (data || []).forEach(r => {
+        r.exName = nameById[r.exercise_id] || '(ejercicio)';
+        r.lines = Array.isArray(r.lines) ? r.lines : [];
+        (byBlock[r.block_id] = byBlock[r.block_id] || []).push(r);
+      });
+      blockList.forEach(b => { b.rmExercises = byBlock[b.id] || []; });
+    }
+
+    // Resumen legible de una línea de RM (para la lista del editor)
+    function rmLineText(ln) {
+      const s = ln.series != null ? ln.series : '?';
+      const r = ln.reps != null ? ln.reps : '?';
+      const intensidad = ln.type === 'rpe' ? ('RPE ' + ln.value) : (ln.value + '%');
+      return `${s}×${r} @${intensidad}`;
+    }
+    function rmListHtml(b) {
+      const list = b.rmExercises || [];
+      if (!list.length) return '<span class="ex-empty">Sin ejercicios con RM.</span>';
+      return list.map(r => `
+        <div class="rm-item" data-rm="${esc(r.id)}">
+          <div class="rm-item-main">
+            <div class="rm-item-name">${esc(r.exName)}</div>
+            <div class="rm-item-lines">${(r.lines || []).map(rmLineText).map(esc).join(' · ') || '—'}</div>
+          </div>
+          <button class="rm-item-x" title="Quitar">×</button>
+        </div>`).join('');
     }
 
     async function addBlock() {
@@ -2799,6 +2879,24 @@
             </div>
             <button class="btn-add-ex ex-add-btn">+ Agregar ejercicio</button>
           </div>
+          <div class="rm-section">
+            <div class="ex-label">🏋️ Ejercicios con RM</div>
+            <div class="rm-list">${rmListHtml(b)}</div>
+            <div class="rm-panel" style="display:none;">
+              <div class="rm-pick">
+                <div>Ejercicio: <span class="rm-pick-name">— elegí de la biblioteca —</span></div>
+                <input class="ex-lib-search rm-lib-search" placeholder="🔎 Buscar ejercicio en la biblioteca…" autocomplete="off" style="margin-top:6px;">
+                <div class="rm-lib-list"></div>
+              </div>
+              <div class="rm-lines"></div>
+              <button class="btn-sm rm-add-line">+ Agregar línea</button>
+              <div class="rm-panel-actions">
+                <button class="btn-primary rm-save-btn">Guardar ejercicio con RM</button>
+                <button class="ex-cancel-link rm-cancel-btn">Cancelar</button>
+              </div>
+            </div>
+            <button class="btn-add-ex rm-add-btn">+ Agregar ejercicio con RM</button>
+          </div>
           ${athleteCommentHtml(b)}
         </div>
       </div>`;
@@ -2857,6 +2955,9 @@
 
       // Ejercicios linkeados
       wireExercises(b, card);
+
+      // Ejercicios con RM
+      wireRm(b, card);
 
       // Fotos del atleta (miniaturas → modal de imagen)
       card.querySelectorAll('.ac-img').forEach(el =>
@@ -2917,7 +3018,7 @@
       if (exerciseLibraryLoading) return exerciseLibraryLoading;
       exerciseLibraryLoading = (async () => {
         const { data, error } = await sb.from('exercise_library')
-          .select('id, name, video_url, last_used_at').order('name', { ascending: true });
+          .select('id, name, video_url, last_used_at, rm_source_id').order('name', { ascending: true });
         if (error) console.warn('exercise_library no disponible:', error.message);
         exerciseLibrary = error ? [] : (data || []);
         exerciseLibraryLoading = null;
@@ -2968,14 +3069,25 @@
         return;
       }
       listEl.innerHTML = header + items.map(e =>
-        `<button type="button" class="ex-lib-item" data-id="${esc(e.id)}">
-           <span class="ex-lib-name">${esc(e.name)}</span>
-           ${e.video_url ? '<span class="ex-lib-has">🎥</span>' : ''}
-         </button>`).join('');
+        `<div class="ex-lib-row">
+           <button type="button" class="ex-lib-item" data-id="${esc(e.id)}">
+             <span class="ex-lib-name">${esc(e.name)}</span>
+             ${e.video_url ? '<span class="ex-lib-has">🎥</span>' : ''}
+             ${e.rm_source_id ? '<span class="ex-lib-has" title="Hereda RM">🔗</span>' : ''}
+           </button>
+           <button type="button" class="ex-lib-link" data-id="${esc(e.id)}" title="Vincular RM a…">🔗</button>
+         </div>`).join('');
       listEl.querySelectorAll('.ex-lib-item').forEach(it => {
         it.addEventListener('click', () => {
           const ex = (exerciseLibrary || []).find(x => String(x.id) === String(it.dataset.id));
           if (ex) pickFromLibrary(card, ex);
+        });
+      });
+      listEl.querySelectorAll('.ex-lib-link').forEach(lk => {
+        lk.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const ex = (exerciseLibrary || []).find(x => String(x.id) === String(lk.dataset.id));
+          if (ex) openRmLinkModal(ex);
         });
       });
     }
@@ -3026,6 +3138,148 @@
       }
       refreshLibAddBtn(card);
     }
+
+    // ---- Ejercicios con RM (editor) ----
+    function wireRm(b, card) {
+      const panel = card.querySelector('.rm-panel');
+      const pickName = card.querySelector('.rm-pick-name');
+      const libSearch = card.querySelector('.rm-lib-search');
+      const libList = card.querySelector('.rm-lib-list');
+      const linesBox = card.querySelector('.rm-lines');
+
+      function addLine() {
+        const div = document.createElement('div');
+        div.className = 'rm-line';
+        div.innerHTML =
+          '<input type="number" class="rm-series" placeholder="Series" min="1" step="1">' +
+          '<input type="number" class="rm-reps" placeholder="Reps" min="1" step="1">' +
+          '<select class="rm-type"><option value="percent">%RM</option><option value="rpe">RPE</option></select>' +
+          '<input type="number" class="rm-value" placeholder="%" step="any" min="0">' +
+          '<button class="rm-line-x" title="Quitar línea" type="button">×</button>';
+        const typeSel = div.querySelector('.rm-type');
+        const valEl = div.querySelector('.rm-value');
+        typeSel.addEventListener('change', () => { valEl.placeholder = typeSel.value === 'rpe' ? 'RPE' : '%'; });
+        div.querySelector('.rm-line-x').addEventListener('click', () => {
+          if (linesBox.querySelectorAll('.rm-line').length > 1) div.remove();
+        });
+        linesBox.appendChild(div);
+      }
+      function resetPanel() {
+        panel.dataset.exId = '';
+        pickName.textContent = '— elegí de la biblioteca —';
+        libSearch.value = ''; libList.innerHTML = '';
+        linesBox.innerHTML = ''; addLine();
+      }
+      function renderRmLib() {
+        const q = libSearch.value.trim().toLowerCase();
+        const all = exerciseLibrary || [];
+        const items = (q ? all.filter(e => String(e.name || '').toLowerCase().includes(q)) : all).slice(0, 50);
+        if (!items.length) { libList.innerHTML = q ? '<div class="ex-lib-empty">Sin resultados.</div>' : ''; return; }
+        libList.innerHTML = items.map(e =>
+          `<button type="button" class="ex-lib-item" data-id="${esc(e.id)}"><span class="ex-lib-name">${esc(e.name)}</span></button>`).join('');
+        libList.querySelectorAll('.ex-lib-item').forEach(it => {
+          it.addEventListener('click', () => {
+            const ex = (exerciseLibrary || []).find(x => String(x.id) === String(it.dataset.id));
+            if (!ex) return;
+            panel.dataset.exId = ex.id;
+            pickName.textContent = ex.name;
+            libSearch.value = ''; libList.innerHTML = '';
+          });
+        });
+      }
+
+      card.querySelector('.rm-add-btn').addEventListener('click', async () => {
+        const open = panel.style.display !== 'none';
+        panel.style.display = open ? 'none' : 'block';
+        if (!open) { await loadExerciseLibrary(); resetPanel(); libSearch.focus(); }
+      });
+      card.querySelector('.rm-cancel-btn').addEventListener('click', () => { panel.style.display = 'none'; });
+      card.querySelector('.rm-add-line').addEventListener('click', () => addLine());
+      libSearch.addEventListener('focus', async () => { await loadExerciseLibrary(); renderRmLib(); });
+      libSearch.addEventListener('input', renderRmLib);
+      card.querySelector('.rm-save-btn').addEventListener('click', () => saveRmExercise(b, card));
+      // Eliminar un RM-ejercicio (delegación en el contenedor de la lista)
+      card.querySelector('.rm-list').addEventListener('click', (e) => {
+        const x = e.target.closest('.rm-item-x');
+        if (!x) return;
+        const item = x.closest('.rm-item');
+        const rm = (b.rmExercises || []).find(r => String(r.id) === String(item.dataset.rm));
+        if (rm) deleteRmExercise(b, rm, card);
+      });
+    }
+
+    async function saveRmExercise(b, card) {
+      const panel = card.querySelector('.rm-panel');
+      const exId = panel.dataset.exId;
+      if (!exId) { flash('Elegí un ejercicio de la biblioteca.'); return; }
+      const lines = [];
+      let bad = false;
+      card.querySelectorAll('.rm-line').forEach(row => {
+        const series = parseInt(row.querySelector('.rm-series').value, 10);
+        const reps = parseInt(row.querySelector('.rm-reps').value, 10);
+        const type = row.querySelector('.rm-type').value;
+        const value = parseFloat(row.querySelector('.rm-value').value);
+        if (!series || !reps || isNaN(value)) { bad = true; return; }
+        lines.push({ series, reps, type, value });
+      });
+      if (bad || !lines.length) { flash('Completá series, reps y valor en cada línea.'); return; }
+      const btn = card.querySelector('.rm-save-btn');
+      btn.disabled = true;
+      const nextPos = (b.rmExercises || []).length;
+      const { data, error } = await sb.from('block_rm_exercises')
+        .insert({ block_id: b.id, exercise_id: exId, lines, position: nextPos }).select().single();
+      btn.disabled = false;
+      if (error) { alert('No se pudo guardar: ' + error.message); return; }
+      const ex = (exerciseLibrary || []).find(x => String(x.id) === String(exId));
+      data.exName = ex ? ex.name : '(ejercicio)';
+      data.lines = Array.isArray(data.lines) ? data.lines : lines;
+      b.rmExercises = b.rmExercises || [];
+      b.rmExercises.push(data);
+      card.querySelector('.rm-list').innerHTML = rmListHtml(b);
+      panel.style.display = 'none';
+      flash('✓ Ejercicio con RM agregado.');
+    }
+
+    async function deleteRmExercise(b, rm, card) {
+      if (!confirm(`¿Quitar el ejercicio con RM "${rm.exName}"?`)) return;
+      const { error } = await sb.from('block_rm_exercises').delete().eq('id', rm.id);
+      if (error) { alert('No se pudo quitar: ' + error.message); return; }
+      b.rmExercises = (b.rmExercises || []).filter(r => String(r.id) !== String(rm.id));
+      card.querySelector('.rm-list').innerHTML = rmListHtml(b);
+    }
+
+    // ---- Vincular RM entre variantes (setea exercise_library.rm_source_id) ----
+    let rmLinkTargetId = null;
+    function openRmLinkModal(ex) {
+      rmLinkTargetId = ex.id;
+      document.getElementById('rmLinkTitle').textContent = 'RM de “' + ex.name + '” hereda de…';
+      document.getElementById('rmLinkSearch').value = '';
+      renderRmLinkList('');
+      openModal('modalRmLink');
+    }
+    function renderRmLinkList(query) {
+      const box = document.getElementById('rmLinkList');
+      const q = String(query || '').trim().toLowerCase();
+      const target = (exerciseLibrary || []).find(e => String(e.id) === String(rmLinkTargetId));
+      const others = (exerciseLibrary || []).filter(e =>
+        String(e.id) !== String(rmLinkTargetId) && (!q || String(e.name || '').toLowerCase().includes(q)));
+      const check = '<span class="ex-lib-has">✓</span>';
+      const noneRow = `<button type="button" class="ex-lib-item" data-id=""><span class="ex-lib-name">Ninguno (usa su propio RM)</span>${target && !target.rm_source_id ? check : ''}</button>`;
+      box.innerHTML = noneRow + others.slice(0, 50).map(e =>
+        `<button type="button" class="ex-lib-item" data-id="${esc(e.id)}"><span class="ex-lib-name">${esc(e.name)}</span>${target && String(target.rm_source_id) === String(e.id) ? check : ''}</button>`).join('');
+      box.querySelectorAll('.ex-lib-item').forEach(it => {
+        it.addEventListener('click', () => setRmSource(it.dataset.id || null));
+      });
+    }
+    async function setRmSource(sourceId) {
+      const { error } = await sb.from('exercise_library').update({ rm_source_id: sourceId }).eq('id', rmLinkTargetId);
+      if (error) { alert('No se pudo vincular: ' + error.message); return; }
+      const ex = (exerciseLibrary || []).find(e => String(e.id) === String(rmLinkTargetId));
+      if (ex) ex.rm_source_id = sourceId;
+      closeModal('modalRmLink');
+      flash(sourceId ? '✓ RM vinculado.' : '✓ Vínculo de RM quitado.');
+    }
+    document.getElementById('rmLinkSearch').addEventListener('input', (e) => renderRmLinkList(e.target.value));
 
     function wireChips(b, card) {
       card.querySelectorAll('.ex-chip').forEach(chip => {

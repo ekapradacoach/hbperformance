@@ -351,6 +351,37 @@
   .pb-chip:hover { border-color: var(--accent); }
   .pb-chip:active { transform: scale(0.97); }
 
+  /* Ejercicios con RM */
+  .pb-rm { border-top: 1px solid var(--border); padding-top: 12px; margin-top: 14px; }
+  .pb-rm-ex { background: var(--bg-input); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; margin-bottom: 8px; }
+  .pb-rm-name { font-weight: 700; font-size: 0.95rem; margin-bottom: 6px; }
+  .pb-rm-line { font-size: 0.92rem; line-height: 1.5; color: var(--text); }
+  .pb-rm-kg { color: var(--accent); }
+  .pb-rm-register { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--border); font-size: 0.9rem; }
+  .pb-rm-reg-lbl { display: block; color: var(--text-secondary); margin-bottom: 6px; }
+  .pb-rm-reg-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .pb-rm-register .rm-reg-input {
+    width: 120px; background: var(--bg); border: 1px solid #333; border-radius: 8px;
+    padding: 8px 10px; color: var(--text); font-family: var(--font-body); font-size: 0.9rem;
+  }
+  .pb-rm-register .rm-reg-input:focus { outline: none; border-color: var(--accent); }
+  .pb-rm-register .rm-reg-save {
+    background: var(--accent); color: #0A0A0A; border: none; border-radius: 8px;
+    padding: 8px 16px; font-weight: 700; font-size: 0.88rem; cursor: pointer; font-family: var(--font-body);
+  }
+  .pb-rm-register .rm-reg-save:disabled { opacity: 0.6; cursor: default; }
+
+  /* Mis RM (estadísticas) */
+  .rmm-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .rmm-row:last-child { border-bottom: none; }
+  .rmm-name { font-weight: 600; }
+  .rmm-edit { display: flex; align-items: center; gap: 6px; }
+  .rmm-input { width: 92px; background: var(--bg); border: 1px solid #333; border-radius: 8px; padding: 8px 10px; color: var(--text); font-family: var(--font-body); font-size: 0.9rem; }
+  .rmm-input:focus { outline: none; border-color: var(--accent); }
+  .rmm-unit { color: var(--text-secondary); font-size: 0.9rem; }
+  .rmm-save { background: var(--accent); color: #0A0A0A; border: none; border-radius: 8px; padding: 8px 14px; font-weight: 700; font-size: 0.85rem; cursor: pointer; font-family: var(--font-body); }
+  .rmm-save:disabled { opacity: 0.6; cursor: default; }
+
   /* Comentario */
   .pb-comment { border-top: 1px solid var(--border); padding-top: 12px; margin-top: 14px; }
   .cmt-text {
@@ -1041,6 +1072,12 @@
         <div class="card-h">🏅 Logros</div>
         <div class="ach-grid" id="achGrid"></div>
       </div>
+
+      <!-- Sección 5: Mis RM -->
+      <div class="card">
+        <div class="card-h">🏋️ Mis RM</div>
+        <div id="misRmList"><div class="muted">Cargando…</div></div>
+      </div>
     </section>
 
     <!-- ===== VIEW: MENSAJES ===== -->
@@ -1463,6 +1500,7 @@
     document.getElementById('dayNext').addEventListener('click', () => { progDate = addDaysStr(progDate, 1); loadProgramaDay(); });
     document.getElementById('dayHoy').addEventListener('click', () => { progDate = TODAY; loadProgramaDay(); });
 
+    let athleteRm = {}; // { baseExerciseId: rm_kg } del atleta, para calcular kilajes del día
     async function loadProgramaDay() {
       document.getElementById('dayLabel').textContent = prettyLong(progDate);
       const box = document.getElementById('progBlocks');
@@ -1503,9 +1541,38 @@
         });
       }
 
+      // Ejercicios con RM del día (degrada si las tablas todavía no existen)
+      athleteRm = {};
+      const rmByBlock = {};
+      const { data: rmEx, error: rmErr } = await sb.from('block_rm_exercises')
+        .select('id, block_id, exercise_id, lines, position').in('block_id', ids).order('position', { ascending: true });
+      if (!rmErr && rmEx && rmEx.length) {
+        const exIds = [...new Set(rmEx.map(r => r.exercise_id))];
+        const libById = {};
+        const { data: libs1 } = await sb.from('exercise_library').select('id, name, rm_source_id').in('id', exIds);
+        (libs1 || []).forEach(l => { libById[l.id] = l; });
+        // nombres de las bases (rm_source_id) que no estén ya cargadas
+        const baseIds = [...new Set((libs1 || []).map(l => l.rm_source_id).filter(Boolean))].filter(id => !libById[id]);
+        if (baseIds.length) {
+          const { data: libs2 } = await sb.from('exercise_library').select('id, name').in('id', baseIds);
+          (libs2 || []).forEach(l => { libById[l.id] = libById[l.id] || l; });
+        }
+        const { data: myRm } = await sb.from('athlete_rm').select('exercise_id, rm_kg').eq('athlete_id', ATHLETE.id);
+        (myRm || []).forEach(r => { athleteRm[r.exercise_id] = Number(r.rm_kg); });
+        rmEx.forEach(r => {
+          const lib = libById[r.exercise_id] || {};
+          r.exName = lib.name || '(ejercicio)';
+          r.baseId = lib.rm_source_id || r.exercise_id;
+          r.baseName = (libById[r.baseId] && libById[r.baseId].name) || r.exName;
+          r.lines = Array.isArray(r.lines) ? r.lines : [];
+          (rmByBlock[r.block_id] = rmByBlock[r.block_id] || []).push(r);
+        });
+      }
+
       progBlocks.forEach(b => {
         b.completion = byBlock[b.id] || null;
         b.exercises = exByBlock[b.id] || [];
+        b.rmExercises = rmByBlock[b.id] || [];
         b.images = (b.completion && imgByComp[b.completion.id]) || [];
         b._pendingFiles = [];
         b._prevUrls = [];
@@ -1535,8 +1602,52 @@
         </div>
         ${b.content ? `<div class="pb-content">${esc(b.content)}</div>` : ''}
         ${exHtml}
+        ${rmHtml(b)}
         <div class="pb-comment">${commentHtml(b)}</div>
         <div class="pb-imgs">${blockImgsHtml(b)}</div>
+      </div>`;
+    }
+
+    // Kilaje = RM × % / 100, sin redondear el resultado real; tope 2 decimales de presentación
+    // (limpia el ruido de punto flotante) y sin ceros sobrantes (70, 71.75, 66.63).
+    function rmKg(rm, pct) {
+      const v = Number(rm) * Number(pct) / 100;
+      return String(Number(v.toFixed(2)));
+    }
+    function rmHtml(b) {
+      const list = b.rmExercises || [];
+      if (!list.length) return '';
+      const shownReg = new Set(); // un campo de "registrá tu RM" por ejercicio-base y por bloque
+      return `<div class="pb-rm">
+        <div class="pb-ex-label">🏋️ Ejercicios con RM</div>
+        ${list.map(r => rmExHtml(r, shownReg)).join('')}
+      </div>`;
+    }
+    function rmExHtml(r, shownReg) {
+      const hasRm = athleteRm[r.baseId] != null;
+      const rm = athleteRm[r.baseId];
+      const linesHtml = (r.lines || []).map(ln => {
+        const base = `${ln.series} series × ${ln.reps} reps`;
+        if (ln.type === 'rpe') return `<div class="pb-rm-line">${esc(base)} @ RPE ${esc(ln.value)}</div>`;
+        if (hasRm) return `<div class="pb-rm-line">${esc(base)} @ ${esc(ln.value)}% → <b class="pb-rm-kg">${esc(rmKg(rm, ln.value))}kg</b></div>`;
+        return `<div class="pb-rm-line">${esc(base)} @ ${esc(ln.value)}%</div>`;
+      }).join('');
+      const needsRm = !hasRm && (r.lines || []).some(ln => ln.type === 'percent');
+      let register = '';
+      if (needsRm && !shownReg.has(String(r.baseId))) {
+        shownReg.add(String(r.baseId));
+        register = `<div class="pb-rm-register" data-base="${esc(r.baseId)}">
+          <span class="pb-rm-reg-lbl">Registrá tu RM de <b>${esc(r.baseName)}</b> (kg):</span>
+          <span class="pb-rm-reg-row">
+            <input type="number" class="rm-reg-input" step="any" min="0" placeholder="kg" inputmode="decimal">
+            <button type="button" class="rm-reg-save">Guardar</button>
+          </span>
+        </div>`;
+      }
+      return `<div class="pb-rm-ex">
+        <div class="pb-rm-name">${esc(r.exName)}</div>
+        ${linesHtml}
+        ${register}
       </div>`;
     }
 
@@ -1575,6 +1686,8 @@
       if (!b) return;
       const chip = e.target.closest('.pb-chip');
       if (chip) { const ex = (b.exercises || []).find(x => String(x.id) === chip.dataset.ex); openVideo(ex); return; }
+      // Registrar RM (primera vez) desde un bloque con %RM
+      if (e.target.closest('.rm-reg-save')) { registerRm(e.target.closest('.pb-rm-register')); return; }
       // Imágenes ya subidas: × elimina (antes que abrir), thumbnail abre el modal
       const imgX = e.target.closest('.pb-img-x');
       if (imgX) { e.stopPropagation(); deleteBlockImage(b, card, imgX.dataset.id, imgX.dataset.path); return; }
@@ -1588,6 +1701,24 @@
       if (e.target.closest('.cmt-cancel')) { clearPendingBlockImgs(b); card.querySelector('.pb-comment').innerHTML = commentHtml(b); return; }
       if (e.target.closest('.cmt-btn')) { openCommentEditor(card, b); return; }
     });
+
+    // Registra/actualiza el RM del atleta (upsert por athlete+ejercicio-base) y recalcula el día
+    async function registerRm(reg) {
+      if (!reg) return;
+      const base = reg.dataset.base;
+      const input = reg.querySelector('.rm-reg-input');
+      const kg = Number(input.value);
+      if (!kg || kg <= 0) { flash('Poné un RM válido (kg).'); return; }
+      const btn = reg.querySelector('.rm-reg-save');
+      btn.disabled = true;
+      const { error } = await sb.from('athlete_rm')
+        .upsert({ athlete_id: ATHLETE.id, exercise_id: base, rm_kg: kg }, { onConflict: 'athlete_id,exercise_id' });
+      btn.disabled = false;
+      if (error) { flash('No se pudo guardar el RM: ' + error.message); return; }
+      athleteRm[base] = kg;
+      renderBlocks(); // recalcula los kilajes en todos los bloques del día
+      flash('✓ RM guardado.');
+    }
 
     async function toggleBlock(b, checked, card) {
       if (checked) {
@@ -1940,7 +2071,51 @@
       renderAdherence();
       renderHistorial();
       renderLogros();
+      loadMisRm();
     }
+
+    // -------- Mis RM (lista editable de los RM del atleta) --------
+    async function loadMisRm() {
+      const box = document.getElementById('misRmList');
+      box.innerHTML = '<div class="muted">Cargando…</div>';
+      const { data, error } = await sb.from('athlete_rm')
+        .select('exercise_id, rm_kg').eq('athlete_id', ATHLETE.id);
+      if (error) { box.innerHTML = '<div class="muted">No se pudieron cargar tus RM.</div>'; return; }
+      const rows = data || [];
+      if (!rows.length) {
+        box.innerHTML = '<div class="muted">Todavía no cargaste ningún RM. Aparecen acá cuando registrás uno desde un bloque con %RM.</div>';
+        return;
+      }
+      const exIds = [...new Set(rows.map(r => r.exercise_id))];
+      const nameById = {};
+      const { data: libs } = await sb.from('exercise_library').select('id, name').in('id', exIds);
+      (libs || []).forEach(l => { nameById[l.id] = l.name; });
+      rows.sort((a, b) => String(nameById[a.exercise_id] || '').localeCompare(String(nameById[b.exercise_id] || '')));
+      box.innerHTML = rows.map(r => `
+        <div class="rmm-row" data-base="${esc(r.exercise_id)}">
+          <span class="rmm-name">${esc(nameById[r.exercise_id] || '(ejercicio)')}</span>
+          <span class="rmm-edit">
+            <input type="number" class="rmm-input" step="any" min="0" value="${esc(r.rm_kg)}" inputmode="decimal">
+            <span class="rmm-unit">kg</span>
+            <button type="button" class="rmm-save">Guardar</button>
+          </span>
+        </div>`).join('');
+    }
+    document.getElementById('misRmList').addEventListener('click', async (e) => {
+      const btn = e.target.closest('.rmm-save');
+      if (!btn) return;
+      const row = btn.closest('.rmm-row');
+      const base = row.dataset.base;
+      const kg = Number(row.querySelector('.rmm-input').value);
+      if (!kg || kg <= 0) { flash('Poné un RM válido (kg).'); return; }
+      btn.disabled = true;
+      const { error } = await sb.from('athlete_rm')
+        .upsert({ athlete_id: ATHLETE.id, exercise_id: base, rm_kg: kg }, { onConflict: 'athlete_id,exercise_id' });
+      btn.disabled = false;
+      if (error) { flash('No se pudo guardar: ' + error.message); return; }
+      athleteRm[base] = kg; // mantener sincronizado el cálculo de kilajes del día
+      flash('✓ RM actualizado.');
+    });
 
     async function loadStatsData() {
       // 1) Todas las completions del atleta (historial completo)

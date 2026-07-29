@@ -1655,3 +1655,71 @@ alter table public.exercise_library add column if not exists last_used_at timest
 - Verificado: syntax-check + unit-test (orden de recientes desc sin nulls, <3 con uso, filtro incluye
   null-used, cap 50) + chequeo del grid responsive en el navegador. Flujo vivo auth-gated (admin).
 - ⚠️ **Pendiente de deploy:** correr el `ALTER TABLE ... add column last_used_at` de arriba.
+
+## 2026-07-28 (g) — Sistema de RM (repetición máxima) con cálculo automático de kilaje
+Feature grande. Editor de bloques (admin) + dashboard del atleta. Coexiste con el texto libre del bloque y
+con `exercise_links` (videos) — **no reemplaza nada**.
+
+### 🗄️ SQL — tablas/columna (correr a mano en Supabase; las policies van aparte, ver más abajo/chat)
+```sql
+-- Herencia de RM entre variantes (self-ref en la biblioteca)
+alter table public.exercise_library
+  add column if not exists rm_source_id uuid references public.exercise_library(id) on delete set null;
+
+-- Ejercicios con RM por bloque (líneas estructuradas en JSONB)
+create table if not exists public.block_rm_exercises (
+  id          uuid primary key default gen_random_uuid(),
+  block_id    uuid not null references public.planning_blocks(id) on delete cascade,
+  exercise_id uuid not null references public.exercise_library(id) on delete cascade,
+  lines       jsonb not null default '[]',   -- [{series:int, reps:int, type:'percent'|'rpe', value:number}]
+  position    int default 0,
+  created_at  timestamptz default now()
+);
+create index if not exists block_rm_exercises_block_idx on public.block_rm_exercises(block_id);
+
+-- RM del atleta (uno por atleta por ejercicio BASE; upsert para carga y edición)
+create table if not exists public.athlete_rm (
+  id          uuid primary key default gen_random_uuid(),
+  athlete_id  uuid not null references public.profiles(id) on delete cascade,
+  exercise_id uuid not null references public.exercise_library(id) on delete cascade, -- ejercicio base (rm_source_id resuelto)
+  rm_kg       numeric not null,
+  created_at  timestamptz default now(),
+  unique (athlete_id, exercise_id)
+);
+```
+Las **policies RLS** (block_rm_exercises admin+atleta+gate is_active; athlete_rm atleta-own+admin; exercise_library
+atleta SELECT + gate) se entregan explicadas una por una (no correr sin revisar). ⚠️ Ojo: la policy de atleta
+calcada de `exercise_links` usa `pd.program_slug = p.program`, que **no matchea Hybrid** (program_slug
+'hybrid-3'/'hybrid-4' vs program 'hybrid') — se ofreció una versión corregida hybrid-aware.
+
+### Editor (admin/index.html)
+- Nueva sub-sección **"🏋️ Ejercicios con RM"** por bloque (`.rm-section`), debajo de "Ejercicios". Lista los
+  RM-ejercicios (nombre + resumen de líneas) con × para quitar. "+ Agregar ejercicio con RM" abre un panel:
+  elegir ejercicio de la **biblioteca** (reusa el cache/buscador) + líneas dinámicas **[Series][Reps][Tipo
+  %RM/RPE][Valor]** con "+ Agregar línea". Guarda en `block_rm_exercises` (lines jsonb). `attachRmExercises`
+  carga por bloque. v1 = agregar/eliminar (sin edición fina de líneas).
+- **Vincular variantes:** botón **🔗** por ítem en la lista de la biblioteca → modal `#modalRmLink` para elegir
+  de qué ejercicio hereda el RM (o "Ninguno") → setea `exercise_library.rm_source_id`. Indicador 🔗 en los que heredan.
+
+### Dashboard (app/dashboard.html)
+- **Render por bloque** (`rmHtml`/`rmExHtml`): por línea → RPE muestra tal cual; %RM con RM cargado calcula
+  `rm×%/100` (helper `rmKg`, **tope 2 decimales**, sin ceros sobrantes) y muestra "→ Xkg"; %RM sin RM muestra
+  la línea + **una vez por ejercicio-base** un campo "Registrá tu RM de [base] (kg)" + Guardar (`registerRm`,
+  upsert). Al guardar recalcula todo el día (`renderBlocks`). Resuelve el **base** (`rm_source_id ?? id`) y usa
+  el nombre base para el label. Datos cargados en `loadProgramaDay` (block_rm_exercises + exercise_library +
+  athlete_rm → `athleteRm` map).
+- **Estadísticas → "🏋️ Mis RM"** (`loadMisRm`): lista todos los RM del atleta (nombre base + kg) con input +
+  Guardar por fila para **editar/actualizar** (upsert). Reemplaza el ítem de backlog de "edición de RM".
+
+### No se tocó
+Texto libre del bloque, `exercise_links`/videos, ni el guardado de bloques. `athlete_rm` con
+`unique(athlete_id, exercise_id)` → guardar es upsert (carga inicial y edición usan el mismo camino).
+
+### Backlog
+- Edición **fina de líneas** de un RM-ejercicio ya guardado en el editor (hoy = borrar y recargar).
+- (La edición de RM del atleta **ya se implementó** en "Mis RM", salió del backlog.)
+
+### Verificación
+- Syntax-check admin + dashboard OK. Unit-test de `rmKg` (70, 71.75, 66.63, 112, 33.3, 87.75). Flujo vivo
+  (editor y bloques) es auth-gated → no reproducible sin sesión.
+- ⚠️ **Pendiente de deploy:** correr el DDL de arriba + las policies (ver chat) en Supabase.
