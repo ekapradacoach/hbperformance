@@ -1734,3 +1734,11 @@ policies + ALTER de exercise_links) quedó entregado en el chat para correr a ma
 ⚠️ **Sospecha a verificar (no de esta tarea):** las policies de atleta de `planning_days`/`planning_blocks`
 podrían tener el MISMO bug de Hybrid (si usan `program_slug = program`). Si así fuera, los atletas de Hybrid
 no verían su planificación por API — conviene revisar el `qual` de esas policies y aplicar el mismo fix.
+
+### 2026-07-28 (g ter) — Fix del bug de Hybrid en planning_days / planning_blocks (RLS)
+Confirmado con el dump de pg_policies: las policies de atleta de `planning_days` y `planning_blocks` usan
+`program_slug = <program del atleta>` sin contemplar Hybrid → **los atletas de Hybrid no ven su planificación
+por API** (program_slug 'hybrid-3'/'hybrid-4' ≠ program 'hybrid'). Bug preexistente, prioridad alta. Se
+entregaron 4 `ALTER POLICY` (2 de planning_days + 2 de planning_blocks) con el mismo criterio hybrid-aware que
+exercise_links/block_rm_exercises. Las policies restrictive `is_active_athlete()` no se tocan. SQL en el chat
+para correr a mano tras revisión.
