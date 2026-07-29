@@ -873,7 +873,8 @@
   .rm-lines { display: flex; flex-direction: column; gap: 6px; }
   .rm-line { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
   .rm-line input, .rm-line select { background: var(--bg); border: 1px solid #333; border-radius: 6px; padding: 7px 8px; color: var(--text); font-family: var(--font-body); font-size: 0.88rem; }
-  .rm-line .rm-series, .rm-line .rm-reps, .rm-line .rm-value { width: 76px; }
+  .rm-line .rm-series, .rm-line .rm-reps { width: 72px; }
+  .rm-line .rm-percent, .rm-line .rm-rpe { width: 90px; }
   .rm-line-x { background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 1rem; }
   .rm-line-x:hover { color: #e05252; }
   .rm-panel-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
@@ -2785,12 +2786,18 @@
       blockList.forEach(b => { b.rmExercises = byBlock[b.id] || []; });
     }
 
-    // Resumen legible de una línea de RM (para la lista del editor)
+    // Resumen legible de una línea de RM (para la lista del editor).
+    // Nuevo shape: { series, reps, percent, rpe } — percent y/o rpe (al menos uno).
     function rmLineText(ln) {
       const s = ln.series != null ? ln.series : '?';
       const r = ln.reps != null ? ln.reps : '?';
-      const intensidad = ln.type === 'rpe' ? ('RPE ' + ln.value) : (ln.value + '%');
-      return `${s}×${r} @${intensidad}`;
+      const hasP = ln.percent != null && ln.percent !== '';
+      const hasR = ln.rpe != null && ln.rpe !== '';
+      let intens = '—';
+      if (hasP && hasR) intens = `${ln.percent}% (RPE ${ln.rpe})`;
+      else if (hasP) intens = `${ln.percent}%`;
+      else if (hasR) intens = `RPE ${ln.rpe}`;
+      return `${s}×${r} @${intens}`;
     }
     function rmListHtml(b) {
       const list = b.rmExercises || [];
@@ -3153,12 +3160,9 @@
         div.innerHTML =
           '<input type="number" class="rm-series" placeholder="Series" min="1" step="1">' +
           '<input type="number" class="rm-reps" placeholder="Reps" min="1" step="1">' +
-          '<select class="rm-type"><option value="percent">%RM</option><option value="rpe">RPE</option></select>' +
-          '<input type="number" class="rm-value" placeholder="%" step="any" min="0">' +
+          '<input type="number" class="rm-percent" placeholder="% (opc.)" min="0" step="any">' +
+          '<input type="number" class="rm-rpe" placeholder="RPE (opc.)" min="0" max="10" step="0.5">' +
           '<button class="rm-line-x" title="Quitar línea" type="button">×</button>';
-        const typeSel = div.querySelector('.rm-type');
-        const valEl = div.querySelector('.rm-value');
-        typeSel.addEventListener('change', () => { valEl.placeholder = typeSel.value === 'rpe' ? 'RPE' : '%'; });
         div.querySelector('.rm-line-x').addEventListener('click', () => {
           if (linesBox.querySelectorAll('.rm-line').length > 1) div.remove();
         });
@@ -3217,12 +3221,15 @@
       card.querySelectorAll('.rm-line').forEach(row => {
         const series = parseInt(row.querySelector('.rm-series').value, 10);
         const reps = parseInt(row.querySelector('.rm-reps').value, 10);
-        const type = row.querySelector('.rm-type').value;
-        const value = parseFloat(row.querySelector('.rm-value').value);
-        if (!series || !reps || isNaN(value)) { bad = true; return; }
-        lines.push({ series, reps, type, value });
+        const pRaw = row.querySelector('.rm-percent').value.trim();
+        const rRaw = row.querySelector('.rm-rpe').value.trim();
+        const percent = pRaw === '' ? null : parseFloat(pRaw);
+        const rpe = rRaw === '' ? null : parseFloat(rRaw);
+        if (!series || !reps) { bad = true; return; }
+        if ((percent == null || isNaN(percent)) && (rpe == null || isNaN(rpe))) { bad = true; return; } // al menos uno
+        lines.push({ series, reps, percent: (percent != null && !isNaN(percent)) ? percent : null, rpe: (rpe != null && !isNaN(rpe)) ? rpe : null });
       });
-      if (bad || !lines.length) { flash('Completá series, reps y valor en cada línea.'); return; }
+      if (bad || !lines.length) { flash('Cada línea necesita series, reps y al menos % o RPE.'); return; }
       const btn = card.querySelector('.rm-save-btn');
       btn.disabled = true;
       const nextPos = (b.rmExercises || []).length;

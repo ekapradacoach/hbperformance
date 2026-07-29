@@ -299,7 +299,7 @@ rm_source_id uuid (FK exercise_library.id, nullable, on delete set null)   ← �
 id uuid (default gen_random_uuid())
 block_id uuid (FK planning_blocks.id, on delete cascade)
 exercise_id uuid (FK exercise_library.id, on delete cascade)   — qué ejercicio (de la biblioteca)
-lines jsonb (default '[]')   — [{series:int, reps:int, type:'percent'|'rpe', value:number}]
+lines jsonb (default '[]')   — [{series:int, reps:int, percent:number|null, rpe:number|null}] (al menos uno de percent/rpe; shape actualizado 2026-07-28 (h), antes era type/value)
 position int (default 0)
 created_at timestamptz
 RLS: admin FOR ALL; atleta SELECT si el bloque es de su programa (calcado de exercise_links) + gate restrictive is_active_athlete(). ⚠️ Crear en Supabase.

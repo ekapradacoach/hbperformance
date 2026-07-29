@@ -1626,13 +1626,23 @@
     function rmExHtml(r, shownReg) {
       const hasRm = athleteRm[r.baseId] != null;
       const rm = athleteRm[r.baseId];
+      // Nuevo shape: { series, reps, percent, rpe }. 3 casos: solo %, solo RPE, o ambos.
       const linesHtml = (r.lines || []).map(ln => {
-        const base = `${ln.series} series × ${ln.reps} reps`;
-        if (ln.type === 'rpe') return `<div class="pb-rm-line">${esc(base)} @ RPE ${esc(ln.value)}</div>`;
-        if (hasRm) return `<div class="pb-rm-line">${esc(base)} @ ${esc(ln.value)}% → <b class="pb-rm-kg">${esc(rmKg(rm, ln.value))}kg</b></div>`;
-        return `<div class="pb-rm-line">${esc(base)} @ ${esc(ln.value)}%</div>`;
+        const base = esc(`${ln.series} series × ${ln.reps} reps`);
+        const hasP = ln.percent != null && ln.percent !== '';
+        const hasR = ln.rpe != null && ln.rpe !== '';
+        let intens = '';
+        if (hasP) {
+          intens = ` @ ${esc(ln.percent)}%`;
+          if (hasRm) intens += ` → <b class="pb-rm-kg">${esc(rmKg(rm, ln.percent))}kg</b>`;
+          if (hasR) intens += ` (RPE ${esc(ln.rpe)})`;
+        } else if (hasR) {
+          intens = ` @ RPE ${esc(ln.rpe)}`;
+        }
+        return `<div class="pb-rm-line">${base}${intens}</div>`;
       }).join('');
-      const needsRm = !hasRm && (r.lines || []).some(ln => ln.type === 'percent');
+      // Solo se pide RM si hay al menos una línea con % cargado (las solo-RPE nunca lo piden)
+      const needsRm = !hasRm && (r.lines || []).some(ln => ln.percent != null && ln.percent !== '');
       let register = '';
       if (needsRm && !shownReg.has(String(r.baseId))) {
         shownReg.add(String(r.baseId));

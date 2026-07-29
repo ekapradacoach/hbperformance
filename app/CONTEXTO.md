@@ -1742,3 +1742,25 @@ por API** (program_slug 'hybrid-3'/'hybrid-4' ≠ program 'hybrid'). Bug preexis
 entregaron 4 `ALTER POLICY` (2 de planning_days + 2 de planning_blocks) con el mismo criterio hybrid-aware que
 exercise_links/block_rm_exercises. Las policies restrictive `is_active_athlete()` no se tocan. SQL en el chat
 para correr a mano tras revisión.
+
+## 2026-07-28 (h) — RM: líneas con % y RPE independientes (ambos por línea)
+Cambio de diseño en las líneas de `block_rm_exercises` (solo código, JSONB no requiere migración).
+- **Nuevo shape de `lines`:** `{ series, reps, percent:number|null, rpe:number|null }` (antes
+  `{series,reps,type:'percent'|'rpe',value}`). Cada línea puede tener **solo %**, **solo RPE**, o **ambos**;
+  series+reps obligatorios y **al menos uno** de percent/rpe.
+- **Editor (admin):** la fila de línea reemplaza el `<select>` de tipo por **2 inputs opcionales**
+  `[Series][Reps][% opc.][RPE opc.][×]`. `saveRmExercise` valida series+reps y ≥1 de %/RPE. `rmLineText`
+  (resumen de la lista) muestra "3×5 @80% (RPE6)" / "3×5 @80%" / "3×5 @RPE6".
+- **Dashboard (`rmExHtml`):** 3 casos por línea → ambos: "… @ 80% → 84kg (RPE 6)" (el kilaje va pegado al %
+  si el atleta tiene RM); solo %: como hoy (+ kilaje); solo RPE: "… @ RPE 8" y **nunca** pide RM. El pedido
+  "Registrá tu RM" aparece solo si hay ≥1 línea con % y el atleta no tiene RM del base.
+- ⚠️ **Datos viejos:** el shape anterior (type/value) **no renderiza** con el código nuevo. La fila de prueba
+  (Back Squat) es solo de prueba → borrar y recargar con el editor nuevo (`delete from public.block_rm_exercises where id = '...';` o la × del editor). No se agregó compatibilidad con el shape viejo.
+- Verificado: syntax-check + unit-test de los 3 casos de render y de `needsRm`. Flujo vivo auth-gated.
+
+### Bug de "el atleta no ve el RM" — sigue en investigación (aparte de este cambio)
+Confirmado: la fila existe, RLS on, las 3 policies de block_rm_exercises presentes. La prueba fue en una
+**ASESORÍA** (no Hybrid). Falta ver el planning_day/planning_block puntual (program_slug + athlete_id) para
+saber por qué la rama `pd.athlete_id = auth.uid()` / `pd.program_slug = p.program` no matchea (o si el
+atleta carga un día distinto al que tiene el RM → el filtro `.in('block_id', ids)` del dashboard no lo
+incluye). SELECT de diagnóstico pedido en el chat; sin fix aplicado todavía.
