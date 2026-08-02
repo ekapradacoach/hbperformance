@@ -274,6 +274,27 @@ Lista textual dejada por el usuario para que quede registrada:
   distinto de `'authorized'`), si le avisamos al atleta, y cuánto período de gracia le damos antes de
   cortarle el acceso. Es un flujo **distinto** al de la cancelación voluntaria (que ya se implementó).
 
+### Registrados 2026-07-28 (no implementar aún)
+- **Distinguir alta manual vs. pago por MP en la lista de Alumnos.** Para Hybrid y en general para cualquier
+  programa grupal, poder ver visualmente qué atletas fueron dados de alta **a mano** (transferencia/efectivo,
+  vía la Edge Function `create-athlete`) vs. cuáles pagaron por **Mercado Pago** (alta vía webhook
+  `process-payment`). Hoy no hay forma de distinguirlos en la lista. Pista de implementación: los de MP tienen
+  `mp_subscription_id` seteado; los manuales lo tienen en `null` — se podría usar eso para un badge/columna
+  (verificar que sea confiable como criterio antes de basarse solo en eso).
+- **Mostrar el `custom_price` en el perfil del atleta de alta manual (solo grupales).** Que a los atletas de
+  alta manual de un **programa grupal** (crossfit/hybrid/corredores) les aparezca en su card "Mi suscripción"
+  el **precio manual** (`profiles.custom_price`) que se les cargó, en vez del precio general del programa
+  (`site_config`) que ven los de MP. ⚠️ **NO aplica a asesorías**: ahí ya se decidió que el precio **nunca**
+  se muestra al atleta (es individual/privado; la fila de precio se oculta para asesorías). Este punto es
+  específico de los 3 grupales con alta manual. (Relacionado: `custom_price` hoy se guarda pero todavía no se
+  usa en ninguna vista — ver también el pendiente de conectarlo a Métricas.)
+- **Paridad de permisos Gonza vs. Erika (admin).** Confirmar/auditar si hoy las dos cuentas de admin
+  (Erika y Gonza) tienen exactamente los mismos permisos y funciones en el panel, o si hay alguna diferencia
+  real. Revisar dos frentes: (a) a nivel **rol/RLS** (ambas deberían ser `role='admin'` → `get_my_role()='admin'`
+  les da acceso total por igual), y (b) a nivel **UI del admin**, si hay algo hardcodeado que trate distinto a
+  una que a otra (ej. algún filtro por coach, `whatsapp_erika`/`whatsapp_gonza`, o textos/acciones atados a una
+  sola). Objetivo: que Gonza tenga exactamente las mismas funciones que Erika.
+
 ## Historial
 ### 2026-07-27 (5) — Mail de reactivación (Resend) en process-payment
 - En `supabase/functions/process-payment/index.ts`, rama **`if (existingProfile)`** (usuario que había
