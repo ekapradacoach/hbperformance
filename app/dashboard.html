@@ -381,15 +381,25 @@
   .rm-in-sep, .rm-in-unit { color: var(--text-secondary); font-size: 0.9rem; }
 
   /* Mis RM (estadísticas) */
-  .rmm-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .rmm-search { width: 100%; background: var(--bg); border: 1px solid #333; border-radius: 8px; padding: 9px 12px; color: var(--text); font-family: var(--font-body); font-size: 0.92rem; margin-bottom: 12px; }
+  .rmm-search:focus { outline: none; border-color: var(--accent); }
+  .rmm-row { padding: 12px 0; border-bottom: 1px solid var(--border); }
   .rmm-row:last-child { border-bottom: none; }
+  .rmm-top { margin-bottom: 8px; }
   .rmm-name { font-weight: 600; }
-  .rmm-edit { display: flex; align-items: center; gap: 6px; }
-  .rmm-input { width: 92px; background: var(--bg); border: 1px solid #333; border-radius: 8px; padding: 8px 10px; color: var(--text); font-family: var(--font-body); font-size: 0.9rem; }
-  .rmm-input:focus { outline: none; border-color: var(--accent); }
-  .rmm-unit { color: var(--text-secondary); font-size: 0.9rem; }
+  .rmm-cur { color: var(--text-secondary); font-weight: 400; font-size: 0.86rem; }
+  .rmm-pr { color: var(--accent); font-weight: 700; font-size: 0.82rem; white-space: nowrap; }
+  .rmm-edit { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   .rmm-save { background: var(--accent); color: #0A0A0A; border: none; border-radius: 8px; padding: 8px 14px; font-weight: 700; font-size: 0.85rem; cursor: pointer; font-family: var(--font-body); }
   .rmm-save:disabled { opacity: 0.6; cursor: default; }
+  .rmm-hist-toggle { background: none; border: none; color: var(--accent); font-weight: 600; font-size: 0.84rem; cursor: pointer; font-family: var(--font-body); }
+  .rmm-hist { margin-top: 8px; padding-left: 10px; border-left: 2px solid var(--border); }
+  .rmm-hist-pt { font-size: 0.88rem; color: var(--text); padding: 3px 0; }
+  .rmm-hist-pt.is-pr { color: var(--text); }
+  .rmm-hist-date { color: var(--text-secondary); font-size: 0.8rem; margin-right: 6px; }
+  .rmm-hist-empty { font-size: 0.86rem; color: var(--text-secondary); }
+  .rmm-more { display: block; width: 100%; margin-top: 12px; background: transparent; border: 1px dashed #3a3a3a; color: var(--text-secondary); border-radius: 8px; padding: 9px; font-family: var(--font-body); font-weight: 600; font-size: 0.85rem; cursor: pointer; }
+  .rmm-more:hover { border-color: var(--accent); color: var(--accent); }
 
   /* Comentario */
   .pb-comment { border-top: 1px solid var(--border); padding-top: 12px; margin-top: 14px; }
@@ -1085,6 +1095,7 @@
       <!-- Sección 5: Mis RM -->
       <div class="card">
         <div class="card-h">🏋️ Mis RM</div>
+        <input type="text" id="misRmSearch" class="rmm-search" placeholder="🔎 Buscar ejercicio…" autocomplete="off">
         <div id="misRmList"><div class="muted">Cargando…</div></div>
       </div>
     </section>
@@ -1562,7 +1573,11 @@
         rmLibById[l.id] = l;
         rmLibByName[String(l.name || '').trim().toLowerCase()] = l;
       });
-      const { data: myRm } = await sb.from('athlete_rm').select('exercise_id, value, declined, value_distance_m').eq('athlete_id', ATHLETE.id);
+      // athlete_rm es un LOG: la fila más reciente por ejercicio es el "valor actual".
+      // Orden ascendente → la última asignación por exercise_id queda como la más reciente.
+      const { data: myRm } = await sb.from('athlete_rm')
+        .select('exercise_id, value, declined, value_distance_m, created_at')
+        .eq('athlete_id', ATHLETE.id).order('created_at', { ascending: true });
       (myRm || []).forEach(r => {
         athleteRm[r.exercise_id] = {
           value: r.value == null ? null : Number(r.value),
@@ -1809,7 +1824,7 @@
       if (!parsed) { flash(type === 'time' ? 'Cargá distancia (m) y tiempo (mm:ss).' : 'Poné un valor válido.'); return; }
       const btn = reg.querySelector('.rm-reg-save'); btn.disabled = true;
       const { error } = await sb.from('athlete_rm')
-        .upsert({ athlete_id: ATHLETE.id, exercise_id: base, value: parsed.value, value_distance_m: parsed.distanceM, declined: false }, { onConflict: 'athlete_id,exercise_id' });
+        .insert({ athlete_id: ATHLETE.id, exercise_id: base, value: parsed.value, value_distance_m: parsed.distanceM, declined: false });
       btn.disabled = false;
       if (error) { flash('No se pudo guardar el RM: ' + error.message); return; }
       athleteRm[base] = { value: parsed.value, distanceM: parsed.distanceM, declined: false };
@@ -1821,7 +1836,7 @@
       if (!reg) return;
       const base = reg.dataset.base;
       const { error } = await sb.from('athlete_rm')
-        .upsert({ athlete_id: ATHLETE.id, exercise_id: base, value: null, value_distance_m: null, declined: true }, { onConflict: 'athlete_id,exercise_id' });
+        .insert({ athlete_id: ATHLETE.id, exercise_id: base, value: null, value_distance_m: null, declined: true });
       if (error) { flash('No se pudo guardar: ' + error.message); return; }
       athleteRm[base] = { value: null, distanceM: null, declined: true };
       renderBlocks();
@@ -2182,44 +2197,126 @@
       loadMisRm();
     }
 
-    // -------- Mis RM (lista TODOS los ejercicios trackeados; cargar/editar en cualquier momento) --------
+    // -------- Mis RM (histórico por ejercicio + PR; buscador + lista colapsada) --------
+    let misRmData = [];           // [{ ex, current, points(numéricos desc), pr }]
+    let misRmExpandAll = false;   // "Ver todos"
+    let misRmSearch = '';
+    const MIS_RM_COLLAPSE = 8;
+
+    // Ritmo (seg/unidad) de un punto de tiempo
+    function rmPaceOfPoint(pt, ex) {
+      const d = Number(pt.value_distance_m), u = Number(ex.rm_unit_meters);
+      if (!d || !u || pt.value == null) return null;
+      return Number(pt.value) * (u / d);
+    }
+    // Texto completo de un valor/punto según tipo
+    function rmValueText(pt, ex) {
+      const t = ex.max_type || 'weight';
+      if (t === 'time') {
+        const pace = rmPaceOfPoint(pt, ex);
+        return `${pt.value_distance_m} m en ${fmtSeconds(pt.value)}` + (pace != null ? ` → ${fmtSeconds(pace)}${ex.rm_unit_label ? ' ' + ex.rm_unit_label : ''}` : '');
+      }
+      return String(Number(pt.value)) + (t === 'reps' ? ' reps' : ' kg');
+    }
+    // Versión corta para el badge de PR
+    function rmValueShort(pt, ex) {
+      const t = ex.max_type || 'weight';
+      if (t === 'time') { const p = rmPaceOfPoint(pt, ex); return p != null ? fmtSeconds(p) + (ex.rm_unit_label ? ' ' + ex.rm_unit_label : '') : '—'; }
+      return String(Number(pt.value)) + (t === 'reps' ? ' reps' : ' kg');
+    }
+    // PR: weight/reps = value más alto; time = ritmo más rápido (menor value/distance)
+    function rmComputePr(numeric, ex) {
+      if (!numeric.length) return null;
+      if ((ex.max_type || 'weight') === 'time') {
+        let best = null, bestRate = Infinity;
+        numeric.forEach(p => {
+          const dist = Number(p.value_distance_m);
+          if (!dist) return;
+          const rate = Number(p.value) / dist;
+          if (rate < bestRate) { bestRate = rate; best = p; }
+        });
+        return best;
+      }
+      let best = numeric[0];
+      numeric.forEach(p => { if (Number(p.value) > Number(best.value)) best = p; });
+      return best;
+    }
+    function fmtDayShort(ts) {
+      const d = new Date(ts); if (isNaN(d)) return '';
+      return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+    }
+
     async function loadMisRm() {
       const box = document.getElementById('misRmList');
       box.innerHTML = '<div class="muted">Cargando…</div>';
       const { data: libs, error } = await sb.from('exercise_library')
-        .select('id, name, max_type').eq('rm_tracked', true).order('name', { ascending: true });
+        .select('id, name, max_type, rm_unit_meters, rm_unit_label').eq('rm_tracked', true).order('name', { ascending: true });
       if (error) { box.innerHTML = '<div class="muted">No se pudieron cargar los ejercicios.</div>'; return; }
-      const rows = libs || [];
-      if (!rows.length) {
-        box.innerHTML = '<div class="muted">Todavía no hay ejercicios con RM en el sistema.</div>';
+      const exRows = libs || [];
+      if (!exRows.length) { box.innerHTML = '<div class="muted">Todavía no hay ejercicios con RM en el sistema.</div>'; misRmData = []; return; }
+      const { data: log } = await sb.from('athlete_rm')
+        .select('id, exercise_id, value, value_distance_m, declined, created_at')
+        .eq('athlete_id', ATHLETE.id).order('created_at', { ascending: false });
+      const byEx = {}; (log || []).forEach(r => { (byEx[r.exercise_id] = byEx[r.exercise_id] || []).push(r); });
+      misRmData = exRows.map(ex => {
+        const all = byEx[ex.id] || [];              // ya desc por created_at
+        const numeric = all.filter(p => p.value != null && !p.declined);
+        return { ex, current: all[0] || null, points: numeric, pr: rmComputePr(numeric, ex) };
+      });
+      renderMisRm();
+    }
+
+    function renderMisRm() {
+      const box = document.getElementById('misRmList');
+      if (!box) return;
+      const q = misRmSearch.trim().toLowerCase();
+      let list = q ? misRmData.filter(d => String(d.ex.name || '').toLowerCase().includes(q)) : misRmData;
+      const total = list.length;
+      const collapsed = !q && !misRmExpandAll;
+      const shown = collapsed ? list.slice(0, MIS_RM_COLLAPSE) : list;
+      if (!shown.length) { box.innerHTML = '<div class="muted">Sin resultados.</div>'; return; }
+      let html = shown.map(misRmRowHtml).join('');
+      if (collapsed && total > MIS_RM_COLLAPSE) html += `<button type="button" class="rmm-more" id="rmmMore">Ver todos (${total})</button>`;
+      box.innerHTML = html;
+    }
+
+    function misRmRowHtml(d) {
+      const ex = d.ex, t = ex.max_type || 'weight';
+      const cur = d.current;
+      const curText = (cur && cur.value != null && !cur.declined) ? rmValueText(cur, ex) : 'No cargado';
+      const prText = d.pr ? rmValueShort(d.pr, ex) : '';
+      const last = d.points[0] || null; // último numérico → prefill del input
+      const prefill = last ? { value: Number(last.value), distanceM: last.value_distance_m == null ? null : Number(last.value_distance_m) } : null;
+      const histHtml = d.points.length
+        ? d.points.map(p => {
+            const isPr = d.pr && String(d.pr.id) === String(p.id);
+            return `<div class="rmm-hist-pt${isPr ? ' is-pr' : ''}"><span class="rmm-hist-date">${esc(fmtDayShort(p.created_at))}</span> ${esc(rmValueText(p, ex))}${isPr ? ' <span class="rmm-pr">⭐ PR</span>' : ''}</div>`;
+          }).join('')
+        : '<div class="rmm-hist-empty">Sin historial todavía.</div>';
+      return `<div class="rmm-row" data-base="${esc(ex.id)}" data-type="${esc(t)}">
+        <div class="rmm-top">
+          <span class="rmm-name">${esc(ex.name)} <span class="rmm-cur">${esc(curText)}</span>${prText ? ` <span class="rmm-pr">⭐ ${esc(prText)}</span>` : ''}</span>
+        </div>
+        <div class="rmm-edit">
+          ${rmInputsHtml(ex, prefill)}
+          <button type="button" class="rmm-save">Guardar</button>
+          ${d.points.length ? '<button type="button" class="rmm-hist-toggle">Historial ▸</button>' : ''}
+        </div>
+        <div class="rmm-hist" style="display:none;">${histHtml}</div>
+      </div>`;
+    }
+
+    document.getElementById('misRmSearch').addEventListener('input', (e) => { misRmSearch = e.target.value; renderMisRm(); });
+    document.getElementById('misRmList').addEventListener('click', async (e) => {
+      if (e.target.closest('#rmmMore')) { misRmExpandAll = true; renderMisRm(); return; }
+      const tog = e.target.closest('.rmm-hist-toggle');
+      if (tog) {
+        const hist = tog.closest('.rmm-row').querySelector('.rmm-hist');
+        const open = hist.style.display !== 'none';
+        hist.style.display = open ? 'none' : 'block';
+        tog.textContent = open ? 'Historial ▸' : 'Historial ▾';
         return;
       }
-      const { data: mine } = await sb.from('athlete_rm').select('exercise_id, value, declined, value_distance_m').eq('athlete_id', ATHLETE.id);
-      const byId = {}; (mine || []).forEach(r => { byId[r.exercise_id] = r; });
-      box.innerHTML = rows.map(ex => {
-        const r = byId[ex.id];
-        const st = r ? { value: r.value == null ? null : Number(r.value), distanceM: r.value_distance_m == null ? null : Number(r.value_distance_m) } : null;
-        const t = ex.max_type || 'weight';
-        // Texto del valor actual
-        let current = 'No cargado';
-        if (st && st.value != null) {
-          if (t === 'time') {
-            const pace = rmPaceSeconds(st, ex);
-            current = `${st.distanceM} m en ${fmtSeconds(st.value)}` + (pace != null ? ` → ${fmtSeconds(pace)}${ex.rm_unit_label ? ' ' + ex.rm_unit_label : ''}` : '');
-          } else {
-            current = String(st.value) + (t === 'reps' ? ' reps' : ' kg');
-          }
-        }
-        return `<div class="rmm-row" data-base="${esc(ex.id)}" data-type="${esc(t)}">
-          <span class="rmm-name">${esc(ex.name)} <span class="rmm-cur">${esc(current)}</span></span>
-          <span class="rmm-edit">
-            ${rmInputsHtml(ex, st)}
-            <button type="button" class="rmm-save">Guardar</button>
-          </span>
-        </div>`;
-      }).join('');
-    }
-    document.getElementById('misRmList').addEventListener('click', async (e) => {
       const btn = e.target.closest('.rmm-save');
       if (!btn) return;
       const row = btn.closest('.rmm-row');
@@ -2228,11 +2325,11 @@
       if (!parsed) { flash(type === 'time' ? 'Cargá distancia (m) y tiempo (mm:ss).' : 'Poné un valor válido.'); return; }
       btn.disabled = true;
       const { error } = await sb.from('athlete_rm')
-        .upsert({ athlete_id: ATHLETE.id, exercise_id: base, value: parsed.value, value_distance_m: parsed.distanceM, declined: false }, { onConflict: 'athlete_id,exercise_id' });
+        .insert({ athlete_id: ATHLETE.id, exercise_id: base, value: parsed.value, value_distance_m: parsed.distanceM, declined: false });
       btn.disabled = false;
       if (error) { flash('No se pudo guardar: ' + error.message); return; }
       athleteRm[base] = { value: parsed.value, distanceM: parsed.distanceM, declined: false }; // sync con el día
-      flash('✓ RM actualizado.');
+      flash('✓ RM guardado.');
       loadMisRm();
     });
 

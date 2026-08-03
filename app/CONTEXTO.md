@@ -1836,3 +1836,45 @@ drop table if exists public.block_rm_exercises;
   @90% → 4:27/km; remo 2000m@8:00 → 2:00/500m), parseo mm:ss, render de marcas (resuelto/no/declined/colgada +
   escaping). Flujo vivo auth-gated.
 - ⚠️ **Pendiente de deploy:** correr el DDL de arriba. (Superseded: entradas (g)/(h) del sistema estructurado.)
+
+## 2026-07-28 (j) — RM: histórico (log) con PR + buscador/colapso en "Mis RM"
+`athlete_rm` pasa de "un valor por atleta/ejercicio (upsert)" a **LOG** (cada carga/edición = un punto nuevo
+con la fecha de hoy, automático). El cálculo de las marcas **no cambia**: usa el punto más reciente.
+
+### 🗄️ DDL (correr a mano)
+```sql
+-- Sacar el unique(athlete_id, exercise_id) → athlete_rm es un log
+do $$
+declare c text;
+begin
+  select conname into c from pg_constraint
+   where conrelid = 'public.athlete_rm'::regclass and contype = 'u' limit 1;
+  if c is not null then execute format('alter table public.athlete_rm drop constraint %I', c); end if;
+end $$;
+
+create index if not exists athlete_rm_athlete_ex_idx
+  on public.athlete_rm (athlete_id, exercise_id, created_at desc);
+```
+**Migración:** los 2 datos en producción (Back Squat 110 kg, Butterfly Pull Up 20 reps) quedan como el
+**primer punto** de cada historial con su `created_at` original (solo se saca el unique, no se tocan filas).
+
+### Comportamiento
+- **Guardar** (cartel del bloque o "Mis RM") = `insert` (antes upsert). `declined` también inserta una fila
+  (value null); **no cuenta como punto numérico** (se filtra del historial y del PR).
+- **Valor actual** = fila más reciente por `created_at`. En el día se reduce el log a "la última por
+  exercise_id" (`order created_at asc` + last-wins). Sin cambios en el cálculo de las marcas.
+- **PR** (sobre puntos con valor, excluye declined): weight/reps = `value` más alto; **time = ritmo más
+  rápido = menor `value/value_distance_m`** (⚠️ no el menor segundos crudos; se compara por ritmo). Se
+  muestra ⭐ en el resumen y en el punto del historial.
+
+### "Mis RM" (dashboard, Estadísticas)
+- **Buscador** arriba (`#misRmSearch`, filtra por nombre en vivo; la búsqueda ignora el colapso).
+- **Colapsado**: muestra los primeros **8** + botón **"Ver todos (N)"**. (Con 2 se ven los 2.)
+- Cada ejercicio: nombre + **valor actual** + **badge de PR ⭐** + input (adaptado al tipo) + **"Historial ▸"**
+  expandible con los puntos (**fecha + valor, más reciente primero**, PR destacado). Todo el log se trae en
+  una sola query y se agrupa en memoria (expandir no consulta de nuevo).
+
+### Verificación
+- Syntax-check dashboard OK. Unit-tests del PR: weight/reps (máximo), time (ritmo más rápido: 5k@19:00 gana
+  a 10k@40:00), declined excluido. Flujo vivo auth-gated.
+- ⚠️ **Pendiente de deploy:** correr el DDL de arriba (drop del unique + índice).

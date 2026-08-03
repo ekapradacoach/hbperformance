@@ -303,15 +303,17 @@ rm_unit_label text (nullable)   ← ⚠️ AGREGAR (2026-07-28 (i)). Solo time: 
 por **marcas `<n>% [[rm:Nombre]]` dentro de `planning_blocks.content`** (texto libre). No hay tabla; la marca se parsea
 en el dashboard y se calcula contra `athlete_rm`.
 
-### athlete_rm   ← ✅ RM del atleta (uno por atleta por ejercicio BASE). 3 estados: sin fila / con value / declined.
+### athlete_rm   ← ✅ LOG histórico de RM del atleta (muchas filas por atleta/ejercicio en el tiempo)
 id uuid (default gen_random_uuid())
 athlete_id uuid (FK profiles.id, on delete cascade)
 exercise_id uuid (FK exercise_library.id, on delete cascade)   — ejercicio BASE (rm_source_id resuelto)
-value numeric (nullable)   ← ⚠️ (2026-07-28 (i)) era rm_kg not null → renombrado a `value` y nullable. Significa kg / reps / (time: segundos de la marca).
-value_distance_m numeric (nullable)   ← ⚠️ AGREGAR (2026-07-28 (i)). Solo time: distancia de la marca (ej. 10000). ritmo = value × (rm_unit_meters / value_distance_m).
-declined boolean (not null default false)   ← ⚠️ AGREGAR (2026-07-28 (i)). true = "no tengo RM" → no se vuelve a pedir; % se muestra sin cálculo.
-created_at timestamptz
-unique(athlete_id, exercise_id)   — guardar = upsert (cartel del bloque o "Mis RM")
+value numeric (nullable)   — kg / reps / (time: segundos de la marca)
+value_distance_m numeric (nullable)   — solo time: distancia de la marca. ritmo = value × (rm_unit_meters / value_distance_m)
+declined boolean (not null default false)   — true = "no tengo RM" (no genera punto numérico; se excluye del historial y del PR)
+created_at timestamptz (default now())   — fecha del punto
+⚠️ (2026-07-28 (j)) **es un LOG**: se **sacó el unique(athlete_id, exercise_id)**; cada guardado hace **INSERT** (no upsert).
+El **valor actual** (para todo el cálculo) = fila **más reciente** por `created_at` por ejercicio. Índice `(athlete_id, exercise_id, created_at desc)`.
+"Mis RM" muestra el historial expandible por ejercicio + el **PR** (weight/reps = value más alto; time = ritmo más rápido = menor value/distance).
 RLS: atleta FOR ALL de lo suyo (athlete_id = auth.uid()); admin SELECT.
 Cálculo: weight = value×%/100 (tope 2 dec); reps = round especial (.6 arriba / .5 abajo); time = ritmo objetivo = ritmo×100/% (proporcional).
 RLS: **solo admin** FOR ALL (get_my_role()='admin'); el atleta NO la usa. Capa opcional sobre exercise_links:
