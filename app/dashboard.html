@@ -400,6 +400,13 @@
   .rmm-hist-empty { font-size: 0.86rem; color: var(--text-secondary); }
   .rmm-more { display: block; width: 100%; margin-top: 12px; background: transparent; border: 1px dashed #3a3a3a; color: var(--text-secondary); border-radius: 8px; padding: 9px; font-family: var(--font-body); font-weight: 600; font-size: 0.85rem; cursor: pointer; }
   .rmm-more:hover { border-color: var(--accent); color: var(--accent); }
+  /* Gráfico de evolución (SVG a mano) */
+  .rmm-chart { margin: 6px 0 10px; }
+  .rmc-svg { width: 100%; height: auto; display: block; overflow: visible; }
+  .rmc-line { stroke: var(--accent); stroke-width: 2; }
+  .rmc-dot { fill: var(--accent); opacity: 0.85; }
+  .rmc-pr { fill: var(--bg-input); stroke: var(--accent); stroke-width: 2; }
+  .rmm-chart-x { display: flex; justify-content: space-between; color: var(--text-secondary); font-size: 0.72rem; margin-top: 3px; }
 
   /* Comentario */
   .pb-comment { border-top: 1px solid var(--border); padding-top: 12px; margin-top: 14px; }
@@ -1092,12 +1099,22 @@
         <div class="ach-grid" id="achGrid"></div>
       </div>
 
-      <!-- Sección 5: Mis RM -->
+      <!-- Sección 5: Mis RM (link a vista aparte) -->
       <div class="card">
         <div class="card-h">🏋️ Mis RM</div>
-        <input type="text" id="misRmSearch" class="rmm-search" placeholder="🔎 Buscar ejercicio…" autocomplete="off">
-        <div id="misRmList"><div class="muted">Cargando…</div></div>
+        <p class="muted" style="margin-bottom:12px;">Tus marcas máximas por ejercicio, con historial y evolución.</p>
+        <button class="btn btn-outline" id="btnMisRm">Ver mis RM →</button>
       </div>
+    </section>
+
+    <!-- ===== VIEW: MIS RM (vista dedicada, patrón Comunidad) ===== -->
+    <section id="view-misrm" class="view">
+      <div class="com-header">
+        <button class="com-back" id="misRmBack">← Volver</button>
+        <h1 class="com-title">🏋️ Mis RM</h1>
+      </div>
+      <input type="text" id="misRmSearch" class="rmm-search" placeholder="🔎 Buscar ejercicio…" autocomplete="off">
+      <div id="misRmList"><div class="muted">Cargando…</div></div>
     </section>
 
     <!-- ===== VIEW: MENSAJES ===== -->
@@ -1358,6 +1375,7 @@
       if (name === 'mensajes') enterMensajes();
       if (name === 'perfil') loadPerfil();
       if (name === 'comunidad') enterComunidad();
+      if (name === 'misrm') loadMisRm();
       window.scrollTo(0, 0);
     }
     document.querySelectorAll('.tabbar a[data-view]').forEach(a => {
@@ -1365,6 +1383,8 @@
     });
     document.getElementById('userBtn').addEventListener('click', () => showView('perfil'));
     document.getElementById('btnComunidad').addEventListener('click', () => showView('comunidad'));
+    document.getElementById('btnMisRm').addEventListener('click', () => showView('misrm'));
+    document.getElementById('misRmBack').addEventListener('click', () => showView('estadisticas'));
 
     // ============================================================
     // INICIO — carga de datos
@@ -2194,7 +2214,6 @@
       renderAdherence();
       renderHistorial();
       renderLogros();
-      loadMisRm();
     }
 
     // -------- Mis RM (histórico por ejercicio + PR; buscador + lista colapsada) --------
@@ -2244,6 +2263,37 @@
     function fmtDayShort(ts) {
       const d = new Date(ts); if (isNaN(d)) return '';
       return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' });
+    }
+    // Line chart en SVG a mano (sin librería). weight/reps = value; time = ritmo (invertido: más rápido = arriba).
+    function rmChartSvg(d) {
+      const ex = d.ex, t = ex.max_type || 'weight';
+      const pts = d.points.slice().reverse();  // d.points es desc → cronológico ascendente
+      const valid = pts.map(p => ({ p, y: t === 'time' ? rmPaceOfPoint(p, ex) : Number(p.value) }))
+                       .filter(o => o.y != null && !isNaN(o.y));
+      if (valid.length < 2) return '';         // con 1 punto no hay línea
+      const W = 280, H = 90, padX = 6, padT = 8, padB = 8;
+      const ys = valid.map(o => o.y);
+      let min = Math.min(...ys), max = Math.max(...ys);
+      if (min === max) { min -= 1; max += 1; }
+      const n = valid.length;
+      const xAt = i => padX + i * (W - 2 * padX) / (n - 1);
+      const yAt = v => {
+        const norm = (v - min) / (max - min);          // 0..1
+        const up = t === 'time' ? (1 - norm) : norm;    // "hacia arriba = mejor" (time invertido)
+        return padT + (1 - up) * (H - padT - padB);
+      };
+      const line = valid.map((o, i) => `${i ? 'L' : 'M'}${xAt(i).toFixed(1)},${yAt(o.y).toFixed(1)}`).join(' ');
+      const dots = valid.map((o, i) => {
+        const isPr = d.pr && String(d.pr.id) === String(o.p.id);
+        return `<circle cx="${xAt(i).toFixed(1)}" cy="${yAt(o.y).toFixed(1)}" r="${isPr ? 4 : 2.5}" class="${isPr ? 'rmc-pr' : 'rmc-dot'}"/>`;
+      }).join('');
+      return `<div class="rmm-chart">
+        <svg viewBox="0 0 ${W} ${H}" class="rmc-svg">
+          <path d="${line}" class="rmc-line" fill="none" vector-effect="non-scaling-stroke"/>
+          ${dots}
+        </svg>
+        <div class="rmm-chart-x"><span>${esc(fmtDayShort(valid[0].p.created_at))}</span><span>${esc(fmtDayShort(valid[n - 1].p.created_at))}</span></div>
+      </div>`;
     }
 
     async function loadMisRm() {
@@ -2302,7 +2352,7 @@
           <button type="button" class="rmm-save">Guardar</button>
           ${d.points.length ? '<button type="button" class="rmm-hist-toggle">Historial ▸</button>' : ''}
         </div>
-        <div class="rmm-hist" style="display:none;">${histHtml}</div>
+        <div class="rmm-hist" style="display:none;">${rmChartSvg(d)}${histHtml}</div>
       </div>`;
     }
 

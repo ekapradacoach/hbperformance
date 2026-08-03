@@ -1878,3 +1878,21 @@ create index if not exists athlete_rm_athlete_ex_idx
 - Syntax-check dashboard OK. Unit-tests del PR: weight/reps (máximo), time (ritmo más rápido: 5k@19:00 gana
   a 10k@40:00), declined excluido. Flujo vivo auth-gated.
 - ⚠️ **Pendiente de deploy:** correr el DDL de arriba (drop del unique + índice).
+
+## 2026-07-28 (k) — "Mis RM": vista dedicada + gráfico de evolución (sin cambios de esquema)
+Dos mejoras de UX sobre "Mis RM" (no toca cálculo/histórico ni SQL).
+
+1. **Vista dedicada** (patrón Comunidad): "Mis RM" dejó de estar inline en Estadísticas. Ahora en
+   Estadísticas hay un botón **"Ver mis RM →"** (`#btnMisRm`) que lleva a una **`<section id="view-misrm">`**
+   con header **"← Volver"** (`#misRmBack` → `showView('estadisticas')`), el buscador y la lista. Se enganchó
+   con el mismo mecanismo que Comunidad: `showView('misrm')` → `loadMisRm()` (se sacó `loadMisRm()` de
+   `loadEstadisticas`). El buscador/colapso/historial ya existentes se movieron tal cual.
+2. **Gráfico de líneas por ejercicio** (dentro del expandible "Historial ▸"): **SVG inline hecho a mano, sin
+   librería** (el proyecto no tiene ninguna; Métricas usa barras CSS a mano; único script externo = supabase-js).
+   Eje X = fecha (orden cronológico), Eje Y = valor. weight/reps = value; **time = ritmo derivado**
+   (`value×unidad/distancia`, mismo criterio que el PR). **Para time el eje Y va invertido** (ritmo más rápido
+   = más arriba) → "arriba = mejor" consistente en los 3 tipos. El punto del **PR** se dibuja destacado. Con
+   <2 puntos numéricos no se dibuja línea.
+
+Verificación: syntax-check OK + unit-test de la geometría del chart (mayor/ más rápido = más arriba; X a lo
+ancho) y del PR. Flujo vivo auth-gated. **Sin SQL.**
