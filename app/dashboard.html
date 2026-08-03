@@ -370,6 +370,15 @@
     padding: 8px 16px; font-weight: 700; font-size: 0.88rem; cursor: pointer; font-family: var(--font-body);
   }
   .pb-rm-register .rm-reg-save:disabled { opacity: 0.6; cursor: default; }
+  .pb-rm-register .rm-reg-decline { background: none; border: none; color: var(--text-secondary); text-decoration: underline; cursor: pointer; font-family: var(--font-body); font-size: 0.86rem; }
+  .pb-rm-register .rm-reg-decline:hover { color: var(--text); }
+  .rmm-cur { color: var(--text-secondary); font-weight: 400; font-size: 0.86rem; }
+  /* Inputs de carga de RM (cartel del bloque + Mis RM), adaptados por tipo */
+  .rm-in-val, .rm-in-dist, .rm-in-time { background: var(--bg); border: 1px solid #333; border-radius: 8px; padding: 8px 10px; color: var(--text); font-family: var(--font-body); font-size: 0.9rem; }
+  .rm-in-val, .rm-in-dist { width: 110px; }
+  .rm-in-time { width: 78px; }
+  .rm-in-val:focus, .rm-in-dist:focus, .rm-in-time:focus { outline: none; border-color: var(--accent); }
+  .rm-in-sep, .rm-in-unit { color: var(--text-secondary); font-size: 0.9rem; }
 
   /* Mis RM (estadísticas) */
   .rmm-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
@@ -1500,7 +1509,10 @@
     document.getElementById('dayNext').addEventListener('click', () => { progDate = addDaysStr(progDate, 1); loadProgramaDay(); });
     document.getElementById('dayHoy').addEventListener('click', () => { progDate = TODAY; loadProgramaDay(); });
 
-    let athleteRm = {}; // { baseExerciseId: rm_kg } del atleta, para calcular kilajes del día
+    // Estado de RM del día: biblioteca (por nombre / por id) + RM del atleta (por ejercicio base)
+    let rmLibByName = {};                 // 'back squat' -> { id, name, max_type, rm_source_id, rm_tracked }
+    let rmLibById = {};                   // id -> row
+    let athleteRm = {};                   // baseId -> { value:number|null, declined:bool }
     async function loadProgramaDay() {
       document.getElementById('dayLabel').textContent = prettyLong(progDate);
       const box = document.getElementById('progBlocks');
@@ -1541,38 +1553,27 @@
         });
       }
 
-      // Ejercicios con RM del día (degrada si las tablas todavía no existen)
-      athleteRm = {};
-      const rmByBlock = {};
-      const { data: rmEx, error: rmErr } = await sb.from('block_rm_exercises')
-        .select('id, block_id, exercise_id, lines, position').in('block_id', ids).order('position', { ascending: true });
-      if (!rmErr && rmEx && rmEx.length) {
-        const exIds = [...new Set(rmEx.map(r => r.exercise_id))];
-        const libById = {};
-        const { data: libs1 } = await sb.from('exercise_library').select('id, name, rm_source_id').in('id', exIds);
-        (libs1 || []).forEach(l => { libById[l.id] = l; });
-        // nombres de las bases (rm_source_id) que no estén ya cargadas
-        const baseIds = [...new Set((libs1 || []).map(l => l.rm_source_id).filter(Boolean))].filter(id => !libById[id]);
-        if (baseIds.length) {
-          const { data: libs2 } = await sb.from('exercise_library').select('id, name').in('id', baseIds);
-          (libs2 || []).forEach(l => { libById[l.id] = libById[l.id] || l; });
-        }
-        const { data: myRm } = await sb.from('athlete_rm').select('exercise_id, rm_kg').eq('athlete_id', ATHLETE.id);
-        (myRm || []).forEach(r => { athleteRm[r.exercise_id] = Number(r.rm_kg); });
-        rmEx.forEach(r => {
-          const lib = libById[r.exercise_id] || {};
-          r.exName = lib.name || '(ejercicio)';
-          r.baseId = lib.rm_source_id || r.exercise_id;
-          r.baseName = (libById[r.baseId] && libById[r.baseId].name) || r.exName;
-          r.lines = Array.isArray(r.lines) ? r.lines : [];
-          (rmByBlock[r.block_id] = rmByBlock[r.block_id] || []).push(r);
-        });
-      }
+      // RM: cache de la biblioteca (para resolver las marcas [[rm:Nombre]] del texto) + RM del atleta.
+      // Degrada si las columnas/tabla no existen todavía.
+      rmLibByName = {}; rmLibById = {}; athleteRm = {};
+      const { data: libAll } = await sb.from('exercise_library')
+        .select('id, name, max_type, rm_source_id, rm_tracked, rm_unit_meters, rm_unit_label');
+      (libAll || []).forEach(l => {
+        rmLibById[l.id] = l;
+        rmLibByName[String(l.name || '').trim().toLowerCase()] = l;
+      });
+      const { data: myRm } = await sb.from('athlete_rm').select('exercise_id, value, declined, value_distance_m').eq('athlete_id', ATHLETE.id);
+      (myRm || []).forEach(r => {
+        athleteRm[r.exercise_id] = {
+          value: r.value == null ? null : Number(r.value),
+          declined: !!r.declined,
+          distanceM: r.value_distance_m == null ? null : Number(r.value_distance_m)
+        };
+      });
 
       progBlocks.forEach(b => {
         b.completion = byBlock[b.id] || null;
         b.exercises = exByBlock[b.id] || [];
-        b.rmExercises = rmByBlock[b.id] || [];
         b.images = (b.completion && imgByComp[b.completion.id]) || [];
         b._pendingFiles = [];
         b._prevUrls = [];
@@ -1581,10 +1582,12 @@
     }
 
     function renderBlocks() {
-      document.getElementById('progBlocks').innerHTML = progBlocks.map(blockCardHtml).join('');
+      // shown: bases cuyo cartel de RM ya se mostró hoy (dedupe a nivel día, primer bloque que lo menciona)
+      const cartelState = { shown: new Set() };
+      document.getElementById('progBlocks').innerHTML = progBlocks.map(b => blockCardHtml(b, cartelState)).join('');
     }
 
-    function blockCardHtml(b) {
+    function blockCardHtml(b, cartelState) {
       const done = !!b.completion;
       const exHtml = (b.exercises && b.exercises.length) ? `
         <div class="pb-ex">
@@ -1600,65 +1603,150 @@
             <span class="pb-check-lbl">Completado</span>
           </label>
         </div>
-        ${b.content ? `<div class="pb-content">${esc(b.content)}</div>` : ''}
+        ${b.content ? `<div class="pb-content">${renderRmContent(b.content)}</div>` : ''}
         ${exHtml}
-        ${rmHtml(b)}
+        ${blockCartelesHtml(b, cartelState)}
         <div class="pb-comment">${commentHtml(b)}</div>
         <div class="pb-imgs">${blockImgsHtml(b)}</div>
       </div>`;
     }
 
-    // Kilaje = RM × % / 100, sin redondear el resultado real; tope 2 decimales de presentación
-    // (limpia el ruido de punto flotante) y sin ceros sobrantes (70, 71.75, 66.63).
-    function rmKg(rm, pct) {
-      const v = Number(rm) * Number(pct) / 100;
-      return String(Number(v.toFixed(2)));
+    // ---- Sistema de RM (marcas [[rm:Nombre]] en el texto libre) ----
+    const RM_MARK_RE = /(\d+(?:[.,]\d+)?)\s*%\s*\[\[rm:\s*([^\]]+?)\s*\]\]/g;
+
+    // Resuelve la fila base (donde vive el RM) a partir del nombre marcado.
+    function rmResolve(name) {
+      const row = rmLibByName[String(name || '').trim().toLowerCase()];
+      if (!row) return null;
+      const baseId = row.rm_source_id || row.id;
+      const baseRow = rmLibById[baseId] || row;
+      return { row, baseId, baseRow };
     }
-    function rmHtml(b) {
-      const list = b.rmExercises || [];
-      if (!list.length) return '';
-      const shownReg = new Set(); // un campo de "registrá tu RM" por ejercicio-base y por bloque
-      return `<div class="pb-rm">
-        <div class="pb-ex-label">🏋️ Ejercicios con RM</div>
-        ${list.map(r => rmExHtml(r, shownReg)).join('')}
-      </div>`;
+    // mm:ss / h:mm:ss / segundos → segundos (o null)
+    function parseTimeToSeconds(str) {
+      const s = String(str).trim();
+      if (s === '') return null;
+      if (/^\d+$/.test(s)) return Number(s);
+      const parts = s.split(':');
+      if (parts.some(p => p.trim() === '' || isNaN(Number(p)))) return null;
+      return parts.reduce((acc, p) => acc * 60 + Number(p), 0);
     }
-    function rmExHtml(r, shownReg) {
-      const hasRm = athleteRm[r.baseId] != null;
-      const rm = athleteRm[r.baseId];
-      // Nuevo shape: { series, reps, percent, rpe }. 3 casos: solo %, solo RPE, o ambos.
-      const linesHtml = (r.lines || []).map(ln => {
-        const base = esc(`${ln.series} series × ${ln.reps} reps`);
-        const hasP = ln.percent != null && ln.percent !== '';
-        const hasR = ln.rpe != null && ln.rpe !== '';
-        let intens = '';
-        if (hasP) {
-          intens = ` @ ${esc(ln.percent)}%`;
-          if (hasRm) intens += ` → <b class="pb-rm-kg">${esc(rmKg(rm, ln.percent))}kg</b>`;
-          if (hasR) intens += ` (RPE ${esc(ln.rpe)})`;
-        } else if (hasR) {
-          intens = ` @ RPE ${esc(ln.rpe)}`;
+    function fmtSeconds(total) {
+      total = Math.round(Number(total));
+      const h = Math.floor(total / 3600), m = Math.floor((total % 3600) / 60), s = total % 60;
+      const pad = n => String(n).padStart(2, '0');
+      return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+    }
+    // Ritmo del atleta (seg por unidad de referencia) a partir de su marca cruda (distancia + tiempo).
+    // ritmo = tiempo_seg × (unidad_metros / distancia_metros). Null si falta algo.
+    function rmPaceSeconds(st, baseRow) {
+      const dist = Number(st && st.distanceM), unit = Number(baseRow && baseRow.rm_unit_meters);
+      if (!dist || !unit || !st || st.value == null) return null;
+      return Number(st.value) * (unit / dist);
+    }
+    // Objetivo calculado para un % según el tipo del ejercicio base. Devuelve string o null.
+    function rmTargetFor(st, baseRow, percentRaw) {
+      const p = Number(String(percentRaw).replace(',', '.'));
+      if (!p || !st || st.value == null) return null;
+      const t = (baseRow && baseRow.max_type) || 'weight';
+      if (t === 'time') {
+        const pace = rmPaceSeconds(st, baseRow);
+        if (pace == null) return null;
+        const label = baseRow.rm_unit_label ? ' ' + baseRow.rm_unit_label : '';
+        return fmtSeconds(pace * 100 / p) + label;                                    // ritmo objetivo, proporcional
+      }
+      if (t === 'reps') {                                                             // regla especial: .6 arriba, .5 abajo
+        const x = Number(st.value) * p / 100, frac = x - Math.floor(x);
+        return String(Math.floor(x) + (frac + 1e-9 >= 0.6 ? 1 : 0)) + ' reps';
+      }
+      return String(Number((Number(st.value) * p / 100).toFixed(2))) + ' kg';         // weight: tope 2 decimales
+    }
+    // Renderiza el content reemplazando las marcas por el % (+ objetivo si el atleta tiene RM)
+    function renderRmContent(content) {
+      let out = '', last = 0, m;
+      RM_MARK_RE.lastIndex = 0;
+      while ((m = RM_MARK_RE.exec(content)) !== null) {
+        out += esc(content.slice(last, m.index));
+        const pctRaw = m[1], name = m[2];
+        const res = rmResolve(name);
+        if (!res) { out += esc(pctRaw) + '%'; last = RM_MARK_RE.lastIndex; continue; }
+        const st = athleteRm[res.baseId];
+        const target = (st && !st.declined) ? rmTargetFor(st, res.baseRow, pctRaw) : null;
+        if (target != null) {
+          out += `${esc(pctRaw)}% → <b class="pb-rm-kg">${esc(target)}</b>`;
+        } else {
+          out += esc(pctRaw) + '%'; // no resuelto / declinado / marca incompleta → % a secas
         }
-        return `<div class="pb-rm-line">${base}${intens}</div>`;
-      }).join('');
-      // Solo se pide RM si hay al menos una línea con % cargado (las solo-RPE nunca lo piden)
-      const needsRm = !hasRm && (r.lines || []).some(ln => ln.percent != null && ln.percent !== '');
-      let register = '';
-      if (needsRm && !shownReg.has(String(r.baseId))) {
-        shownReg.add(String(r.baseId));
-        register = `<div class="pb-rm-register" data-base="${esc(r.baseId)}">
-          <span class="pb-rm-reg-lbl">Registrá tu RM de <b>${esc(r.baseName)}</b> (kg):</span>
+        last = RM_MARK_RE.lastIndex;
+      }
+      out += esc(content.slice(last));
+      return out;
+    }
+    // Bases no resueltas mencionadas en el content de un bloque (para los carteles)
+    function rmBasesInContent(content) {
+      const bases = [], seen = new Set(); let m;
+      RM_MARK_RE.lastIndex = 0;
+      while ((m = RM_MARK_RE.exec(content)) !== null) {
+        const res = rmResolve(m[2]);
+        if (!res || seen.has(res.baseId)) continue;
+        seen.add(res.baseId);
+        bases.push(res.baseRow);
+      }
+      return bases;
+    }
+    // Etiqueta corta del tipo de máximo (para labels)
+    function rmTypeHint(baseRow) {
+      const t = baseRow.max_type || 'weight';
+      if (t === 'time') return 'una marca: distancia + tiempo' + (baseRow.rm_unit_label ? ' · ritmo ' + baseRow.rm_unit_label : '');
+      if (t === 'reps') return 'máximo de reps';
+      return 'kg';
+    }
+    // Inputs de carga adaptados al tipo (time = distancia + tiempo; resto = un número). `cur` prellena.
+    function rmInputsHtml(baseRow, cur) {
+      const t = baseRow.max_type || 'weight';
+      if (t === 'time') {
+        const d = cur && cur.distanceM != null ? esc(cur.distanceM) : '';
+        const tm = cur && cur.value != null ? esc(fmtSeconds(cur.value)) : '';
+        return `<input type="number" class="rm-in-dist" placeholder="distancia (m)" min="0" step="any" inputmode="decimal" value="${d}">
+          <span class="rm-in-sep">en</span>
+          <input type="text" class="rm-in-time" placeholder="mm:ss" value="${tm}">`;
+      }
+      const ph = t === 'reps' ? 'reps' : 'kg';
+      const v = cur && cur.value != null ? esc(Number(cur.value)) : '';
+      return `<input type="number" class="rm-in-val" placeholder="${ph}" min="0" step="any" inputmode="decimal" value="${v}"><span class="rm-in-unit">${ph}</span>`;
+    }
+    // Lee los inputs de un contenedor → { value, distanceM } o null si inválido
+    function readRmInputs(container, type) {
+      if (type === 'time') {
+        const dist = parseFloat(String(container.querySelector('.rm-in-dist').value).replace(',', '.'));
+        const secs = parseTimeToSeconds(container.querySelector('.rm-in-time').value);
+        if (!dist || dist <= 0 || secs == null || secs <= 0) return null;
+        return { value: secs, distanceM: dist };
+      }
+      const n = parseFloat(String(container.querySelector('.rm-in-val').value).trim().replace(',', '.'));
+      if (isNaN(n) || n <= 0) return null;
+      return { value: n, distanceM: null };
+    }
+    // Carteles de "cargá tu RM" del bloque (dedupe a nivel día vía cartelState.shown)
+    function blockCartelesHtml(b, cartelState) {
+      if (!b.content) return '';
+      let html = '';
+      rmBasesInContent(b.content).forEach(baseRow => {
+        const st = athleteRm[baseRow.id];
+        const needs = !st || (st.value == null && !st.declined); // ni cargado ni declinado
+        if (!needs || cartelState.shown.has(baseRow.id)) return;
+        cartelState.shown.add(baseRow.id);
+        const t = baseRow.max_type || 'weight';
+        html += `<div class="pb-rm-register" data-base="${esc(baseRow.id)}" data-type="${esc(t)}">
+          <span class="pb-rm-reg-lbl">Cargá tu RM de <b>${esc(baseRow.name)}</b> (${esc(rmTypeHint(baseRow))}):</span>
           <span class="pb-rm-reg-row">
-            <input type="number" class="rm-reg-input" step="any" min="0" placeholder="kg" inputmode="decimal">
+            ${rmInputsHtml(baseRow, null)}
             <button type="button" class="rm-reg-save">Guardar</button>
+            <button type="button" class="rm-reg-decline">No tengo RM</button>
           </span>
         </div>`;
-      }
-      return `<div class="pb-rm-ex">
-        <div class="pb-rm-name">${esc(r.exName)}</div>
-        ${linesHtml}
-        ${register}
-      </div>`;
+      });
+      return html ? `<div class="pb-rm">${html}</div>` : '';
     }
 
     // Galería de imágenes ya subidas del bloque (miniaturas clickeables + × para borrar)
@@ -1696,8 +1784,9 @@
       if (!b) return;
       const chip = e.target.closest('.pb-chip');
       if (chip) { const ex = (b.exercises || []).find(x => String(x.id) === chip.dataset.ex); openVideo(ex); return; }
-      // Registrar RM (primera vez) desde un bloque con %RM
+      // Cartel de RM en el bloque: guardar o declinar
       if (e.target.closest('.rm-reg-save')) { registerRm(e.target.closest('.pb-rm-register')); return; }
+      if (e.target.closest('.rm-reg-decline')) { declineRm(e.target.closest('.pb-rm-register')); return; }
       // Imágenes ya subidas: × elimina (antes que abrir), thumbnail abre el modal
       const imgX = e.target.closest('.pb-img-x');
       if (imgX) { e.stopPropagation(); deleteBlockImage(b, card, imgX.dataset.id, imgX.dataset.path); return; }
@@ -1712,22 +1801,31 @@
       if (e.target.closest('.cmt-btn')) { openCommentEditor(card, b); return; }
     });
 
-    // Registra/actualiza el RM del atleta (upsert por athlete+ejercicio-base) y recalcula el día
+    // Registra el RM del atleta desde el cartel de un bloque (upsert por athlete+ejercicio-base)
     async function registerRm(reg) {
       if (!reg) return;
-      const base = reg.dataset.base;
-      const input = reg.querySelector('.rm-reg-input');
-      const kg = Number(input.value);
-      if (!kg || kg <= 0) { flash('Poné un RM válido (kg).'); return; }
-      const btn = reg.querySelector('.rm-reg-save');
-      btn.disabled = true;
+      const base = reg.dataset.base, type = reg.dataset.type;
+      const parsed = readRmInputs(reg, type);
+      if (!parsed) { flash(type === 'time' ? 'Cargá distancia (m) y tiempo (mm:ss).' : 'Poné un valor válido.'); return; }
+      const btn = reg.querySelector('.rm-reg-save'); btn.disabled = true;
       const { error } = await sb.from('athlete_rm')
-        .upsert({ athlete_id: ATHLETE.id, exercise_id: base, rm_kg: kg }, { onConflict: 'athlete_id,exercise_id' });
+        .upsert({ athlete_id: ATHLETE.id, exercise_id: base, value: parsed.value, value_distance_m: parsed.distanceM, declined: false }, { onConflict: 'athlete_id,exercise_id' });
       btn.disabled = false;
       if (error) { flash('No se pudo guardar el RM: ' + error.message); return; }
-      athleteRm[base] = kg;
-      renderBlocks(); // recalcula los kilajes en todos los bloques del día
+      athleteRm[base] = { value: parsed.value, distanceM: parsed.distanceM, declined: false };
+      renderBlocks(); // recalcula todos los objetivos del día
       flash('✓ RM guardado.');
+    }
+    // "No tengo RM": marca declined → no se vuelve a pedir para ese ejercicio
+    async function declineRm(reg) {
+      if (!reg) return;
+      const base = reg.dataset.base;
+      const { error } = await sb.from('athlete_rm')
+        .upsert({ athlete_id: ATHLETE.id, exercise_id: base, value: null, value_distance_m: null, declined: true }, { onConflict: 'athlete_id,exercise_id' });
+      if (error) { flash('No se pudo guardar: ' + error.message); return; }
+      athleteRm[base] = { value: null, distanceM: null, declined: true };
+      renderBlocks();
+      flash('Ok. Podés cargar tu RM en Estadísticas → Mis RM.');
     }
 
     async function toggleBlock(b, checked, card) {
@@ -2084,47 +2182,58 @@
       loadMisRm();
     }
 
-    // -------- Mis RM (lista editable de los RM del atleta) --------
+    // -------- Mis RM (lista TODOS los ejercicios trackeados; cargar/editar en cualquier momento) --------
     async function loadMisRm() {
       const box = document.getElementById('misRmList');
       box.innerHTML = '<div class="muted">Cargando…</div>';
-      const { data, error } = await sb.from('athlete_rm')
-        .select('exercise_id, rm_kg').eq('athlete_id', ATHLETE.id);
-      if (error) { box.innerHTML = '<div class="muted">No se pudieron cargar tus RM.</div>'; return; }
-      const rows = data || [];
+      const { data: libs, error } = await sb.from('exercise_library')
+        .select('id, name, max_type').eq('rm_tracked', true).order('name', { ascending: true });
+      if (error) { box.innerHTML = '<div class="muted">No se pudieron cargar los ejercicios.</div>'; return; }
+      const rows = libs || [];
       if (!rows.length) {
-        box.innerHTML = '<div class="muted">Todavía no cargaste ningún RM. Aparecen acá cuando registrás uno desde un bloque con %RM.</div>';
+        box.innerHTML = '<div class="muted">Todavía no hay ejercicios con RM en el sistema.</div>';
         return;
       }
-      const exIds = [...new Set(rows.map(r => r.exercise_id))];
-      const nameById = {};
-      const { data: libs } = await sb.from('exercise_library').select('id, name').in('id', exIds);
-      (libs || []).forEach(l => { nameById[l.id] = l.name; });
-      rows.sort((a, b) => String(nameById[a.exercise_id] || '').localeCompare(String(nameById[b.exercise_id] || '')));
-      box.innerHTML = rows.map(r => `
-        <div class="rmm-row" data-base="${esc(r.exercise_id)}">
-          <span class="rmm-name">${esc(nameById[r.exercise_id] || '(ejercicio)')}</span>
+      const { data: mine } = await sb.from('athlete_rm').select('exercise_id, value, declined, value_distance_m').eq('athlete_id', ATHLETE.id);
+      const byId = {}; (mine || []).forEach(r => { byId[r.exercise_id] = r; });
+      box.innerHTML = rows.map(ex => {
+        const r = byId[ex.id];
+        const st = r ? { value: r.value == null ? null : Number(r.value), distanceM: r.value_distance_m == null ? null : Number(r.value_distance_m) } : null;
+        const t = ex.max_type || 'weight';
+        // Texto del valor actual
+        let current = 'No cargado';
+        if (st && st.value != null) {
+          if (t === 'time') {
+            const pace = rmPaceSeconds(st, ex);
+            current = `${st.distanceM} m en ${fmtSeconds(st.value)}` + (pace != null ? ` → ${fmtSeconds(pace)}${ex.rm_unit_label ? ' ' + ex.rm_unit_label : ''}` : '');
+          } else {
+            current = String(st.value) + (t === 'reps' ? ' reps' : ' kg');
+          }
+        }
+        return `<div class="rmm-row" data-base="${esc(ex.id)}" data-type="${esc(t)}">
+          <span class="rmm-name">${esc(ex.name)} <span class="rmm-cur">${esc(current)}</span></span>
           <span class="rmm-edit">
-            <input type="number" class="rmm-input" step="any" min="0" value="${esc(r.rm_kg)}" inputmode="decimal">
-            <span class="rmm-unit">kg</span>
+            ${rmInputsHtml(ex, st)}
             <button type="button" class="rmm-save">Guardar</button>
           </span>
-        </div>`).join('');
+        </div>`;
+      }).join('');
     }
     document.getElementById('misRmList').addEventListener('click', async (e) => {
       const btn = e.target.closest('.rmm-save');
       if (!btn) return;
       const row = btn.closest('.rmm-row');
-      const base = row.dataset.base;
-      const kg = Number(row.querySelector('.rmm-input').value);
-      if (!kg || kg <= 0) { flash('Poné un RM válido (kg).'); return; }
+      const base = row.dataset.base, type = row.dataset.type;
+      const parsed = readRmInputs(row, type);
+      if (!parsed) { flash(type === 'time' ? 'Cargá distancia (m) y tiempo (mm:ss).' : 'Poné un valor válido.'); return; }
       btn.disabled = true;
       const { error } = await sb.from('athlete_rm')
-        .upsert({ athlete_id: ATHLETE.id, exercise_id: base, rm_kg: kg }, { onConflict: 'athlete_id,exercise_id' });
+        .upsert({ athlete_id: ATHLETE.id, exercise_id: base, value: parsed.value, value_distance_m: parsed.distanceM, declined: false }, { onConflict: 'athlete_id,exercise_id' });
       btn.disabled = false;
       if (error) { flash('No se pudo guardar: ' + error.message); return; }
-      athleteRm[base] = kg; // mantener sincronizado el cálculo de kilajes del día
+      athleteRm[base] = { value: parsed.value, distanceM: parsed.distanceM, declined: false }; // sync con el día
       flash('✓ RM actualizado.');
+      loadMisRm();
     });
 
     async function loadStatsData() {

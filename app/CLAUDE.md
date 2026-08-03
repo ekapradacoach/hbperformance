@@ -292,26 +292,28 @@ video_url text
 created_at timestamptz (default now())
 created_by uuid (FK profiles.id, on delete set null)   — admin que lo cargó
 last_used_at timestamptz (nullable)   ← ⚠️ AGREGAR (2026-07-28 (f)). Se actualiza al elegir el ejercicio de la biblioteca (autocompletar). Se usa para el top-3 "Usados recientemente" con el buscador vacío.
-rm_source_id uuid (FK exercise_library.id, nullable, on delete set null)   ← ⚠️ AGREGAR (2026-07-28 (g)). Herencia de RM: si está seteado, esta variante usa el RM del ejercicio referenciado (base = rm_source_id ?? id). Un nivel.
-⚠️ RLS 2026-07-28 (g): además de admin FOR ALL, el **atleta ahora tiene SELECT** (para mostrar nombres de ejercicios con RM y resolver herencia) + gate restrictive is_active_athlete().
+rm_source_id uuid (FK exercise_library.id, nullable, on delete set null)   — Herencia de RM: si está seteado, esta variante usa el RM del base (base = rm_source_id ?? id). Un nivel.
+max_type text (not null default 'weight', check in ('weight','reps','time'))   ← ⚠️ AGREGAR (2026-07-28 (i)). Tipo de máximo. Assault/Echo bike = 'reps' (calorías).
+rm_tracked boolean (not null default false)   ← ⚠️ AGREGAR (2026-07-28 (i)). Se activa al usar "+ Vincular RM" sobre la base; "Mis RM" lista los que lo tienen true.
+rm_unit_meters numeric (nullable)   ← ⚠️ AGREGAR (2026-07-28 (i)). Solo time: cada cuántos metros se mide el ritmo (1000, 500).
+rm_unit_label text (nullable)   ← ⚠️ AGREGAR (2026-07-28 (i)). Solo time: etiqueta del ritmo ('/km', '/500m', '/1000m').
+⚠️ RLS: admin FOR ALL + atleta SELECT (lee nombres/max_type/unidad para resolver las marcas) + gate restrictive is_active_athlete().
 
-### block_rm_exercises   ← ✅ (2026-07-28 (g)) ejercicios con RM por bloque (líneas estructuradas en JSONB)
-id uuid (default gen_random_uuid())
-block_id uuid (FK planning_blocks.id, on delete cascade)
-exercise_id uuid (FK exercise_library.id, on delete cascade)   — qué ejercicio (de la biblioteca)
-lines jsonb (default '[]')   — [{series:int, reps:int, percent:number|null, rpe:number|null}] (al menos uno de percent/rpe; shape actualizado 2026-07-28 (h), antes era type/value)
-position int (default 0)
-created_at timestamptz
-RLS: admin FOR ALL; atleta SELECT si el bloque es de su programa (calcado de exercise_links) + gate restrictive is_active_athlete(). ⚠️ Crear en Supabase.
+### (ELIMINADA) block_rm_exercises   ← ❌ dropeada 2026-07-28 (i). El sistema estructurado (Series/Reps/%/RPE) se reemplazó
+por **marcas `<n>% [[rm:Nombre]]` dentro de `planning_blocks.content`** (texto libre). No hay tabla; la marca se parsea
+en el dashboard y se calcula contra `athlete_rm`.
 
-### athlete_rm   ← ✅ (2026-07-28 (g)) RM del atleta (uno por atleta por ejercicio BASE)
+### athlete_rm   ← ✅ RM del atleta (uno por atleta por ejercicio BASE). 3 estados: sin fila / con value / declined.
 id uuid (default gen_random_uuid())
 athlete_id uuid (FK profiles.id, on delete cascade)
 exercise_id uuid (FK exercise_library.id, on delete cascade)   — ejercicio BASE (rm_source_id resuelto)
-rm_kg numeric (not null)
+value numeric (nullable)   ← ⚠️ (2026-07-28 (i)) era rm_kg not null → renombrado a `value` y nullable. Significa kg / reps / (time: segundos de la marca).
+value_distance_m numeric (nullable)   ← ⚠️ AGREGAR (2026-07-28 (i)). Solo time: distancia de la marca (ej. 10000). ritmo = value × (rm_unit_meters / value_distance_m).
+declined boolean (not null default false)   ← ⚠️ AGREGAR (2026-07-28 (i)). true = "no tengo RM" → no se vuelve a pedir; % se muestra sin cálculo.
 created_at timestamptz
-unique(athlete_id, exercise_id)   — guardar = upsert (carga inicial desde un bloque %RM y edición desde "Mis RM")
-RLS: atleta FOR ALL de lo suyo (athlete_id = auth.uid()); admin SELECT. Kilaje = rm_kg × %/100 (tope 2 decimales). ⚠️ Crear en Supabase.
+unique(athlete_id, exercise_id)   — guardar = upsert (cartel del bloque o "Mis RM")
+RLS: atleta FOR ALL de lo suyo (athlete_id = auth.uid()); admin SELECT.
+Cálculo: weight = value×%/100 (tope 2 dec); reps = round especial (.6 arriba / .5 abajo); time = ritmo objetivo = ritmo×100/% (proporcional).
 RLS: **solo admin** FOR ALL (get_my_role()='admin'); el atleta NO la usa. Capa opcional sobre exercise_links:
 se llena solo cuando el coach toca "+ Añadir a biblioteca" en el panel de ejercicios; buscar+click autocompleta
 nombre/URL y sigue guardándose en `exercise_links`. ⚠️ Crear en Supabase (SQL en CONTEXTO.md 2026-07-28 (e)).

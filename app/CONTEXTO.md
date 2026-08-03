@@ -1785,3 +1785,54 @@ Confirmado: la fila existe, RLS on, las 3 policies de block_rm_exercises present
 saber por qué la rama `pd.athlete_id = auth.uid()` / `pd.program_slug = p.program` no matchea (o si el
 atleta carga un día distinto al que tiene el RM → el filtro `.in('block_id', ids)` del dashboard no lo
 incluye). SELECT de diagnóstico pedido en el chat; sin fix aplicado todavía.
+
+## 2026-07-28 (i) — RM v2: marcas en el texto libre (REEMPLAZA el sistema estructurado)
+Reemplaza `block_rm_exercises` (Series/Reps/%/RPE) por **marcas dentro del texto libre del bloque**. El coach
+escribe normal y, seleccionando un `%`, lo vincula a un ejercicio → se inserta la marca `<n>% [[rm:Nombre]]`
+en `planning_blocks.content`. Solo el `%` vinculado se calcula; RPE/tiempos/series siguen siendo texto plano.
+
+### 🗄️ DDL FINAL CONSOLIDADO (correr a mano, una sola vez)
+```sql
+-- exercise_library: tipo de máximo + flag trackeado + unidad de referencia (solo time)
+alter table public.exercise_library
+  add column if not exists max_type text not null default 'weight' check (max_type in ('weight','reps','time'));
+alter table public.exercise_library add column if not exists rm_tracked boolean not null default false;
+alter table public.exercise_library add column if not exists rm_unit_meters numeric;   -- 1000, 500…
+alter table public.exercise_library add column if not exists rm_unit_label  text;       -- '/km', '/500m'…
+
+-- athlete_rm: value genérico nullable + declined + distancia de la marca (solo time)
+alter table public.athlete_rm rename column rm_kg to value;      -- ⚠️ una sola vez (si ya existe 'value', saltear esta línea)
+alter table public.athlete_rm alter column value drop not null;
+alter table public.athlete_rm add column if not exists declined boolean not null default false;
+alter table public.athlete_rm add column if not exists value_distance_m numeric;
+
+-- sistema estructurado viejo (solo datos de prueba) — se elimina (dropea también sus policies)
+drop table if exists public.block_rm_exercises;
+```
+**No requiere policies nuevas**: usa las de `athlete_rm` (atleta FOR ALL propio) y `exercise_library`
+(atleta SELECT + admin FOR ALL) ya creadas en la tarea RM anterior. `rm_source_id` ya existía.
+
+### Comportamiento
+- **max_type** ∈ weight/reps/time. weight = value×%/100 (2 dec). reps = value×%/100 con round especial
+  (.6 arriba, .5 abajo). Assault/Echo bike → usar **reps** (calorías). time = ritmo.
+- **time**: la base tiene una **unidad de referencia** (`rm_unit_meters` + `rm_unit_label`; presets 1km `/km`,
+  500m `/500m`, 1000m `/1000m`, + "Otra…"). El atleta carga una **marca cruda** (distancia + tiempo →
+  `value`=segundos, `value_distance_m`=metros). ritmo = value×(unit/dist); objetivo = ritmo×100/% (mm:ss + label).
+- **3 estados** (`athlete_rm`): sin fila → cartel; con `value` → calcula; `declined=true` → % sin cálculo, sin cartel.
+- **Cartel** dedupe a nivel día (1 por ejercicio-base no resuelto, en el primer bloque). Input adaptado
+  (kg / reps / distancia+tiempo) + "No tengo RM" (declined) → avisa "podés cargarlo en Mis RM".
+- **Mis RM** (Estadísticas): lista TODOS los ejercicios con `rm_tracked=true` (max_type + valor/"No cargado"),
+  cargar/editar en cualquier momento (upsert, pisa un declined).
+
+### Editor (admin/index.html)
+- Se quitó el panel "Ejercicios con RM" (attachRmExercises/wireRm/saveRmExercise/etc. eliminados). Botón
+  **"+ Vincular RM"** por bloque: seleccionar el % → modal `#modalVincularRm` (buscar ejercicio en la
+  biblioteca + max_type + unidad si time) → setea max_type/rm_tracked (+unidad) en la BASE e inserta la marca.
+- El **🔗** de la biblioteca (modal `#modalRmLink`) ahora también **edita el max_type (+unidad)** del ejercicio,
+  además de la herencia rm_source_id (por si el coach se equivocó al elegir el tipo).
+
+### Verificación
+- Syntax-check admin + dashboard OK. Unit-tests: weight/reps (12.6→13, 12.5→12), time (10000m@40:00 → 4:00/km;
+  @90% → 4:27/km; remo 2000m@8:00 → 2:00/500m), parseo mm:ss, render de marcas (resuelto/no/declined/colgada +
+  escaping). Flujo vivo auth-gated.
+- ⚠️ **Pendiente de deploy:** correr el DDL de arriba. (Superseded: entradas (g)/(h) del sistema estructurado.)

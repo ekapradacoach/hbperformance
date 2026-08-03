@@ -858,7 +858,9 @@
   .ex-lib-link { flex-shrink: 0; background: none; border: none; cursor: pointer; opacity: 0.55; font-size: 0.85rem; padding: 0 8px; align-self: stretch; }
   .ex-lib-link:hover { opacity: 1; }
 
-  /* ---- Ejercicios con RM (editor) ---- */
+  /* ---- Vincular RM (editor) ---- */
+  .rm-linkbar { margin: 6px 0 2px; }
+  /* ---- (legacy) Ejercicios con RM ---- */
   .rm-section { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 12px; }
   .rm-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
   .rm-item { background: var(--bg-input); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
@@ -2066,6 +2068,48 @@
     </div>
   </div>
 
+  <!-- =============== Modal: Vincular RM (marca en el texto) =============== -->
+  <div class="modal-backdrop" id="modalVincularRm">
+    <div class="modal">
+      <div class="modal-head">
+        <h3>Vincular <span id="vrmPercent">%</span> a un ejercicio</h3>
+        <button class="modal-close" data-close="modalVincularRm">✕</button>
+      </div>
+      <input type="hidden" id="vrmExId">
+      <div class="field">
+        <label>Ejercicio</label>
+        <div class="rm-pick-name" id="vrmPickName">— elegí un ejercicio —</div>
+        <input type="text" id="vrmSearch" class="al-search" placeholder="🔎 Buscar en la biblioteca…" autocomplete="off" style="width:100%;margin-top:6px;">
+        <div id="vrmList" class="ex-lib-list" style="max-height:220px;"></div>
+      </div>
+      <div class="field" id="vrmMaxTypeWrap" style="display:none;">
+        <label for="vrmMaxType">Tipo de máximo</label>
+        <select id="vrmMaxType">
+          <option value="weight">Peso (kg)</option>
+          <option value="reps">Repeticiones (o calorías: Assault/Echo bike)</option>
+          <option value="time">Tiempo / ritmo</option>
+        </select>
+      </div>
+      <div class="field" id="vrmUnitWrap" style="display:none;">
+        <label for="vrmUnitPreset">Unidad de referencia (ritmo)</label>
+        <select id="vrmUnitPreset">
+          <option value="1000|/km">Ritmo cada 1 km (running)</option>
+          <option value="500|/500m">Ritmo cada 500 m (remo / ski erg)</option>
+          <option value="1000|/1000m">Ritmo cada 1000 m (bike erg)</option>
+          <option value="custom">Otra…</option>
+        </select>
+        <div id="vrmUnitCustom" style="display:none; gap:8px; margin-top:6px;">
+          <input type="number" id="vrmUnitMeters" placeholder="metros" min="1" step="any" style="width:120px;">
+          <input type="text" id="vrmUnitLabel" placeholder="etiqueta (ej. /2k)" style="flex:1;">
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn-ghost" data-close="modalVincularRm">Cancelar</button>
+        <button class="btn-primary" id="vrmConfirm">Vincular</button>
+      </div>
+    </div>
+  </div>
+
   <!-- =============== Modal: Vincular RM entre variantes =============== -->
   <div class="modal-backdrop" id="modalRmLink">
     <div class="modal">
@@ -2073,9 +2117,33 @@
         <h3 id="rmLinkTitle">Vincular RM</h3>
         <button class="modal-close" data-close="modalRmLink">✕</button>
       </div>
+      <div class="field">
+        <label for="rmlMaxType">Tipo de máximo</label>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+          <select id="rmlMaxType">
+            <option value="weight">Peso (kg)</option>
+            <option value="reps">Repeticiones (o calorías: Assault/Echo bike)</option>
+            <option value="time">Tiempo / ritmo</option>
+          </select>
+          <button class="btn-sm" id="rmlSaveType">Guardar tipo</button>
+        </div>
+        <div id="rmlUnitWrap" style="display:none;margin-top:6px;">
+          <select id="rmlUnitPreset">
+            <option value="1000|/km">Ritmo cada 1 km (running)</option>
+            <option value="500|/500m">Ritmo cada 500 m (remo / ski erg)</option>
+            <option value="1000|/1000m">Ritmo cada 1000 m (bike erg)</option>
+            <option value="custom">Otra…</option>
+          </select>
+          <div id="rmlUnitCustom" style="display:none;gap:8px;margin-top:6px;">
+            <input type="number" id="rmlUnitMeters" placeholder="metros" min="1" step="any" style="width:120px;">
+            <input type="text" id="rmlUnitLabel" placeholder="etiqueta (ej. /2k)" style="flex:1;">
+          </div>
+        </div>
+      </div>
+      <hr style="border:none;border-top:1px solid var(--border);margin:12px 0;">
       <p style="color:#AAA;margin:0 0 10px;font-size:.9rem;">Elegí de qué ejercicio hereda el RM (o “Ninguno” para que use el suyo propio).</p>
       <input type="text" id="rmLinkSearch" class="al-search" placeholder="🔎 Buscar…" autocomplete="off" style="width:100%;margin:0 0 8px;">
-      <div id="rmLinkList" class="ex-lib-list" style="max-height:260px;"></div>
+      <div id="rmLinkList" class="ex-lib-list" style="max-height:220px;"></div>
     </div>
   </div>
 
@@ -2700,7 +2768,6 @@
       }
       blocks = data || [];
       await attachExercises(blocks);
-      await attachRmExercises(blocks);
       await attachAthleteComments(blocks);
       renderBlocks();
     }
@@ -2764,54 +2831,6 @@
       blockList.forEach(b => { b.exercises = byBlock[b.id] || []; });
     }
 
-    // Carga los ejercicios con RM (block_rm_exercises) y los adjunta como b.rmExercises.
-    // El nombre del ejercicio se resuelve contra la cache de la biblioteca. Degrada si no existe la tabla.
-    async function attachRmExercises(blockList) {
-      blockList.forEach(b => { b.rmExercises = []; });
-      const ids = blockList.map(b => b.id);
-      if (!ids.length) return;
-      const { data, error } = await sb.from('block_rm_exercises')
-        .select('id, block_id, exercise_id, lines, position').in('block_id', ids)
-        .order('position', { ascending: true });
-      if (error) { console.warn('block_rm_exercises no disponible:', error.message); return; }
-      await loadExerciseLibrary();
-      const nameById = {};
-      (exerciseLibrary || []).forEach(e => { nameById[e.id] = e.name; });
-      const byBlock = {};
-      (data || []).forEach(r => {
-        r.exName = nameById[r.exercise_id] || '(ejercicio)';
-        r.lines = Array.isArray(r.lines) ? r.lines : [];
-        (byBlock[r.block_id] = byBlock[r.block_id] || []).push(r);
-      });
-      blockList.forEach(b => { b.rmExercises = byBlock[b.id] || []; });
-    }
-
-    // Resumen legible de una línea de RM (para la lista del editor).
-    // Nuevo shape: { series, reps, percent, rpe } — percent y/o rpe (al menos uno).
-    function rmLineText(ln) {
-      const s = ln.series != null ? ln.series : '?';
-      const r = ln.reps != null ? ln.reps : '?';
-      const hasP = ln.percent != null && ln.percent !== '';
-      const hasR = ln.rpe != null && ln.rpe !== '';
-      let intens = '—';
-      if (hasP && hasR) intens = `${ln.percent}% (RPE ${ln.rpe})`;
-      else if (hasP) intens = `${ln.percent}%`;
-      else if (hasR) intens = `RPE ${ln.rpe}`;
-      return `${s}×${r} @${intens}`;
-    }
-    function rmListHtml(b) {
-      const list = b.rmExercises || [];
-      if (!list.length) return '<span class="ex-empty">Sin ejercicios con RM.</span>';
-      return list.map(r => `
-        <div class="rm-item" data-rm="${esc(r.id)}">
-          <div class="rm-item-main">
-            <div class="rm-item-name">${esc(r.exName)}</div>
-            <div class="rm-item-lines">${(r.lines || []).map(rmLineText).map(esc).join(' · ') || '—'}</div>
-          </div>
-          <button class="rm-item-x" title="Quitar">×</button>
-        </div>`).join('');
-    }
-
     async function addBlock() {
       const day = await ensureDay();
       if (!day) return;
@@ -2858,6 +2877,9 @@
         </div>
         <div class="block-body">
           <textarea class="block-content" placeholder="Escribí el contenido del bloque…">${esc(b.content)}</textarea>
+          <div class="rm-linkbar">
+            <button class="btn-sm rm-link-btn" title="Seleccioná un % en el texto y vinculalo a un ejercicio">+ Vincular RM</button>
+          </div>
           <div class="exercises">
             <div class="ex-label">Ejercicios</div>
             <div class="ex-chips">${exerciseChipsHtml(b)}</div>
@@ -2885,24 +2907,6 @@
               </div>
             </div>
             <button class="btn-add-ex ex-add-btn">+ Agregar ejercicio</button>
-          </div>
-          <div class="rm-section">
-            <div class="ex-label">🏋️ Ejercicios con RM</div>
-            <div class="rm-list">${rmListHtml(b)}</div>
-            <div class="rm-panel" style="display:none;">
-              <div class="rm-pick">
-                <div>Ejercicio: <span class="rm-pick-name">— elegí de la biblioteca —</span></div>
-                <input class="ex-lib-search rm-lib-search" placeholder="🔎 Buscar ejercicio en la biblioteca…" autocomplete="off" style="margin-top:6px;">
-                <div class="rm-lib-list"></div>
-              </div>
-              <div class="rm-lines"></div>
-              <button class="btn-sm rm-add-line">+ Agregar línea</button>
-              <div class="rm-panel-actions">
-                <button class="btn-primary rm-save-btn">Guardar ejercicio con RM</button>
-                <button class="ex-cancel-link rm-cancel-btn">Cancelar</button>
-              </div>
-            </div>
-            <button class="btn-add-ex rm-add-btn">+ Agregar ejercicio con RM</button>
           </div>
           ${athleteCommentHtml(b)}
         </div>
@@ -2963,8 +2967,8 @@
       // Ejercicios linkeados
       wireExercises(b, card);
 
-      // Ejercicios con RM
-      wireRm(b, card);
+      // Vincular RM: seleccionar un % en el textarea y linkearlo a un ejercicio
+      card.querySelector('.rm-link-btn').addEventListener('click', () => openVincularRm(b, card));
 
       // Fotos del atleta (miniaturas → modal de imagen)
       card.querySelectorAll('.ac-img').forEach(el =>
@@ -3025,7 +3029,7 @@
       if (exerciseLibraryLoading) return exerciseLibraryLoading;
       exerciseLibraryLoading = (async () => {
         const { data, error } = await sb.from('exercise_library')
-          .select('id, name, video_url, last_used_at, rm_source_id').order('name', { ascending: true });
+          .select('id, name, video_url, last_used_at, rm_source_id, max_type, rm_tracked').order('name', { ascending: true });
         if (error) console.warn('exercise_library no disponible:', error.message);
         exerciseLibrary = error ? [] : (data || []);
         exerciseLibraryLoading = null;
@@ -3146,120 +3150,174 @@
       refreshLibAddBtn(card);
     }
 
-    // ---- Ejercicios con RM (editor) ----
-    function wireRm(b, card) {
-      const panel = card.querySelector('.rm-panel');
-      const pickName = card.querySelector('.rm-pick-name');
-      const libSearch = card.querySelector('.rm-lib-search');
-      const libList = card.querySelector('.rm-lib-list');
-      const linesBox = card.querySelector('.rm-lines');
-
-      function addLine() {
-        const div = document.createElement('div');
-        div.className = 'rm-line';
-        div.innerHTML =
-          '<input type="number" class="rm-series" placeholder="Series" min="1" step="1">' +
-          '<input type="number" class="rm-reps" placeholder="Reps" min="1" step="1">' +
-          '<input type="number" class="rm-percent" placeholder="% (opc.)" min="0" step="any">' +
-          '<input type="number" class="rm-rpe" placeholder="RPE (opc.)" min="0" max="10" step="0.5">' +
-          '<button class="rm-line-x" title="Quitar línea" type="button">×</button>';
-        div.querySelector('.rm-line-x').addEventListener('click', () => {
-          if (linesBox.querySelectorAll('.rm-line').length > 1) div.remove();
+    // ---- Vincular RM (marca en el texto libre del bloque) ----
+    let vincularCtx = null; // { b, ta, selStart, selEnd, percent }
+    function openVincularRm(b, card) {
+      const ta = card.querySelector('.block-content');
+      const selStart = ta.selectionStart, selEnd = ta.selectionEnd;
+      const sel = ta.value.slice(selStart, selEnd);
+      const numMatch = sel.match(/(\d+(?:[.,]\d+)?)/);
+      if (!numMatch) { flash('Seleccioná el porcentaje en el texto (ej. 60%) y tocá "+ Vincular RM".'); return; }
+      vincularCtx = { b, ta, selStart, selEnd, percent: numMatch[1].replace(',', '.') };
+      document.getElementById('vrmPercent').textContent = vincularCtx.percent + '%';
+      document.getElementById('vrmExId').value = '';
+      document.getElementById('vrmPickName').textContent = '— elegí un ejercicio —';
+      document.getElementById('vrmMaxTypeWrap').style.display = 'none';
+      document.getElementById('vrmUnitWrap').style.display = 'none';
+      document.getElementById('vrmSearch').value = '';
+      document.getElementById('vrmList').innerHTML = '';
+      openModal('modalVincularRm');
+      loadExerciseLibrary().then(() => renderVrmList(''));
+      setTimeout(() => document.getElementById('vrmSearch').focus(), 60);
+    }
+    function renderVrmList(query) {
+      const box = document.getElementById('vrmList');
+      const q = String(query || '').trim().toLowerCase();
+      const all = exerciseLibrary || [];
+      const items = (q ? all.filter(e => String(e.name || '').toLowerCase().includes(q)) : all).slice(0, 50);
+      if (!items.length) { box.innerHTML = q ? '<div class="ex-lib-empty">Sin resultados.</div>' : ''; return; }
+      box.innerHTML = items.map(e =>
+        `<button type="button" class="ex-lib-item" data-id="${esc(e.id)}"><span class="ex-lib-name">${esc(e.name)}</span></button>`).join('');
+      box.querySelectorAll('.ex-lib-item').forEach(it => {
+        it.addEventListener('click', () => {
+          const ex = (exerciseLibrary || []).find(x => String(x.id) === String(it.dataset.id));
+          if (!ex) return;
+          document.getElementById('vrmExId').value = ex.id;
+          document.getElementById('vrmPickName').textContent = ex.name;
+          box.innerHTML = ''; document.getElementById('vrmSearch').value = '';
+          // el max_type (y la unidad de ritmo) se definen sobre la BASE del RM
+          const baseId = ex.rm_source_id || ex.id;
+          const baseEx = (exerciseLibrary || []).find(x => String(x.id) === String(baseId)) || ex;
+          document.getElementById('vrmMaxType').value = baseEx.max_type || 'weight';
+          document.getElementById('vrmMaxTypeWrap').style.display = '';
+          vrmSyncUnitWrap();
+          vrmSetUnit(baseEx.rm_unit_meters, baseEx.rm_unit_label);
         });
-        linesBox.appendChild(div);
-      }
-      function resetPanel() {
-        panel.dataset.exId = '';
-        pickName.textContent = '— elegí de la biblioteca —';
-        libSearch.value = ''; libList.innerHTML = '';
-        linesBox.innerHTML = ''; addLine();
-      }
-      function renderRmLib() {
-        const q = libSearch.value.trim().toLowerCase();
-        const all = exerciseLibrary || [];
-        const items = (q ? all.filter(e => String(e.name || '').toLowerCase().includes(q)) : all).slice(0, 50);
-        if (!items.length) { libList.innerHTML = q ? '<div class="ex-lib-empty">Sin resultados.</div>' : ''; return; }
-        libList.innerHTML = items.map(e =>
-          `<button type="button" class="ex-lib-item" data-id="${esc(e.id)}"><span class="ex-lib-name">${esc(e.name)}</span></button>`).join('');
-        libList.querySelectorAll('.ex-lib-item').forEach(it => {
-          it.addEventListener('click', () => {
-            const ex = (exerciseLibrary || []).find(x => String(x.id) === String(it.dataset.id));
-            if (!ex) return;
-            panel.dataset.exId = ex.id;
-            pickName.textContent = ex.name;
-            libSearch.value = ''; libList.innerHTML = '';
-          });
-        });
-      }
-
-      card.querySelector('.rm-add-btn').addEventListener('click', async () => {
-        const open = panel.style.display !== 'none';
-        panel.style.display = open ? 'none' : 'block';
-        if (!open) { await loadExerciseLibrary(); resetPanel(); libSearch.focus(); }
-      });
-      card.querySelector('.rm-cancel-btn').addEventListener('click', () => { panel.style.display = 'none'; });
-      card.querySelector('.rm-add-line').addEventListener('click', () => addLine());
-      libSearch.addEventListener('focus', async () => { await loadExerciseLibrary(); renderRmLib(); });
-      libSearch.addEventListener('input', renderRmLib);
-      card.querySelector('.rm-save-btn').addEventListener('click', () => saveRmExercise(b, card));
-      // Eliminar un RM-ejercicio (delegación en el contenedor de la lista)
-      card.querySelector('.rm-list').addEventListener('click', (e) => {
-        const x = e.target.closest('.rm-item-x');
-        if (!x) return;
-        const item = x.closest('.rm-item');
-        const rm = (b.rmExercises || []).find(r => String(r.id) === String(item.dataset.rm));
-        if (rm) deleteRmExercise(b, rm, card);
       });
     }
-
-    async function saveRmExercise(b, card) {
-      const panel = card.querySelector('.rm-panel');
-      const exId = panel.dataset.exId;
+    // ---- Helpers de la unidad de referencia (ritmo), compartidos con el modal de 🔗 ----
+    function vrmSyncUnitWrap() {
+      document.getElementById('vrmUnitWrap').style.display =
+        document.getElementById('vrmMaxType').value === 'time' ? '' : 'none';
+    }
+    function vrmSetUnit(meters, label) {
+      const sel = document.getElementById('vrmUnitPreset');
+      const custom = document.getElementById('vrmUnitCustom');
+      const val = `${meters == null ? '' : meters}|${label || ''}`;
+      const opt = Array.from(sel.options).find(o => o.value === val);
+      if (opt) { sel.value = val; custom.style.display = 'none'; }
+      else if (meters) {
+        sel.value = 'custom';
+        document.getElementById('vrmUnitMeters').value = meters;
+        document.getElementById('vrmUnitLabel').value = label || '';
+        custom.style.display = 'flex';
+      } else { sel.value = '1000|/km'; custom.style.display = 'none'; }
+    }
+    function vrmReadUnit() {
+      const preset = document.getElementById('vrmUnitPreset').value;
+      if (preset === 'custom') {
+        const meters = parseFloat(document.getElementById('vrmUnitMeters').value);
+        const label = document.getElementById('vrmUnitLabel').value.trim();
+        if (!meters || meters <= 0) return null;
+        return { meters, label: label || null };
+      }
+      const parts = preset.split('|');
+      return { meters: Number(parts[0]), label: parts[1] || null };
+    }
+    document.getElementById('vrmMaxType').addEventListener('change', vrmSyncUnitWrap);
+    document.getElementById('vrmUnitPreset').addEventListener('change', () => {
+      document.getElementById('vrmUnitCustom').style.display =
+        document.getElementById('vrmUnitPreset').value === 'custom' ? 'flex' : 'none';
+    });
+    document.getElementById('vrmSearch').addEventListener('input', (e) => renderVrmList(e.target.value));
+    document.getElementById('vrmConfirm').addEventListener('click', confirmVincularRm);
+    async function confirmVincularRm() {
+      if (!vincularCtx) return;
+      const exId = document.getElementById('vrmExId').value;
       if (!exId) { flash('Elegí un ejercicio de la biblioteca.'); return; }
-      const lines = [];
-      let bad = false;
-      card.querySelectorAll('.rm-line').forEach(row => {
-        const series = parseInt(row.querySelector('.rm-series').value, 10);
-        const reps = parseInt(row.querySelector('.rm-reps').value, 10);
-        const pRaw = row.querySelector('.rm-percent').value.trim();
-        const rRaw = row.querySelector('.rm-rpe').value.trim();
-        const percent = pRaw === '' ? null : parseFloat(pRaw);
-        const rpe = rRaw === '' ? null : parseFloat(rRaw);
-        if (!series || !reps) { bad = true; return; }
-        if ((percent == null || isNaN(percent)) && (rpe == null || isNaN(rpe))) { bad = true; return; } // al menos uno
-        lines.push({ series, reps, percent: (percent != null && !isNaN(percent)) ? percent : null, rpe: (rpe != null && !isNaN(rpe)) ? rpe : null });
-      });
-      if (bad || !lines.length) { flash('Cada línea necesita series, reps y al menos % o RPE.'); return; }
-      const btn = card.querySelector('.rm-save-btn');
-      btn.disabled = true;
-      const nextPos = (b.rmExercises || []).length;
-      const { data, error } = await sb.from('block_rm_exercises')
-        .insert({ block_id: b.id, exercise_id: exId, lines, position: nextPos }).select().single();
-      btn.disabled = false;
-      if (error) { alert('No se pudo guardar: ' + error.message); return; }
+      const maxType = document.getElementById('vrmMaxType').value;
       const ex = (exerciseLibrary || []).find(x => String(x.id) === String(exId));
-      data.exName = ex ? ex.name : '(ejercicio)';
-      data.lines = Array.isArray(data.lines) ? data.lines : lines;
-      b.rmExercises = b.rmExercises || [];
-      b.rmExercises.push(data);
-      card.querySelector('.rm-list').innerHTML = rmListHtml(b);
-      panel.style.display = 'none';
-      flash('✓ Ejercicio con RM agregado.');
+      const baseId = (ex && ex.rm_source_id) || exId;
+      // max_type + rm_tracked (+ unidad si es time) se guardan en la BASE del RM
+      const patch = { max_type: maxType, rm_tracked: true };
+      if (maxType === 'time') {
+        const unit = vrmReadUnit();
+        if (!unit) { flash('Completá la unidad de referencia (metros).'); return; }
+        patch.rm_unit_meters = unit.meters; patch.rm_unit_label = unit.label;
+      }
+      const btn = document.getElementById('vrmConfirm'); btn.disabled = true;
+      const { error } = await sb.from('exercise_library').update(patch).eq('id', baseId);
+      btn.disabled = false;
+      if (error) { flash('No se pudo vincular: ' + error.message); return; }
+      const baseEx = (exerciseLibrary || []).find(x => String(x.id) === String(baseId));
+      if (baseEx) { Object.assign(baseEx, patch); }
+      // Insertar la marca en el textarea, reemplazando la selección
+      const { b, ta, selStart, selEnd, percent } = vincularCtx;
+      const mark = `${percent}% [[rm:${ex ? ex.name : 'ejercicio'}]]`;
+      ta.value = ta.value.slice(0, selStart) + mark + ta.value.slice(selEnd);
+      b.content = ta.value;
+      autoResize(ta);
+      scheduleSave(b);
+      closeModal('modalVincularRm');
+      flash('✓ RM vinculado. Se calcula en el portal del atleta.');
     }
 
-    async function deleteRmExercise(b, rm, card) {
-      if (!confirm(`¿Quitar el ejercicio con RM "${rm.exName}"?`)) return;
-      const { error } = await sb.from('block_rm_exercises').delete().eq('id', rm.id);
-      if (error) { alert('No se pudo quitar: ' + error.message); return; }
-      b.rmExercises = (b.rmExercises || []).filter(r => String(r.id) !== String(rm.id));
-      card.querySelector('.rm-list').innerHTML = rmListHtml(b);
-    }
-
-    // ---- Vincular RM entre variantes (setea exercise_library.rm_source_id) ----
+    // ---- Modal 🔗: editar tipo de máximo + herencia (rm_source_id) ----
     let rmLinkTargetId = null;
+    function rmlSyncUnitWrap() {
+      document.getElementById('rmlUnitWrap').style.display =
+        document.getElementById('rmlMaxType').value === 'time' ? '' : 'none';
+    }
+    function rmlSetUnit(meters, label) {
+      const sel = document.getElementById('rmlUnitPreset');
+      const custom = document.getElementById('rmlUnitCustom');
+      const val = `${meters == null ? '' : meters}|${label || ''}`;
+      const opt = Array.from(sel.options).find(o => o.value === val);
+      if (opt) { sel.value = val; custom.style.display = 'none'; }
+      else if (meters) {
+        sel.value = 'custom';
+        document.getElementById('rmlUnitMeters').value = meters;
+        document.getElementById('rmlUnitLabel').value = label || '';
+        custom.style.display = 'flex';
+      } else { sel.value = '1000|/km'; custom.style.display = 'none'; }
+    }
+    function rmlReadUnit() {
+      const preset = document.getElementById('rmlUnitPreset').value;
+      if (preset === 'custom') {
+        const meters = parseFloat(document.getElementById('rmlUnitMeters').value);
+        const label = document.getElementById('rmlUnitLabel').value.trim();
+        if (!meters || meters <= 0) return null;
+        return { meters, label: label || null };
+      }
+      const parts = preset.split('|');
+      return { meters: Number(parts[0]), label: parts[1] || null };
+    }
+    document.getElementById('rmlMaxType').addEventListener('change', rmlSyncUnitWrap);
+    document.getElementById('rmlUnitPreset').addEventListener('change', () => {
+      document.getElementById('rmlUnitCustom').style.display =
+        document.getElementById('rmlUnitPreset').value === 'custom' ? 'flex' : 'none';
+    });
+    // Guardar el tipo de máximo (+ unidad si es time) del ejercicio clickeado
+    document.getElementById('rmlSaveType').addEventListener('click', async () => {
+      const maxType = document.getElementById('rmlMaxType').value;
+      const patch = { max_type: maxType, rm_tracked: true };
+      if (maxType === 'time') {
+        const unit = rmlReadUnit();
+        if (!unit) { flash('Completá la unidad de referencia (metros).'); return; }
+        patch.rm_unit_meters = unit.meters; patch.rm_unit_label = unit.label;
+      }
+      const { error } = await sb.from('exercise_library').update(patch).eq('id', rmLinkTargetId);
+      if (error) { flash('No se pudo guardar: ' + error.message); return; }
+      const ex = (exerciseLibrary || []).find(e => String(e.id) === String(rmLinkTargetId));
+      if (ex) Object.assign(ex, patch);
+      flash('✓ Tipo de máximo guardado.');
+    });
     function openRmLinkModal(ex) {
       rmLinkTargetId = ex.id;
-      document.getElementById('rmLinkTitle').textContent = 'RM de “' + ex.name + '” hereda de…';
+      document.getElementById('rmLinkTitle').textContent = 'RM de “' + ex.name + '”';
+      document.getElementById('rmlMaxType').value = ex.max_type || 'weight';
+      rmlSyncUnitWrap();
+      rmlSetUnit(ex.rm_unit_meters, ex.rm_unit_label);
       document.getElementById('rmLinkSearch').value = '';
       renderRmLinkList('');
       openModal('modalRmLink');
