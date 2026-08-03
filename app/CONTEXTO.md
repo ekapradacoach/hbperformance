@@ -1896,3 +1896,9 @@ Dos mejoras de UX sobre "Mis RM" (no toca cálculo/histórico ni SQL).
 
 Verificación: syntax-check OK + unit-test de la geometría del chart (mayor/ más rápido = más arriba; X a lo
 ancho) y del PR. Flujo vivo auth-gated. **Sin SQL.**
+
+## 2026-08-03 — Historial de Estadísticas: colapsar a los últimos 5 + "Ver más"
+El "Historial" de Estadísticas mostraba hasta 14 días (`renderHistorial` `.slice(0,14)`), que igual llenaba
+la pantalla. Ahora muestra los **últimos 5** por default + botón **"Ver más (N)"** que expande al resto
+(mismo patrón de colapso que "Mis RM"). `histExpanded` se resetea a false al entrar a Estadísticas.
+Solo UX, sin SQL ni cambios de datos.

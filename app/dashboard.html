@@ -400,6 +400,8 @@
   .rmm-hist-empty { font-size: 0.86rem; color: var(--text-secondary); }
   .rmm-more { display: block; width: 100%; margin-top: 12px; background: transparent; border: 1px dashed #3a3a3a; color: var(--text-secondary); border-radius: 8px; padding: 9px; font-family: var(--font-body); font-weight: 600; font-size: 0.85rem; cursor: pointer; }
   .rmm-more:hover { border-color: var(--accent); color: var(--accent); }
+  .hist-more { display: block; width: 100%; margin-top: 12px; background: transparent; border: 1px dashed #3a3a3a; color: var(--text-secondary); border-radius: 8px; padding: 9px; font-family: var(--font-body); font-weight: 600; font-size: 0.85rem; cursor: pointer; }
+  .hist-more:hover { border-color: var(--accent); color: var(--accent); }
   /* Gráfico de evolución (SVG a mano) */
   .rmm-chart { margin: 6px 0 10px; }
   .rmc-svg { width: 100%; height: auto; display: block; overflow: visible; }
@@ -2209,6 +2211,7 @@
     const MONTHS_ABBR = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
     async function loadEstadisticas() {
+      histExpanded = false; // arranca colapsado a los últimos 5 en cada visita
       await loadStatsData();
       renderStatsCards();
       renderAdherence();
@@ -2500,11 +2503,14 @@
       const wd = WD_SHORT[dowOf(ds)];
       return `${wd.charAt(0).toUpperCase() + wd.slice(1)} ${d} ${MONTHS_ABBR[m - 1]}`;
     }
+    let histExpanded = false;         // "Ver más" del historial (arranca colapsado a los últimos 5)
+    const HIST_COLLAPSE = 5;
     function renderHistorial() {
-      const dates = Object.keys(statsPerDate).filter(d => d <= TODAY).sort().reverse().slice(0, 14);
+      const all = Object.keys(statsPerDate).filter(d => d <= TODAY).sort().reverse();
       const box = document.getElementById('histList');
-      if (!dates.length) { box.innerHTML = '<div class="muted">Todavía no hay sesiones planificadas.</div>'; return; }
-      box.innerHTML = '<div class="hist-list">' + dates.map(ds => {
+      if (!all.length) { box.innerHTML = '<div class="muted">Todavía no hay sesiones planificadas.</div>'; return; }
+      const dates = histExpanded ? all : all.slice(0, HIST_COLLAPSE);
+      let html = '<div class="hist-list">' + dates.map(ds => {
         const p = statsPerDate[ds];
         const pct = p.total > 0 ? Math.round(p.completed / p.total * 100) : 0;
         const icon = (p.total > 0 && p.completed >= p.total) ? '✅' : (p.completed > 0 ? '🟡' : '⭕');
@@ -2520,6 +2526,12 @@
           </div>
         </div>`;
       }).join('') + '</div>';
+      if (!histExpanded && all.length > HIST_COLLAPSE) {
+        html += `<button type="button" class="hist-more" id="histMore">Ver más (${all.length - HIST_COLLAPSE})</button>`;
+      }
+      box.innerHTML = html;
+      const more = document.getElementById('histMore');
+      if (more) more.addEventListener('click', () => { histExpanded = true; renderHistorial(); });
     }
 
     function renderLogros() {
