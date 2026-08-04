@@ -1905,8 +1905,8 @@ Solo UX, sin SQL ni cambios de datos.
 
 ## 2026-08-04 — Guía "Cómo leer el programa" (vista dedicada en el dashboard atleta)
 Botón **"📖 Cómo leer el programa"** al final de la vista **Inicio** (después de la card de Comunidad) →
-lleva a una **`<section id="view-misrm">`**... no: nueva **`<section id="view-guia">`** con el mismo patrón de
-vista dedicada que Comunidad/Mis RM (header "← Volver" → vuelve a Inicio; `showView('guia')` → `loadGuia()`).
+lleva a una nueva **`<section id="view-guia">`** con el mismo patrón de vista dedicada que Comunidad/Mis RM
+(header "← Volver" → vuelve a Inicio; `showView('guia')` → `loadGuia()`).
 Contenido: guía **estática** del coach (texto **verbatim**, títulos/headers en dorado — `.guia-title` /
 `.guia-h` / `.guia-callout` — y el resto en texto normal con listas y sub-listas, respetando la estructura).
 El link de WhatsApp del final (`#guiaWa`) se setea desde **`site_config.whatsapp_erika`** (no hardcodeado;
