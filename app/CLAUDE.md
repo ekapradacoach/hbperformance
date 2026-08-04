@@ -332,7 +332,15 @@ comment text
 ### site_config   ← ✅ config editable del sitio (precios, links de pago, WhatsApp). Clave-valor.
 key text (primary key)   — p.ej. price_crossfit_ars, whatsapp_erika, **mp_plan_crossfit** (id del
   preapproval_plan por programa, lo escribe `create-plans`). `mp_link_<prog>` = legacy sin uso.
-  **announcement_active** ('true'/'false') + **announcement_text** (2026-08-04): cartel de anuncios del dashboard atleta (Inicio).
+  ~~announcement_active / announcement_text~~ (legacy 2026-08-04, **reemplazadas** por la tabla `announcements` el 2026-08-04 (c); las claves viejas quedan huérfanas/sin uso).
+
+### announcements   ← ✅ (2026-08-04 (c)) anuncios del dashboard atleta (varios a la vez, por programa o todos)
+id uuid (default gen_random_uuid())
+message text (not null)
+program text (nullable)   — null / 'all' = todos; o slug: crossfit/hybrid/corredores/asesoria-erika/asesoria-gonza
+active boolean (not null default true)
+created_at timestamptz (default now())
+RLS: admin FOR ALL (get_my_role()='admin'); atleta SELECT solo activos que le apliquen (active AND (program null/'all' OR program = su profiles.program)). Se muestran apilados como primeros bloques de Inicio. ⚠️ Crear en Supabase.
 value text (not null)
 updated_at timestamptz (default now())
 RLS: admin FOR ALL (get_my_role()='admin'); **público SELECT** (las landing lo leen sin auth).

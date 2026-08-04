@@ -1951,3 +1951,47 @@ Links: iOS `https://youtube.com/shorts/9fK73zCwlpM?feature=share` · Android `ht
   estilo diferenciado (`.ann-banner`: borde/fondo dorado + ícono 📢). `loadAnnouncement()` (llamado en
   `loadInicio`) lee `site_config`; se muestra **solo si** `announcement_active='true'` **y** hay texto; si no,
   oculto para todos. Sin descarte individual por atleta. `site_config` ya tiene SELECT público → sin RLS nueva.
+
+## 2026-08-04 (c) — Anuncios: de mensaje único (site_config) a tabla `announcements` (varios, por programa)
+El cartel de anuncios pasó de un solo mensaje en `site_config` a un sistema de **varios anuncios activos a la
+vez**, cada uno dirigido a un programa o a todos.
+
+### 🗄️ DDL (correr a mano)
+```sql
+create table if not exists public.announcements (
+  id         uuid primary key default gen_random_uuid(),
+  message    text not null,
+  program    text,                 -- null / 'all' = todos; o slug: crossfit/hybrid/corredores/asesoria-erika/asesoria-gonza
+  active     boolean not null default true,
+  created_at timestamptz not null default now()
+);
+alter table public.announcements enable row level security;
+create policy "Admin gestiona announcements" on public.announcements
+  for all to public using (get_my_role() = 'admin') with check (get_my_role() = 'admin');
+create policy "Atleta ve anuncios de su programa" on public.announcements
+  for select to authenticated using (
+    active = true
+    and (program is null or program = 'all'
+         or program = (select p.program from profiles p where p.id = auth.uid()))
+  );
+-- (opcional, limpieza) las claves viejas quedan huérfanas:
+-- delete from public.site_config where key in ('announcement_active','announcement_text');
+```
+Sin gate `is_active_athlete()` (son mensajes de difusión). **El anuncio de prueba de `site_config` se descarta**
+(era solo "Esto es una prueba"); la tabla arranca vacía.
+
+### Admin → Configuración (`admin/index.html`)
+La card "Cartel de anuncios" (mensaje único + toggle) se reemplazó por **"📢 Anuncios"**: botón **"+ Nuevo
+anuncio"** + lista (`#annList`) traída de la tabla. Cada fila (`annRowHtml`): textarea (mensaje) + select de
+programa (Todos/crossfit/hybrid/corredores/asesoria-erika/asesoria-gonza) + checkbox Activo + **Guardar**
+(INSERT si es nueva, UPDATE si tiene id) + **Eliminar** (DELETE; si es nueva sin guardar, solo saca la fila).
+`loadAnnouncements()` se llama desde `loadConfig`. Se sacó todo el código viejo (cfg_announcement_*).
+
+### Dashboard (`app/dashboard.html`, Inicio)
+`#annBanner` pasó de banner único a **contenedor** que apila N `.ann-banner` (mismo estilo dorado + 📢).
+`loadAnnouncement()` consulta `announcements` (active=true) y filtra por `program in ['all', mi programa]`
+(la RLS ya filtra; el filtro en JS es defensivo). Primeros bloques de Inicio. **No se tocó `shortcut_guide_seen`.**
+
+### Verificación
+Syntax-check admin + dashboard OK, sin refs colgadas al sistema viejo. Flujo vivo auth/admin-gated.
+⚠️ **Pendiente de deploy:** correr el DDL de arriba (y opcional, borrar las claves viejas de site_config).

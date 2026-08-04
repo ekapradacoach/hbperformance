@@ -990,8 +990,8 @@
     <section id="view-inicio" class="view active">
       <h1 class="greeting" id="greeting">Hola 👋</h1>
 
-      <!-- Cartel de anuncios (editable desde admin → Configuración; se muestra por JS si está activo) -->
-      <div id="annBanner" class="ann-banner" style="display:none;"></div>
+      <!-- Anuncios (editables desde admin → Configuración; se apilan por JS los activos que aplican) -->
+      <div id="annBanner"></div>
 
       <!-- Card HOY -->
       <div class="card card-today">
@@ -1509,20 +1509,22 @@
       }
     }
 
-    // Cartel de anuncios: se muestra solo si announcement_active='true' y hay texto (site_config)
+    // Anuncios: apila los activos que aplican al atleta (program 'all'/null o su programa).
+    // La RLS ya filtra activos+programa; el filtro acá es defensivo/explícito.
     async function loadAnnouncement() {
       const box = document.getElementById('annBanner');
       if (!box) return;
-      const { data } = await sb.from('site_config').select('key, value')
-        .in('key', ['announcement_active', 'announcement_text']);
-      const cfg = {}; (data || []).forEach(r => { cfg[r.key] = r.value; });
-      const text = (cfg.announcement_text || '').trim();
-      if (cfg.announcement_active === 'true' && text) {
-        box.innerHTML = `<span class="ann-ico">📢</span><div class="ann-text">${esc(text)}</div>`;
-        box.style.display = 'flex';
-      } else {
-        box.style.display = 'none';
-      }
+      const { data, error } = await sb.from('announcements')
+        .select('id, message, program, active').eq('active', true)
+        .order('created_at', { ascending: false });
+      if (error) { box.innerHTML = ''; return; } // degrada si la tabla no existe todavía
+      const mine = (data || []).filter(a => {
+        const p = a.program || 'all';
+        return p === 'all' || p === ATHLETE.program;
+      });
+      box.innerHTML = mine.map(a =>
+        `<div class="ann-banner"><span class="ann-ico">📢</span><div class="ann-text">${esc(a.message)}</div></div>`
+      ).join('');
     }
 
     async function loadToday() {

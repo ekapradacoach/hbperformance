@@ -1389,6 +1389,14 @@
   .cfg-field.cfg-check { flex-direction: row; align-items: center; gap: 8px; text-transform: none; }
   .cfg-field.cfg-check input { width: auto; }
   .cfg-note { color: #888; font-size: 0.82rem; margin: 4px 0 0; }
+  /* Lista de anuncios (Configuración) */
+  .ann-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
+  .ann-row { border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-top: 12px; display: flex; flex-direction: column; gap: 10px; }
+  .ann-row-ctl { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .ann-row .ann-prog { background: #1A1A1A; border: 1px solid #333; border-radius: 8px; padding: 8px 10px; color: var(--text); font-family: var(--font-body); font-size: 0.9rem; color-scheme: dark; }
+  .ann-active { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; color: var(--text-secondary); }
+  .ann-active input { width: auto; }
+  .ann-row-btns { margin-left: auto; display: flex; gap: 8px; }
   .cfg-card input[type="number"], .cfg-card input[type="text"] {
     background: #1A1A1A;
     border: 1px solid #333;
@@ -1953,18 +1961,14 @@
           <button class="btn-primary cfg-save" id="cfgSaveContact">Guardar contacto</button>
         </div>
 
-        <!-- Sección 4: Cartel de anuncios -->
+        <!-- Sección 4: Anuncios (varios, cada uno por programa o todos) -->
         <div class="cfg-card">
-          <h2 class="cfg-title">📢 Cartel de anuncios</h2>
-          <label class="cfg-field cfg-check">
-            <input type="checkbox" id="cfg_announcement_active">
-            <span>Mostrar el cartel a los atletas (Activo)</span>
-          </label>
-          <label class="cfg-field">Mensaje
-            <textarea id="cfg_announcement_text" rows="3" placeholder="Ej: Esta semana el horario cambia…"></textarea>
-          </label>
-          <p class="cfg-note">Si está inactivo o el mensaje está vacío, el cartel no se muestra a ningún atleta.</p>
-          <button class="btn-primary cfg-save" id="cfgSaveAnnouncement">Guardar anuncio</button>
+          <div class="ann-head">
+            <h2 class="cfg-title" style="margin:0;">📢 Anuncios</h2>
+            <button class="btn-sm" id="annNew">+ Nuevo anuncio</button>
+          </div>
+          <p class="cfg-note">Se muestran en el Inicio del atleta. Podés tener varios activos a la vez. Inactivo o vacío = no se muestra.</p>
+          <div id="annList"><div class="list-empty">Cargando…</div></div>
         </div>
 
       </section>
@@ -4731,10 +4735,8 @@
       // Contacto (sin el 54 en el input)
       setInput('cfg_whatsapp_erika', stripCC(c.whatsapp_erika));
       setInput('cfg_whatsapp_gonza', stripCC(c.whatsapp_gonza));
-      // Anuncios
-      const annChk = document.getElementById('cfg_announcement_active');
-      if (annChk) annChk.checked = (c.announcement_active === 'true');
-      setInput('cfg_announcement_text', c.announcement_text);
+      // Anuncios (tabla aparte)
+      loadAnnouncements();
     }
 
     // Feedback "✓ Guardado" por 2s
@@ -4775,12 +4777,81 @@
       ];
       saveConfig(pairs, this, 'Guardar contacto');
     });
-    document.getElementById('cfgSaveAnnouncement').addEventListener('click', function () {
-      const pairs = [
-        ['announcement_active', document.getElementById('cfg_announcement_active').checked ? 'true' : 'false'],
-        ['announcement_text', document.getElementById('cfg_announcement_text').value.trim()]
-      ];
-      saveConfig(pairs, this, 'Guardar anuncio');
+    // ---- Anuncios (tabla announcements: varios, por programa o todos) ----
+    const ANN_PROGRAMS = [
+      ['all', 'Todos los programas'],
+      ['crossfit', 'CrossFit'],
+      ['hybrid', 'Hybrid Evolution'],
+      ['corredores', 'Fuerza corredores'],
+      ['asesoria-erika', 'Asesoría Erika'],
+      ['asesoria-gonza', 'Asesoría Gonza']
+    ];
+    function annRowHtml(a) {
+      const id = a.id || '';
+      const prog = a.program || 'all';
+      const opts = ANN_PROGRAMS.map(([v, l]) =>
+        `<option value="${v}"${v === prog ? ' selected' : ''}>${l}</option>`).join('');
+      return `<div class="ann-row" data-id="${esc(id)}">
+        <textarea class="ann-msg" rows="2" placeholder="Mensaje del anuncio…">${esc(a.message || '')}</textarea>
+        <div class="ann-row-ctl">
+          <select class="ann-prog">${opts}</select>
+          <label class="ann-active"><input type="checkbox" class="ann-active-cb"${a.active ? ' checked' : ''}> Activo</label>
+          <span class="ann-row-btns">
+            <button class="btn-sm ann-save">Guardar</button>
+            <button class="btn-sm danger ann-del">Eliminar</button>
+          </span>
+        </div>
+      </div>`;
+    }
+    async function loadAnnouncements() {
+      const box = document.getElementById('annList');
+      if (!box) return;
+      const { data, error } = await sb.from('announcements')
+        .select('id, message, program, active').order('created_at', { ascending: false });
+      if (error) { box.innerHTML = '<div class="list-empty">No se pudieron cargar los anuncios. ¿Creaste la tabla?</div>'; return; }
+      const rows = data || [];
+      box.innerHTML = rows.length ? rows.map(annRowHtml).join('')
+        : '<div class="list-empty">No hay anuncios. Tocá “+ Nuevo anuncio”.</div>';
+    }
+    document.getElementById('annNew').addEventListener('click', () => {
+      const box = document.getElementById('annList');
+      const empty = box.querySelector('.list-empty');
+      if (empty) box.innerHTML = '';
+      box.insertAdjacentHTML('afterbegin', annRowHtml({ program: 'all', active: true }));
+    });
+    document.getElementById('annList').addEventListener('click', async (e) => {
+      const row = e.target.closest('.ann-row');
+      if (!row) return;
+      const id = row.dataset.id;
+      if (e.target.closest('.ann-save')) {
+        const message = row.querySelector('.ann-msg').value.trim();
+        if (!message) { flash('Poné un mensaje para el anuncio.'); return; }
+        const program = row.querySelector('.ann-prog').value;
+        const active = row.querySelector('.ann-active-cb').checked;
+        const btn = e.target.closest('.ann-save'); btn.disabled = true;
+        if (id) {
+          const { error } = await sb.from('announcements').update({ message, program, active }).eq('id', id);
+          btn.disabled = false;
+          if (error) { flash('No se pudo guardar: ' + error.message); return; }
+          flash('✓ Anuncio guardado.');
+        } else {
+          const { data, error } = await sb.from('announcements')
+            .insert({ message, program, active }).select('id').single();
+          btn.disabled = false;
+          if (error) { flash('No se pudo crear: ' + error.message); return; }
+          row.dataset.id = data.id; // ahora es existente → próximos Guardar hacen UPDATE
+          flash('✓ Anuncio creado.');
+        }
+        return;
+      }
+      if (e.target.closest('.ann-del')) {
+        if (!id) { row.remove(); return; } // fila nueva sin guardar → solo se quita del DOM
+        if (!confirm('¿Eliminar este anuncio?')) return;
+        const { error } = await sb.from('announcements').delete().eq('id', id);
+        if (error) { flash('No se pudo eliminar: ' + error.message); return; }
+        row.remove();
+        flash('🗑️ Anuncio eliminado.');
+      }
     });
 
     // ============================================================
