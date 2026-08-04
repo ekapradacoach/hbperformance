@@ -402,6 +402,17 @@
   .rmm-more:hover { border-color: var(--accent); color: var(--accent); }
   .hist-more { display: block; width: 100%; margin-top: 12px; background: transparent; border: 1px dashed #3a3a3a; color: var(--text-secondary); border-radius: 8px; padding: 9px; font-family: var(--font-body); font-weight: 600; font-size: 0.85rem; cursor: pointer; }
   .hist-more:hover { border-color: var(--accent); color: var(--accent); }
+  /* Guía "cómo leer el programa" */
+  .guia-cta { width: 100%; margin-top: 4px; }
+  .guia-body { line-height: 1.6; }
+  .guia-title { font-family: var(--font-display); font-weight: 800; font-size: 1.5rem; letter-spacing: -0.5px; color: var(--accent); margin-bottom: 14px; }
+  .guia-h { font-family: var(--font-display); font-weight: 800; font-size: 1.15rem; color: var(--accent); margin: 24px 0 8px; }
+  .guia-callout { color: var(--accent); font-weight: 700; margin: 14px 0; }
+  .guia-p { color: var(--text); margin: 0 0 12px; }
+  .guia-list { margin: 0 0 12px; padding-left: 20px; }
+  .guia-list li { color: var(--text); margin-bottom: 10px; }
+  .guia-list .guia-list { margin-top: 10px; }
+  #guiaWa { margin-top: 4px; }
   /* Gráfico de evolución (SVG a mano) */
   .rmm-chart { margin: 6px 0 10px; }
   .rmc-svg { width: 100%; height: auto; display: block; overflow: visible; }
@@ -1001,6 +1012,9 @@
         <div id="commPreview"><div class="muted">Cargando…</div></div>
         <button class="btn btn-outline" id="btnComunidad">Ver comunidad →</button>
       </div>
+
+      <!-- Guía: cómo leer el programa -->
+      <button class="btn btn-outline guia-cta" id="btnGuia">📖 Cómo leer el programa</button>
     </section>
 
     <!-- ===== VIEW: MI PROGRAMA ===== -->
@@ -1163,6 +1177,54 @@
         <button class="btn btn-filled com-newbtn" id="comNewBtn">+ Nueva publicación</button>
       </div>
       <div class="com-feed" id="comFeed"><div class="com-empty">Cargando…</div></div>
+    </section>
+
+    <!-- ===== VIEW: GUÍA (cómo leer el programa) ===== -->
+    <section id="view-guia" class="view">
+      <div class="com-header">
+        <button class="com-back" id="guiaBack">← Volver</button>
+        <h1 class="com-title">📖 Cómo leer el programa</h1>
+      </div>
+      <div class="guia-body">
+        <h2 class="guia-title">GUÍA PARA LEER Y ENTENDER EL PROGRAMA</h2>
+
+        <p class="guia-p">Buenas chicos! Armo este mensaje con la finalidad de darles una explicación de cómo leer y entender el programa. De cualquier manera, siempre estamos dispuestos a responder preguntas.</p>
+
+        <p class="guia-p">El plan está calendarizado, no es obligatorio respetar los días, podés acomodarlos a gusto propio. Cada semana se carga uno nuevo con distintas modificaciones.</p>
+
+        <p class="guia-callout">LA MAYORÍA DE LOS EJERCICIOS ESTÁN CON UN VIDEO A YOUTUBE.</p>
+
+        <ul class="guia-list">
+          <li><b>SESIONES = DÍAS</b></li>
+          <li><b>LECTURA DE SERIES:</b> 1x10 equivale a 1 vuelta y 10 repeticiones.</li>
+          <li><b>RONDAS POR CALIDAD:</b> hace referencia a hacer un ejercicio atrás del otro, se usan para entradas en calor, biseries o triseries de musculación. Por calidad hace referencia a que tienen que ser prolijos y no apurarse en el proceso.</li>
+          <li><b>STRENGTH / FUERZA:</b> hace referencia a bloques de fuerza, donde van a trabajar con % o RPE:
+            <ul class="guia-list">
+              <li><b>%=</b> SI Y SOLO SI en algún momento hiciste un peso máximo de un ejercicio a UNA repetición (ej: "el 15/07 busqué lo máximo que podía levantar en sentadilla a una sola repetición y tiré 100k"). Ahí se trabaja el % sobre esos 100k: si el trabajo dice 1x8 60%, es una serie de 8 reps con 60kg (60% de 100k). Nuestro sistema lo calcula automático: cargás tu peso una sola vez y la app hace la cuenta sola de ahí en adelante. Podés ver y editar todos tus RM en Estadísticas → Mis RM.
+                <p class="guia-p">Esto no es solo para ejercicios con pesas: algunos se miden por REPETICIONES máximas (ej. tu máximo de dominadas) o por RITMO/TIEMPO (ej. tu mejor marca en 5k o en remo) — el sistema calcula igual, solo cambia qué número cargás como tu "máximo".</p>
+                <p class="guia-p">Si todavía no sabés tu RM de un ejercicio, tocá "No tengo RM" cuando te aparezca — no te lo va a volver a pedir, y podés cargarlo cuando quieras desde Estadísticas → Mis RM.</p>
+              </li>
+              <li><b>RPE =</b> SI NO TENGO PESO MÁXIMO. Trabajamos con qué tan pesada percibís vos la carga, en una escala del 1 al 10, donde 1 es lo más liviano que vas a levantar y 10 es lo máximo que podés mover (ni un kilo más). Si el trabajo dice 1x8 RPE 6, buscá un peso que no sea ni muy pesado ni muy liviano — que te exija, pero te deje resto.</li>
+            </ul>
+          </li>
+          <li><b>CORE / ACCESORIOS:</b> ejercicios que complementan la rutina.</li>
+        </ul>
+
+        <h3 class="guia-h">HYBRID WORKOUTS</h3>
+        <p class="guia-p">Son los trabajos de CARDIO, tipo circuito, varían semana a semana. Pueden aparecer con distintos métodos y nombres:</p>
+        <ul class="guia-list">
+          <li><b>AMRAP:</b> metés la mayor cantidad de vueltas posible en el tiempo estipulado. Ej: "AMRAP 12': 10 saltos, 15 sentadillas…" → durante 12 minutos, tratás de meter la mayor cantidad de rondas posible.</li>
+          <li><b>EMOM:</b> se trabaja DENTRO DEL MINUTO. Buscás completar la cantidad pedida dentro de ese minuto, y lo que sobra de tiempo lo descansás. Ej: EMOM 12' — min 1: 10 sentadillas / min 2: 40" bici / min 3: descanso. Si las 10 sentadillas te toman 30", descansás los otros 30". Si te toman 58", descansás 2". Si no llegás a completarlas en el minuto, pasás igual al siguiente, dejando donde estabas. Si el minuto dice "descanso", descansás los 60" enteros. Así hasta completar los 12'.</li>
+          <li><b>TABATA:</b> segundos de actividad por segundos de descanso (ej. 3' on x 1' off, o 20" on x 10" off). En los tramos ON hacés la mayor cantidad posible en ese tiempo; en los OFF, descansás.</li>
+          <li><b>EVERY 2' x 10 rondas / EVERY 3' x 5 vueltas:</b> similar al EMOM, pero con un intervalo distinto a 1 minuto. Cada X minutos hacés la serie pedida, y lo que sobra de tiempo lo usás para descansar.</li>
+          <li><b>FOR TIME / POR TIEMPO:</b> completás el trabajo entero hasta terminarlo. Por lo general indica X rondas, o una cantidad específica de cada ejercicio, y se termina cuando lo completás.</li>
+        </ul>
+
+        <p class="guia-p">Para redondear: es importante que siempre traten de anotarse tiempos, pesos y sensaciones — llevar un registro nos ayuda a materializar el progreso. Espero haber sido lo más clara posible, ¡creo que no me olvido de nada!</p>
+
+        <p class="guia-p">¿Dudas? Escribinos por WhatsApp.</p>
+        <a class="btn btn-filled" id="guiaWa" href="#" target="_blank" rel="noopener">💬 Escribinos por WhatsApp</a>
+      </div>
     </section>
   </main>
 
@@ -1378,6 +1440,7 @@
       if (name === 'perfil') loadPerfil();
       if (name === 'comunidad') enterComunidad();
       if (name === 'misrm') loadMisRm();
+      if (name === 'guia') loadGuia();
       window.scrollTo(0, 0);
     }
     document.querySelectorAll('.tabbar a[data-view]').forEach(a => {
@@ -1387,6 +1450,18 @@
     document.getElementById('btnComunidad').addEventListener('click', () => showView('comunidad'));
     document.getElementById('btnMisRm').addEventListener('click', () => showView('misrm'));
     document.getElementById('misRmBack').addEventListener('click', () => showView('estadisticas'));
+    document.getElementById('btnGuia').addEventListener('click', () => showView('guia'));
+    document.getElementById('guiaBack').addEventListener('click', () => showView('inicio'));
+
+    // Guía: setea el link de WhatsApp desde site_config.whatsapp_erika (no hardcodeado)
+    let guiaWaSet = false;
+    async function loadGuia() {
+      if (guiaWaSet) return; // una sola vez por sesión
+      const { data } = await sb.from('site_config').select('key, value').eq('key', 'whatsapp_erika').maybeSingle();
+      const num = data && data.value ? String(data.value).replace(/\D/g, '') : '';
+      const a = document.getElementById('guiaWa');
+      if (a && num) { a.href = 'https://wa.me/' + num; guiaWaSet = true; }
+    }
 
     // ============================================================
     // INICIO — carga de datos

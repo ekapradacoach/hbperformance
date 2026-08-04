@@ -1902,3 +1902,14 @@ El "Historial" de Estadísticas mostraba hasta 14 días (`renderHistorial` `.sli
 la pantalla. Ahora muestra los **últimos 5** por default + botón **"Ver más (N)"** que expande al resto
 (mismo patrón de colapso que "Mis RM"). `histExpanded` se resetea a false al entrar a Estadísticas.
 Solo UX, sin SQL ni cambios de datos.
+
+## 2026-08-04 — Guía "Cómo leer el programa" (vista dedicada en el dashboard atleta)
+Botón **"📖 Cómo leer el programa"** al final de la vista **Inicio** (después de la card de Comunidad) →
+lleva a una **`<section id="view-misrm">`**... no: nueva **`<section id="view-guia">`** con el mismo patrón de
+vista dedicada que Comunidad/Mis RM (header "← Volver" → vuelve a Inicio; `showView('guia')` → `loadGuia()`).
+Contenido: guía **estática** del coach (texto **verbatim**, títulos/headers en dorado — `.guia-title` /
+`.guia-h` / `.guia-callout` — y el resto en texto normal con listas y sub-listas, respetando la estructura).
+El link de WhatsApp del final (`#guiaWa`) se setea desde **`site_config.whatsapp_erika`** (no hardcodeado;
+`loadGuia` hace un SELECT puntual y arma `https://wa.me/<num>`). Solo UX, sin SQL.
+Nota: el botón quedó en **Inicio** ("al final del dashboard", visible para todos, no invasivo); si se prefiere
+en "Mi programa" es un movimiento trivial.
