@@ -1913,3 +1913,41 @@ El link de WhatsApp del final (`#guiaWa`) se setea desde **`site_config.whatsapp
 `loadGuia` hace un SELECT puntual y arma `https://wa.me/<num>`). Solo UX, sin SQL.
 Nota: el botón quedó en **Inicio** ("al final del dashboard", visible para todos, no invasivo); si se prefiere
 en "Mi programa" es un movimiento trivial.
+
+## 2026-08-04 (b) — Videos de acceso directo (iOS/Android) + cartel de anuncios editable
+Dos tareas en un commit.
+
+### 🗄️ SQL (correr a mano) — solo para la Tarea 1
+```sql
+alter table public.profiles add column if not exists shortcut_guide_seen boolean not null default false;
+```
+(La Tarea 2 no necesita SQL: `announcement_active` / `announcement_text` son filas nuevas de `site_config`,
+key/value, que se crean con el upsert desde Configuración.)
+
+### Tarea 1 — Videos "acceso directo" (iOS/Android) en 3 lugares
+Links: iOS `https://youtube.com/shorts/9fK73zCwlpM?feature=share` · Android `https://youtube.com/shorts/zxFiiyyc9qE?feature=share`.
+1. **Modal de primera vez** (`app/dashboard.html`, `#shortcutModal`, patrón `.cm-modal`): si
+   `profiles.shortcut_guide_seen` es false, al entrar al dashboard aparece con los 2 links + botón
+   **"Entendido"** → setea `shortcut_guide_seen=true` en `profiles` (persistente, NO localStorage → no
+   reaparece desde otro dispositivo). Se dispara en `init()` (ruta normal y ruta del chooser de Hybrid) vía
+   `maybeShowShortcutModal()`.
+2. **Link permanente en Perfil**: card "📲 Acceso directo" con los 2 videos (siempre accesible).
+3. **Mail de bienvenida** = template **Invite user de Supabase Auth** (Dashboard → Authentication → Email
+   Templates), NO está en el repo (los mails del código son solo reactivación/cobro-fallido vía Resend).
+   ⚠️ **Pegar a mano** en ese template (se agrega, no reemplaza):
+   ```html
+   <p>📲 Agregá HB Performance a la pantalla de inicio de tu celular:</p>
+   <ul>
+     <li><a href="https://youtube.com/shorts/9fK73zCwlpM?feature=share">Cómo hacerlo en iPhone (iOS)</a></li>
+     <li><a href="https://youtube.com/shorts/zxFiiyyc9qE?feature=share">Cómo hacerlo en Android</a></li>
+   </ul>
+   ```
+
+### Tarea 2 — Cartel de anuncios editable
+- **Admin → Configuración** (`admin/index.html`): card "📢 Cartel de anuncios" con checkbox
+  `cfg_announcement_active` + textarea `cfg_announcement_text` + "Guardar anuncio" → upsert de
+  `announcement_active` ('true'/'false') y `announcement_text` en `site_config` (mismo patrón `saveConfig`).
+- **Dashboard → Inicio** (`app/dashboard.html`): `#annBanner` como **primer bloque** (después del saludo),
+  estilo diferenciado (`.ann-banner`: borde/fondo dorado + ícono 📢). `loadAnnouncement()` (llamado en
+  `loadInicio`) lee `site_config`; se muestra **solo si** `announcement_active='true'` **y** hay texto; si no,
+  oculto para todos. Sin descarte individual por atleta. `site_config` ya tiene SELECT público → sin RLS nueva.

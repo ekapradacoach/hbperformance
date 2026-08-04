@@ -252,6 +252,8 @@ mp_subscription_id text
 avatar_url text   ← ⚠️ AGREGAR en Supabase. URL pública de la foto de perfil (bucket `avatars`). NULL = usa iniciales.
 custom_price numeric   ← ⚠️ AGREGAR en Supabase (2026-07-27). Precio manual por atleta. NULL = usa el de site_config. (Aún NO conectado a Métricas.)
 hybrid_variant text   ← ⚠️ AGREGAR en Supabase (2026-07-27). '3' | '4'. Solo aplica si program='hybrid' (qué plan entrena; la planificación vive en program_slug 'hybrid-3'/'hybrid-4').
+payment_failed_at timestamptz   ← ⚠️ AGREGAR (2026-07-28). Timestamp del 1er cobro rechazado (cobro fallido); corte a los 3 días.
+shortcut_guide_seen boolean (not null default false)   ← ⚠️ AGREGAR (2026-08-04). true = ya vio el modal de "acceso directo" (videos iOS/Android); no se vuelve a mostrar.
 created_at timestamptz
 
 ### programs
@@ -330,6 +332,7 @@ comment text
 ### site_config   ← ✅ config editable del sitio (precios, links de pago, WhatsApp). Clave-valor.
 key text (primary key)   — p.ej. price_crossfit_ars, whatsapp_erika, **mp_plan_crossfit** (id del
   preapproval_plan por programa, lo escribe `create-plans`). `mp_link_<prog>` = legacy sin uso.
+  **announcement_active** ('true'/'false') + **announcement_text** (2026-08-04): cartel de anuncios del dashboard atleta (Inicio).
 value text (not null)
 updated_at timestamptz (default now())
 RLS: admin FOR ALL (get_my_role()='admin'); **público SELECT** (las landing lo leen sin auth).

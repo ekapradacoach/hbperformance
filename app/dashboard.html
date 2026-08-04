@@ -413,6 +413,10 @@
   .guia-list li { color: var(--text); margin-bottom: 10px; }
   .guia-list .guia-list { margin-top: 10px; }
   #guiaWa { margin-top: 4px; }
+  /* Cartel de anuncios (Inicio) — estilo diferenciado con el acento dorado */
+  .ann-banner { display: flex; gap: 10px; align-items: flex-start; background: rgba(245,168,0,0.09); border: 1px solid var(--accent); border-radius: 14px; padding: 14px 16px; margin-bottom: 16px; }
+  .ann-banner .ann-ico { font-size: 1.3rem; line-height: 1.2; flex-shrink: 0; }
+  .ann-banner .ann-text { color: var(--text); font-size: 0.95rem; line-height: 1.5; white-space: pre-line; word-break: break-word; }
   /* Gráfico de evolución (SVG a mano) */
   .rmm-chart { margin: 6px 0 10px; }
   .rmc-svg { width: 100%; height: auto; display: block; overflow: visible; }
@@ -986,6 +990,9 @@
     <section id="view-inicio" class="view active">
       <h1 class="greeting" id="greeting">Hola 👋</h1>
 
+      <!-- Cartel de anuncios (editable desde admin → Configuración; se muestra por JS si está activo) -->
+      <div id="annBanner" class="ann-banner" style="display:none;"></div>
+
       <!-- Card HOY -->
       <div class="card card-today">
         <div class="card-h">📌 Hoy</div>
@@ -1159,6 +1166,16 @@
       <!-- Sección 2: Suscripción -->
       <div class="card" id="pfSubscription"></div>
 
+      <!-- Sección 2b: Acceso directo (videos, siempre accesible) -->
+      <div class="card">
+        <div class="card-h">📲 Acceso directo</div>
+        <p class="muted" style="margin-bottom:12px;">Cómo agregar HB Performance a la pantalla de inicio de tu celular:</p>
+        <div class="pf-sec-actions">
+          <a class="btn btn-outline pf-full" href="https://youtube.com/shorts/9fK73zCwlpM?feature=share" target="_blank" rel="noopener">🍎 Ver en iPhone (iOS)</a>
+          <a class="btn btn-outline pf-full" href="https://youtube.com/shorts/zxFiiyyc9qE?feature=share" target="_blank" rel="noopener">🤖 Ver en Android</a>
+        </div>
+      </div>
+
       <!-- Sección 3: Seguridad -->
       <div class="card">
         <div class="card-h">🔒 Seguridad</div>
@@ -1244,6 +1261,19 @@
   <!-- ===== Modal de confirmación: cancelar suscripción ===== -->
   <div class="cm-modal" id="cancelModal">
     <div class="cm-card" id="cancelModalCard"></div>
+  </div>
+
+  <!-- ===== Modal: acceso directo a la pantalla de inicio (primera vez) ===== -->
+  <div class="cm-modal" id="shortcutModal">
+    <div class="cm-card">
+      <h3 class="cm-title">📲 Agregá el acceso directo</h3>
+      <p class="cm-text">Sumá HB Performance a la pantalla de inicio de tu celular para entrar más rápido. Mirá el video según tu dispositivo:</p>
+      <div class="cm-actions col">
+        <a class="btn btn-outline" href="https://youtube.com/shorts/9fK73zCwlpM?feature=share" target="_blank" rel="noopener">🍎 Cómo hacerlo en iPhone (iOS)</a>
+        <a class="btn btn-outline" href="https://youtube.com/shorts/zxFiiyyc9qE?feature=share" target="_blank" rel="noopener">🤖 Cómo hacerlo en Android</a>
+        <button class="btn btn-filled" id="shortcutOk">Entendido</button>
+      </div>
+    </div>
   </div>
 
   <!-- ===== Modal: nueva publicación (comunidad) ===== -->
@@ -1467,6 +1497,7 @@
     // INICIO — carga de datos
     // ============================================================
     async function loadInicio() {
+      loadAnnouncement();
       loadToday();
       loadWeek();
       loadUpcoming();
@@ -1475,6 +1506,22 @@
         document.getElementById('cardComunidad').style.display = 'none';
       } else {
         loadCommunity();
+      }
+    }
+
+    // Cartel de anuncios: se muestra solo si announcement_active='true' y hay texto (site_config)
+    async function loadAnnouncement() {
+      const box = document.getElementById('annBanner');
+      if (!box) return;
+      const { data } = await sb.from('site_config').select('key, value')
+        .in('key', ['announcement_active', 'announcement_text']);
+      const cfg = {}; (data || []).forEach(r => { cfg[r.key] = r.value; });
+      const text = (cfg.announcement_text || '').trim();
+      if (cfg.announcement_active === 'true' && text) {
+        box.innerHTML = `<span class="ann-ico">📢</span><div class="ann-text">${esc(text)}</div>`;
+        box.style.display = 'flex';
+      } else {
+        box.style.display = 'none';
       }
     }
 
@@ -3641,6 +3688,20 @@
       ov.classList.add('show');
     }
 
+    // Modal de acceso directo la primera vez (persiste en profiles.shortcut_guide_seen, no en localStorage)
+    function maybeShowShortcutModal() {
+      if (ATHLETE && !ATHLETE.shortcut_guide_seen) {
+        document.getElementById('shortcutModal').classList.add('show');
+      }
+    }
+    document.getElementById('shortcutOk').addEventListener('click', async () => {
+      document.getElementById('shortcutModal').classList.remove('show');
+      if (!ATHLETE || ATHLETE.shortcut_guide_seen) return;
+      ATHLETE.shortcut_guide_seen = true; // optimista (no vuelve a aparecer esta sesión)
+      const { error } = await sb.from('profiles').update({ shortcut_guide_seen: true }).eq('id', ATHLETE.id);
+      if (error) console.warn('No se pudo marcar shortcut_guide_seen:', error.message);
+    });
+
     async function init() {
       const { data: { session } } = await sb.auth.getSession();
       if (!session || !session.user) { window.location.replace('login.html'); return; }
@@ -3687,12 +3748,13 @@
 
       // Hybrid sin plan elegido todavía → pantalla de elección antes de mostrar contenido
       if (isHybrid() && !HYBRID_VARIANT) {
-        showHybridChooser(() => { showView('inicio'); loadInicio(); });
+        showHybridChooser(() => { showView('inicio'); loadInicio(); maybeShowShortcutModal(); });
         return;
       }
 
       showView('inicio');
       loadInicio();
+      maybeShowShortcutModal();
     }
 
     init();

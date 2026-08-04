@@ -1385,6 +1385,10 @@
   .cfg-prog-name { font-weight: 700; font-size: 0.98rem; margin-bottom: 10px; }
   .cfg-fields { display: flex; gap: 14px; flex-wrap: wrap; }
   .cfg-field { display: flex; flex-direction: column; gap: 6px; font-size: 0.78rem; color: var(--text-secondary); font-weight: 600; letter-spacing: 0.3px; flex: 1; min-width: 150px; }
+  .cfg-card textarea { background: #1A1A1A; border: 1px solid #333; border-radius: 8px; padding: 10px 12px; color: var(--text); font-family: var(--font-body); font-size: 0.95rem; color-scheme: dark; width: 100%; resize: vertical; min-height: 70px; }
+  .cfg-field.cfg-check { flex-direction: row; align-items: center; gap: 8px; text-transform: none; }
+  .cfg-field.cfg-check input { width: auto; }
+  .cfg-note { color: #888; font-size: 0.82rem; margin: 4px 0 0; }
   .cfg-card input[type="number"], .cfg-card input[type="text"] {
     background: #1A1A1A;
     border: 1px solid #333;
@@ -1947,6 +1951,20 @@
             </label>
           </div>
           <button class="btn-primary cfg-save" id="cfgSaveContact">Guardar contacto</button>
+        </div>
+
+        <!-- Sección 4: Cartel de anuncios -->
+        <div class="cfg-card">
+          <h2 class="cfg-title">📢 Cartel de anuncios</h2>
+          <label class="cfg-field cfg-check">
+            <input type="checkbox" id="cfg_announcement_active">
+            <span>Mostrar el cartel a los atletas (Activo)</span>
+          </label>
+          <label class="cfg-field">Mensaje
+            <textarea id="cfg_announcement_text" rows="3" placeholder="Ej: Esta semana el horario cambia…"></textarea>
+          </label>
+          <p class="cfg-note">Si está inactivo o el mensaje está vacío, el cartel no se muestra a ningún atleta.</p>
+          <button class="btn-primary cfg-save" id="cfgSaveAnnouncement">Guardar anuncio</button>
         </div>
 
       </section>
@@ -4713,6 +4731,10 @@
       // Contacto (sin el 54 en el input)
       setInput('cfg_whatsapp_erika', stripCC(c.whatsapp_erika));
       setInput('cfg_whatsapp_gonza', stripCC(c.whatsapp_gonza));
+      // Anuncios
+      const annChk = document.getElementById('cfg_announcement_active');
+      if (annChk) annChk.checked = (c.announcement_active === 'true');
+      setInput('cfg_announcement_text', c.announcement_text);
     }
 
     // Feedback "✓ Guardado" por 2s
@@ -4752,6 +4774,13 @@
         ['whatsapp_gonza', addCC(document.getElementById('cfg_whatsapp_gonza').value)]
       ];
       saveConfig(pairs, this, 'Guardar contacto');
+    });
+    document.getElementById('cfgSaveAnnouncement').addEventListener('click', function () {
+      const pairs = [
+        ['announcement_active', document.getElementById('cfg_announcement_active').checked ? 'true' : 'false'],
+        ['announcement_text', document.getElementById('cfg_announcement_text').value.trim()]
+      ];
+      saveConfig(pairs, this, 'Guardar anuncio');
     });
 
     // ============================================================
