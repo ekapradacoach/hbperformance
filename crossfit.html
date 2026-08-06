@@ -313,9 +313,12 @@
       <div class="prog-content fade-in">
         <p class="lead">Programa de CrossFit para nivel avanzado. 5 sesiones semanales de 1:30 a 2:30 hs. Periodización de 3 semanas de carga + 1 de descarga para que siempre estés progresando sin quemarte.</p>
 
+        <span class="eyebrow">Nivel</span>
+        <p class="info-text">Avanzado / RX — pensado para atletas con experiencia en CrossFit y buen dominio técnico de los movimientos.</p>
+
         <span class="eyebrow">Qué incluye</span>
         <ul class="feature-list">
-          <li><span class="fi">✓</span> Olimpismo (Oly)</li>
+          <li><span class="fi">✓</span> Levantamiento olímpico (Oly)</li>
           <li><span class="fi">✓</span> Gimnásticos</li>
           <li><span class="fi">✓</span> Workouts (WOD)</li>
           <li><span class="fi">✓</span> Musculación</li>
@@ -334,7 +337,7 @@
           <ul class="feature-list">
             <li><span class="fi">✓</span> Recibís la planificación diaria lista en tu portal</li>
             <li><span class="fi">✓</span> Podés comentar cómo fue tu semana</li>
-            <li><span class="fi">✓</span> Chat directo con los entrenadores ante cualquier duda</li>
+            <li><span class="fi">✓</span> Chat grupal, con los entrenadores presentes para responder cualquier duda</li>
           </ul>
         </div>
 
@@ -349,6 +352,7 @@
           <a href="#mp-crossfit" id="btn-mp" class="btn btn-filled">Suscribirme — $45.000 ARS</a>
           <a href="#paypal-crossfit" id="btn-paypal" class="btn btn-outline">Subscribe — USD 40</a>
         </div>
+        <div id="paypalNote" style="display:none;margin-top:12px;font-size:0.9rem;line-height:1.5;color:var(--text-secondary);background:rgba(245,168,0,0.06);border:1px solid rgba(245,168,0,0.3);border-radius:10px;padding:12px 14px;">El pago en USD estará disponible próximamente. Mientras tanto, <a href="#" id="paypalWa" target="_blank" rel="noopener" style="color:var(--accent);font-weight:600;">escribinos por WhatsApp</a> para coordinar tu suscripción.</div>
       </div>
 
     </div>
@@ -503,6 +507,14 @@
 
   // ---- Precios y links desde site_config ----
   (async function () {
+    // PayPal aún no configurado → al tocar el botón muestra el aviso "próximamente" + WhatsApp
+    var ppBtn = document.getElementById('btn-paypal');
+    if (ppBtn) ppBtn.addEventListener('click', function (e) {
+      if (ppBtn.dataset.configured === 'true') return; // ya configurado → deja navegar a PayPal
+      e.preventDefault();
+      var n = document.getElementById('paypalNote');
+      if (n) n.style.display = 'block';
+    });
     try {
       const { data, error } = await sb.from('site_config').select('key, value');
       if (error || !data) return; // sin conexión / tabla → quedan los valores por defecto del HTML
@@ -519,7 +531,9 @@
       var mp = document.getElementById('btn-mp');
       if (mp && arsFmt != null) mp.textContent = 'Suscribirme — $' + arsFmt + ' ARS';
       var pp = document.getElementById('btn-paypal');
-      if (pp) { if (config['paypal_link_crossfit']) pp.href = config['paypal_link_crossfit']; pp.textContent = 'Subscribe — USD ' + usd; }
+      if (pp) { pp.textContent = 'Subscribe — USD ' + usd; var ppl = config['paypal_link_crossfit']; if (ppl && ppl !== '#') { pp.href = ppl; pp.dataset.configured = 'true'; } }
+      var ppWa = document.getElementById('paypalWa');
+      if (ppWa && config['whatsapp_erika']) ppWa.href = 'https://wa.me/' + config['whatsapp_erika'] + '?text=' + encodeURIComponent('Hola! Quiero coordinar el pago en USD de mi suscripción.');
       var wa = document.getElementById('btn-whatsapp');
       if (wa && config['whatsapp_erika']) wa.href = 'https://wa.me/' + config['whatsapp_erika'];
       var waf = document.getElementById('waFloat');

@@ -1995,3 +1995,24 @@ programa (Todos/crossfit/hybrid/corredores/asesoria-erika/asesoria-gonza) + chec
 ### Verificación
 Syntax-check admin + dashboard OK, sin refs colgadas al sistema viejo. Flujo vivo auth/admin-gated.
 ⚠️ **Pendiente de deploy:** correr el DDL de arriba (y opcional, borrar las claves viejas de site_config).
+
+## 2026-08-05 — 6 ajustes de contenido/UI en las landing (sin lógica de pago ni DB)
+1. **Asesorías** (asesoria-erika/gonza): el hero del coach (`.coach-hero`) se achicó de `min-height 74vh → 52vh`
+   (mobile 64vh → 44vh; padding 120/56 → 110/48) para que la foto no domine tanto y quede más consistente con el resto.
+2. **3 landing de programa** (crossfit/hybrid/corredores): las menciones de "chat directo/chat con entrenadores"
+   se reemplazaron por **"Chat grupal, con los entrenadores presentes para responder cualquier duda"**.
+3. **Pago USD (PayPal)** en las 3 landing: como PayPal no está configurado, al tocar el botón ahora se muestra
+   un aviso **"El pago en USD estará disponible próximamente. …escribinos por WhatsApp…"** con link a WhatsApp
+   (`site_config.whatsapp_erika`, no hardcodeado). El botón solo navega si hay un `paypal_link_<prog>` real
+   (distinto de vacío/`'#'`) → cuando lo configuren, funciona solo. `#paypalNote` + handler en el IIFE de config.
+4. **CrossFit**: "Olimpismo (Oly)" → **"Levantamiento olímpico (Oly)"**; se agregó eyebrow **"Nivel"** + nota
+   "Avanzado / RX — pensado para atletas con experiencia…".
+5. **Hybrid**: se sacó el ítem de **Discord** (→ "Comunidad y soporte dentro del portal web"); el eyebrow
+   "Elegí tu plan" pasó a **"Los dos planes, incluidos"** + nota "Tu suscripción incluye los dos planes… elegís
+   cuál entrenar cada semana desde tu portal, podés cambiar cuando quieras" (las 2 level-cards se mantienen como info).
+6. **Corredores**: el paréntesis "(con solo 2 días ya es suficiente)" se sacó del bullet y se reemplazó por una
+   nota: "Con 2 días alcanza para completar el estímulo semanal. El tercer día es un refuerzo extra: si podés
+   sumarlo, te lo recomendamos, aunque no es indispensable."
+
+Verificado en el navegador (páginas públicas): los 6 cambios presentes; el aviso de PayPal aparece al click y
+el link de WhatsApp sale de site_config; hero de asesoría ~52vh. No se tocó lógica de pago/checkout ni la base.
