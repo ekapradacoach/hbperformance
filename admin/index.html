@@ -3914,6 +3914,20 @@
       const t = tipoDe(program);
       return `<span class="type-badge ${isAsesoria(program) ? 'tipo-asesoria' : ''}">${t}</span>`;
     }
+    // Origen del alta (solo programas grupales): "Manual" = cargado por un admin vía create-athlete
+    // (sin mp_subscription_id); "MP" = alta automática por el webhook de pago (tiene mp_subscription_id).
+    // Las asesorías son siempre alta manual → no se muestra (ya se distinguen con el badge "Asesoría").
+    function origenBadge(a) {
+      if (!a || isAsesoria(a.program)) return '';
+      const manual = !a.mp_subscription_id;
+      const bg = manual ? '#1c2733' : '#152a1e';
+      const fg = manual ? '#6bb2e8' : '#4cae7f';
+      const txt = manual ? '✋ Manual' : '💳 MP';
+      const title = manual
+        ? 'Alta manual: cargada por un admin (transferencia/efectivo). No tiene suscripción de Mercado Pago.'
+        : 'Alta automática por pago de Mercado Pago (tiene suscripción activa en MP).';
+      return `<span title="${title}" style="display:inline-block;margin-left:6px;padding:2px 8px;border-radius:999px;font-size:.72rem;font-weight:700;background:${bg};color:${fg};border:1px solid ${fg};white-space:nowrap;">${txt}</span>`;
+    }
     // Aviso de vencimiento (solo visual para el admin — NO corta el acceso).
     // Amarillo si vence dentro de ≤5 días; rojo si ya venció / vence hoy.
     function vencInfo(a) {
@@ -3987,7 +4001,7 @@
           <td>${esc(a.phone) || '—'}</td>
           <td>${progBadge(a.program)}</td>
           <td>${estadoBadge(a.subscription_status)}${vencBadge(a)}</td>
-          <td>${tipoBadge(a.program)}</td>
+          <td>${tipoBadge(a.program)}${origenBadge(a)}</td>
           <td>${fmtDayOnly(a.subscription_start)}</td>
           <td><div class="al-actions">
             <button class="btn-sm act-ver">👁️ Ver</button>

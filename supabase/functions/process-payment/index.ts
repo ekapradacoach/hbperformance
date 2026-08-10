@@ -78,6 +78,9 @@ Deno.serve(async (req) => {
 
     // --- Resolver el ID de la preapproval según el tipo de evento ---
     let preapprovalId: string | null = null
+    // Email real del pagador (se resuelve desde el pago de MP en el 1er cobro de un alta nueva).
+    // Es el criterio PRIMARIO para matchear el pending correcto; si queda null se usa el fallback por recencia.
+    let payerEmail: string | null = null
 
     if (type.includes('preapproval')) {
       // subscription_preapproval / preapproval → data.id ES la preapproval
@@ -131,20 +134,32 @@ Deno.serve(async (req) => {
       }
 
       if (chargeApproved) {
-        // Cobro exitoso: si venía de una falla, limpiar el flag (recuperación automática).
+        // ¿Ya existe un profile con esta suscripción? → distingue RENOVACIÓN de ALTA NUEVA.
         const { data: prof } = await adminClient
           .from('profiles')
           .select('id, email, payment_failed_at')
           .eq('mp_subscription_id', preapprovalId)
           .maybeSingle()
-        if (prof && prof.payment_failed_at) {
-          await adminClient
-            .from('profiles')
-            .update({ payment_failed_at: null })
-            .eq('id', prof.id)
-          console.log('Cobro recuperado → payment_failed_at limpiado:', prof.email)
+        if (prof) {
+          // RENOVACIÓN: cobro mensual de un socio que ya tiene cuenta con esta suscripción.
+          // No hay nada que dar de alta. Si venía de una falla, se limpia el flag (recuperación).
+          if (prof.payment_failed_at) {
+            await adminClient
+              .from('profiles')
+              .update({ payment_failed_at: null })
+              .eq('id', prof.id)
+            console.log('Cobro recuperado → payment_failed_at limpiado:', prof.email)
+          }
+          console.log('Renovación (cobro recurrente OK), sin alta:', prof.email)
+          return json({ ok: true, status: 'renewal' })
         }
-        // Sigo al flujo normal de abajo (por si fuese el alta inicial que llega como authorized_payment).
+        // No hay profile con esta suscripción → es el PRIMER pago de un alta nueva.
+        // Capturar el email real del pagador para el matching por email de más abajo.
+        // ⚠️ TEMPORAL: log del authorized_payment para validar el field-path del email en el 1er pago real. SACAR después.
+        console.log('TEMP ap payload:', JSON.stringify(ap))
+        payerEmail = await resolvePayerEmail(ap, MP_TOKEN)
+        console.log('payerEmail resuelto:', payerEmail || '(no se pudo resolver → fallback por recencia)')
+        // Sigo al flujo normal de abajo (alta inicial que llega como authorized_payment).
       }
     } else {
       // payment u otros topics → no aplican al alta por suscripción
@@ -190,18 +205,46 @@ Deno.serve(async (req) => {
         return json({ ok: false, error: 'No se pudo determinar el programa de la suscripción' }, 422)
       }
 
-      // Buscar datos del atleta en pending_subscriptions (el más reciente del programa)
-      const { data: pending } = await adminClient
-        .from('pending_subscriptions')
-        .select('*')
-        .eq('program', program)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
+      // --- Encontrar el pending correcto ---
+      // PRIMARIO: por el email real del pagador (payerEmail). Comparación case-insensitive exacta en JS
+      // (evita los comodines %/_ de ilike; los emails pueden llevar '_').
+      // FALLBACK: el pending más reciente del programa, SOLO si se creó hace <= 30 min.
+      let pending: any = null
+
+      if (payerEmail) {
+        const target = payerEmail.toLowerCase().trim()
+        const { data: candidates } = await adminClient
+          .from('pending_subscriptions')
+          .select('*')
+          .eq('program', program)
+          .order('created_at', { ascending: false })
+          .limit(50)
+        pending = (candidates ?? []).find((p: any) => (p.email || '').toLowerCase().trim() === target) ?? null
+        if (pending) console.log('Pending matcheado por email del pagador:', payerEmail, program)
+      }
 
       if (!pending) {
-        console.error('No pending subscription para program:', program)
-        return json({ ok: false, error: 'No pending subscription data found' }, 404)
+        const { data: recent } = await adminClient
+          .from('pending_subscriptions')
+          .select('*')
+          .eq('program', program)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        const RECENT_MS = 30 * 60 * 1000
+        if (recent && (Date.now() - new Date(recent.created_at).getTime()) <= RECENT_MS) {
+          pending = recent
+          console.warn('Pending por recencia (email no matcheó exacto). payer:', payerEmail || '(desconocido)',
+            '| pending.email:', recent.email, '| program:', program)
+        }
+      }
+
+      if (!pending) {
+        // Ni email ni pending reciente → no damos de alta a nadie automático. Erika lo resuelve a mano.
+        // Buscar "ALTA MANUAL REQUERIDA" en los logs. Devuelve 200 para que MP no reintente (no se auto-resuelve).
+        console.error('ALTA MANUAL REQUERIDA: pago autorizado sin pending matcheable.',
+          'program:', program, '| payer_email:', payerEmail || '(desconocido)', '| preapproval:', preapprovalId)
+        return json({ ok: false, status: 'manual_required' })
       }
 
       const { email, full_name, phone } = pending
@@ -347,6 +390,32 @@ async function sendPaymentFailedEmail(email: string, full_name: string | null) {
     }
   } catch (mailErr) {
     console.error('Error enviando el mail de cobro fallido:', mailErr)
+  }
+}
+
+// Email real del pagador, encadenando authorized_payment → payment → payer.email.
+// El objeto `ap` (authorized_payment) trae payment.id; con ese id se consulta /v1/payments/{id},
+// que sí expone payer.email. Defensivo: cualquier fallo devuelve null y el matching cae al fallback por recencia.
+async function resolvePayerEmail(ap: any, mpToken: string | undefined): Promise<string | null> {
+  try {
+    const paymentId = ap?.payment?.id
+    if (!paymentId) {
+      console.warn('authorized_payment sin payment.id → no se puede resolver el email del pagador')
+      return null
+    }
+    const res = await fetch(`${MP_API}/v1/payments/${paymentId}`, {
+      headers: { 'Authorization': `Bearer ${mpToken}` }
+    })
+    if (!res.ok) {
+      console.warn('No se pudo GET /v1/payments/{id}:', res.status)
+      return null
+    }
+    const payment = await res.json()
+    const email = payment?.payer?.email ? String(payment.payer.email).trim() : ''
+    return email || null
+  } catch (err) {
+    console.warn('Error resolviendo el email del pagador:', err)
+    return null
   }
 }
 

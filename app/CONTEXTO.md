@@ -275,7 +275,7 @@ Lista textual dejada por el usuario para que quede registrada:
   cortarle el acceso. Es un flujo **distinto** al de la cancelación voluntaria (que ya se implementó).
 
 ### Registrados 2026-07-28 (no implementar aún)
-- **Distinguir alta manual vs. pago por MP en la lista de Alumnos.** Para Hybrid y en general para cualquier
+- ✅ **HECHO (2026-08-06)** — **Distinguir alta manual vs. pago por MP en la lista de Alumnos.** Para Hybrid y en general para cualquier
   programa grupal, poder ver visualmente qué atletas fueron dados de alta **a mano** (transferencia/efectivo,
   vía la Edge Function `create-athlete`) vs. cuáles pagaron por **Mercado Pago** (alta vía webhook
   `process-payment`). Hoy no hay forma de distinguirlos en la lista. Pista de implementación: los de MP tienen
@@ -288,12 +288,35 @@ Lista textual dejada por el usuario para que quede registrada:
   se muestra al atleta (es individual/privado; la fila de precio se oculta para asesorías). Este punto es
   específico de los 3 grupales con alta manual. (Relacionado: `custom_price` hoy se guarda pero todavía no se
   usa en ninguna vista — ver también el pendiente de conectarlo a Métricas.)
-- **Paridad de permisos Gonza vs. Erika (admin).** Confirmar/auditar si hoy las dos cuentas de admin
+- ✅ **AUDITADO (2026-08-06)** — **Paridad de permisos Gonza vs. Erika (admin).** Confirmar/auditar si hoy las dos cuentas de admin
   (Erika y Gonza) tienen exactamente los mismos permisos y funciones en el panel, o si hay alguna diferencia
   real. Revisar dos frentes: (a) a nivel **rol/RLS** (ambas deberían ser `role='admin'` → `get_my_role()='admin'`
   les da acceso total por igual), y (b) a nivel **UI del admin**, si hay algo hardcodeado que trate distinto a
   una que a otra (ej. algún filtro por coach, `whatsapp_erika`/`whatsapp_gonza`, o textos/acciones atados a una
   sola). Objetivo: que Gonza tenga exactamente las mismas funciones que Erika.
+  → **Resultado:** cero diferenciación por admin, en código y en diseño de RLS (todas las policies usan
+  `get_my_role()='admin'` uniforme; las menciones erika/gonza son a los *programas* de asesoría y a
+  `whatsapp_erika/_gonza`, no al admin logueado; no hay email/uid hardcodeado). Único punto no verificable
+  desde el repo: que la fila de Gonza en `profiles` tenga literalmente `role='admin'` — el usuario lo confirma
+  con la query de roles entregada. Ver Historial 2026-08-06.
+
+### Registrados 2026-08-06 (backlog de seguridad, no implementar aún)
+- **Visibilidad cruzada entre asesorados del mismo coach (RLS).** Las policies de SELECT de atleta sobre
+  `planning_days` / `planning_blocks` (las "Athlete ve…" que se conservan tras la limpieza de duplicados)
+  matchean por `pd.program_slug = p.program`. Como **todos** los asesorados de un mismo coach comparten el
+  `program_slug` (`asesoria-erika` o `asesoria-gonza`), esa condición hace que un asesorado pueda leer por API
+  la planificación de **otro** asesorado del mismo coach (la distinción real 1-a-1 es el `athlete_id`, que hoy
+  suma acceso vía `OR` pero no lo *restringe*). El editor/portal filtran bien por `athlete_id` en la UI, así que
+  no se nota en la app, pero la RLS es más laxa de lo debido. A revisar aparte: para asesorías, la lectura del
+  atleta debería exigir `athlete_id = auth.uid()` (no solo `program_slug`). No se tocó en la tarea de limpieza
+  de duplicados (2026-08-06), que solo removió policies redundantes sin cambar el criterio de las que quedan.
+- **Anti-abuso de `pending_subscriptions` — Opción B (endurecimiento futuro).** El fix de C1 (2026-08-06 (d))
+  usó la **Opción A** (trigger SQL de rate-limit). La **Opción B**, más robusta pero más invasiva, queda
+  registrada por si algún día se ve **abuso real** que la justifique: **mover el INSERT del pending a una Edge
+  Function** (plegado en `create-subscription`, que la landing ya invoca al lado) con `service_role`, **dropear
+  la policy de INSERT anónimo** de `pending_subscriptions` (que la tabla deje de ser escribible por PostgREST
+  público) y **rate-limit por IP real** (`x-forwarded-for`) con una tablita `rate_limits`. Cierra el vector de
+  INSERT anónimo por completo y limita por IP, a costo de cambiar el contrato landing↔función y sumar una tabla.
 
 ## Historial
 ### 2026-07-27 (5) — Mail de reactivación (Resend) en process-payment
@@ -2016,3 +2039,148 @@ Syntax-check admin + dashboard OK, sin refs colgadas al sistema viejo. Flujo viv
 
 Verificado en el navegador (páginas públicas): los 6 cambios presentes; el aviso de PayPal aparece al click y
 el link de WhatsApp sale de site_config; hero de asesoría ~52vh. No se tocó lógica de pago/checkout ni la base.
+
+## 2026-08-06 (c) — Auditoría de seguridad completa (SOLO REPORTE, cero fixes aplicados)
+Auditoría de 8 áreas (RLS, Edge Functions, endpoints públicos, XSS, CORS, Storage, exposición de datos, secrets).
+**No se tocó ningún archivo de código** — hallazgos para planificar fixes en otra sesión. Ordenados por severidad:
+- 🔴 **C1 — Secuestro de alta/pago.** `process-payment` matchea el comprador tomando **el pending más reciente
+  del programa** (`pending_subscriptions` `.eq('program',program).order(created_at desc).limit(1)`, index.ts:194),
+  NO por email del pagador de MP. Como `pending_subscriptions` acepta INSERT anónimo (`WITH CHECK true`), un
+  atacante que inunda esa tabla con `program=X` + su email secuestra el alta del próximo que pague X (y sin
+  malicia, dos pagos simultáneos del mismo programa se cruzan). Fix propuesto: cruzar por el **payer email de MP**
+  (la preapproval trae payer), no por "último del programa"; + validar email + anti-abuso en el INSERT.
+- ❌ **C2 — DESCARTADO (falso positivo).** Se sospechó fuga de PII de `profiles` entre atletas por el join
+  `author:profiles!author_id(full_name,role)` (dashboard.html:3090). **Query B (2026-08-06) lo refutó:** las
+  policies de SELECT de `profiles` son solo `auth.uid()=id` (propia) + admin — **un atleta NO puede leer el
+  perfil de otro** (ni el del admin). El join embebido devuelve **null** para terceros (PostgREST aplica la RLS
+  al recurso embebido) y el código lo tapa con literales fijos: comunidad → `|| 'Atleta'` (dashboard.html:3151,
+  3191); chat → `|| 'Coach'` / `{full_name:'Coach',role:'admin'}` (2759, 2779). El nombre **no** está
+  denormalizado (community_posts/messages no tienen columna de nombre). No hay exfiltración. Efecto colateral
+  solo-UX: la comunidad muestra a los pares como "Atleta" genérico. Si se quisieran ver nombres reales de pares,
+  sería una *feature* deliberada (vista `public_profiles` de solo-lectura), no un fix de seguridad.
+- 🟠 **I1 — `process-payment` NO valida la firma del webhook de MP.** La "clave secreta" del panel de Webhooks
+  está guardada pero **sin uso en el código** (no valida `x-signature`). Mitigante: re-consulta el estado real a
+  MP. Fix: validar HMAC `x-signature` al inicio.
+- 🟠 **I2 — `create-plans` sin auth interna** (depende de verify_jwt OFF; era one-off). Confirmar que esté
+  undeployed; si no, agregar chequeo admin-por-JWT.
+- 🟠 **I3 — YT API key hardcodeada** en `admin/index.html:2252` (HTML estático público). Restringir por referrer
+  en Google Cloud / mover a Edge Function. (Ya estaba en backlog; vigente.)
+- 🟠 **I4 — Sin anti-abuso** (rate limit/captcha/validación) en `pending_subscriptions` INSERT, `create-subscription`
+  y `process-payment`. Ligado a C1.
+- 🟡 Menores: buckets de Storage públicos (fotos accesibles por URL, limitación ya conocida); mensajes de error
+  con `err.message` crudo; CORS `*` (aceptable, auth por token — no cookies); `select('*')` sobre el propio
+  profile del atleta; `youtube_url` admite `javascript:` en href (self-XSS admin-only); `create-athlete` sin
+  validar formato de email.
+- ✅ **XSS: limpio.** `esc()` (escapa `& < > " '`, idéntica en dashboard y admin) envuelve el 100% de los campos
+  de texto libre de usuarios en todos los re-render (nombres, chat, comunidad, comentarios de bloque). Verificado
+  por subagente exhaustivo. Único `insertAdjacentHTML` usa datos estáticos.
+- ✅ **Secrets:** solo la YT key (I3) en el front; Supabase usa la publishable key (correcta). Ningún service_role/
+  MP token/Resend key en el cliente.
+- **Queries corridas (2026-08-06):** **Query A** → todas las tablas de `public` con `rls_on=true` y ≥1 policy,
+  **ninguna tabla abierta** (área 1 cerrada, sin hallazgos). **Query B** → refutó C2 (ver arriba). Con eso, el
+  **único crítico real es C1**. Orden sugerido de fixes: **C1 → I1 → I3/I2 → I4 → menores.** Nada aplicado aún.
+
+## 2026-08-06 — Badge "Manual vs MP" en la lista de Alumnos (admin) + auditoría RLS (solo reporte)
+Sesión con 3 tareas; **solo se aplicó código en la tarea 2** (las otras 2 tocan RLS/permisos y quedaron como
+reporte para que el usuario confirme antes de tocar nada en Supabase).
+1. **Tarea 2 (aplicada) — distinguir alta manual vs. pago por MP en `#view-alumnos`** (`admin/index.html`):
+   nueva función **`origenBadge(a)`** (junto a `tipoBadge`) que devuelve un pill al lado de la columna **Tipo**:
+   `mp_subscription_id` vacío → **"✋ Manual"** (azul, alta cargada por admin vía `create-athlete`);
+   con `mp_subscription_id` → **"💳 MP"** (verde, alta automática por el webhook `process-payment`). **Solo se
+   muestra en los 3 grupales** (crossfit/hybrid/corredores); en asesorías retorna `''` (siempre son manuales y
+   ya se distinguen con el badge "Asesoría"). Estilo inline consistente con `vencBadge` (pill .72rem, borde
+   redondeado). Se agregó a la celda Tipo del `renderAlumnos`: `${tipoBadge(a.program)}${origenBadge(a)}`.
+   `loadAlumnos` ya trae `mp_subscription_id` (usa `select('*')`), no hizo falta tocar la query. Syntax-check
+   `new Function` OK (1 script inline, 0 errores). (Sale del backlog 2026-07-28.)
+2. **Tarea 1 (reporte, sin cambios) — paridad Gonza vs. Erika (admin):** auditado repo + SQL documentado.
+   **Conclusión: no hay NINGUNA diferenciación por admin.** (a) RLS: todas las policies de admin usan
+   `public.get_my_role()='admin'` de forma uniforme (profiles, exercise_links, site_config, messages,
+   notifications, exercise_library, announcements, block_images…); ninguna referencia a un id/email/nombre de
+   admin puntual. `is_active_athlete()` nunca bloquea a `role='admin'`. (b) UI: las menciones "erika/gonza" en
+   `admin/index.html` son a los **programas de asesoría** (`asesoria-erika/-gonza`) y a las claves
+   `whatsapp_erika/_gonza`, NO al admin logueado. `CURRENT_ADMIN_ID/NAME` solo se usan para burbujas propias
+   del chat, `created_by` y targeting de notifs — nada restringe qué ve/hace cada admin. No hay email/uid
+   hardcodeado (verificado). **Lo único no verificable desde el repo:** que la fila de Gonza en `profiles`
+   tenga literalmente `role='admin'` (si fuera distinto, todas las policies la excluyen en silencio). Query de
+   confirmación entregada al usuario. Pendiente: que el usuario confirme el `role` real de ambas cuentas.
+3. **Tarea 3 (reporte, sin cambios) — policies RLS duplicadas:** el repo NO tiene el estado real de
+   `pg_policies` (los nombres que dio el usuario, ej. "Athlete crea posts", no existen en el repo → se crearon
+   a mano en Supabase). CONTEXTO 2026-07-28 (b) ya observó duplicados remanentes en **community_posts /
+   planning_days / messages** (dos SELECT de atleta con distinto nombre). Se entregó al usuario una query de
+   dump de `pg_policies` para armar la lista completa y exacta de drops.
+   → **Resuelto (mismo día):** el usuario corrió el dump; se analizaron caso por caso (permissive = OR → dropear
+   la angosta con la amplia presente NO corta acceso). **Lista final confirmada contra el dump (7 DROP en 6 casos):**
+   (1) `messages` INSERT: mantener "Usuario envía mensajes", dropear "Admin envía mensajes" + "Athlete envía
+   mensajes" (mismo `with_check from_id=auth.uid()`). (2) `community_posts` INSERT: mantener "Atleta crea posts
+   en su programa", dropear "Athlete crea posts" (mismo `with_check`, distinto orden). (3) `community_posts`
+   SELECT: mantener "Atleta ve posts de su programa" (incluye `OR role='admin'` — único acceso admin a posts;
+   el admin hoy no lee la tabla), dropear "Athlete ve posts de su programa" (subconjunto). (4) `planning_days`
+   **y** `planning_blocks` SELECT: mantener "Athlete ve…" (incluye `OR athlete_id=auth.uid()` → asesorías 1-a-1),
+   dropear "Atleta ve…" (solo `program_slug`). ⚠️ OJO: acá el keeper es el de nombre en **inglés**, inverso al
+   caso 3 — los nombres están cruzados entre tablas, se decide por el `qual`. (5) `messages` SELECT: mantener
+   "Athlete ve sus mensajes" (por `channel`) + "Admin ve todos los mensajes", dropear "Usuario ve sus mensajes"
+   (legacy `from_id/to_id`; el chat es 100% por `channel`, `to_id` ya no se escribe — verificado en dashboard y
+   admin). SQL de los 7 `DROP POLICY IF EXISTS` entregado para correr a mano. No toca las restrictive
+   `is_active_athlete()` ni las policies de admin. **Bug de Hybrid en los keepers de planning: ya resuelto**
+   (los 4 ALTER POLICY hybrid-aware están vigentes, confirmado por el usuario). **Pendiente:** que el usuario
+   corra los DROP (falta completar el nombre exacto de las 2 policies "Atleta ve…" de planning, truncado en la
+   charla). Observación de visibilidad cruzada en asesorías → backlog (ver "Registrados 2026-08-06").
+
+## 2026-08-06 (d) — Fix C1: matching de pagos por email del pagador + renovación/alta + anti-abuso (Opción A)
+Implementación del fix del crítico **C1** de la auditoría (secuestro/cruce de altas). Diseño confirmado por el
+usuario en 4 piezas. **Solo se tocó `supabase/functions/process-payment/index.ts`** (⚠️ requiere **redeploy**).
+- **Pieza 1 — email real del pagador.** Nueva `resolvePayerEmail(ap, mpToken)`: encadena `authorized_payment`
+  (`ap.payment.id`) → `GET /v1/payments/{id}` → `payer.email`. Defensiva: cualquier fallo devuelve `null` (cae al
+  fallback). Se captura en `let payerEmail` de scope superior. (La preapproval trae `payer_email:""` vacío y
+  `payer_id`, por eso hace falta la llamada extra al pago — confirmado con logs reales del usuario.)
+- **Pieza 2 — matching.** En la rama `status==='authorized'`: **PRIMARIO** por email del pagador (candidatos del
+  programa, comparación case-insensitive exacta en JS para evitar comodines `%/_` de ilike); **FALLBACK** = pending
+  más reciente del programa **solo si se creó hace ≤ 30 min**; **SIN MATCH** → `console.error('ALTA MANUAL
+  REQUERIDA: …')` (string buscable) + `return {ok:false, status:'manual_required'}` con **HTTP 200** (MP no
+  reintenta; no se da de alta a nadie automático → Erika lo resuelve a mano). Se eliminó el viejo "último del
+  programa" incondicional y el 404 de "No pending".
+- **Pieza 3 — renovación vs alta nueva.** En la rama de cobro **aprobado** del `authorized_payment`: si ya existe
+  un profile con ese `mp_subscription_id` → es **renovación** (cobro mensual de socio) → limpia `payment_failed_at`
+  si estaba + `console.log('Renovación…')` + `return {ok:true, status:'renewal'}` (skip limpio, **ya no tira el
+  ERROR** "No pending para program"). Si no existe → es el **1er pago de un alta nueva** → resuelve `payerEmail` y
+  sigue al matching. La rama de cobro **fallido** quedó intacta.
+- **Pieza 4 — anti-abuso (Opción A elegida por el usuario).** Trigger SQL `BEFORE INSERT` en
+  `pending_subscriptions` (cap global 30/min + cap por email 5/hora). **SQL para correr a mano** (abajo). La
+  Opción B (mover INSERT a Edge Function + IP rate-limit) quedó en el backlog de seguridad.
+- ⚠️ **`console.log` TEMPORAL** en la rama de alta nueva: `console.log('TEMP ap payload:', JSON.stringify(ap))`
+  para validar el field-path del email en el **primer pago real**. **SACAR** una vez confirmado (`ap.payment.id` +
+  `payment.payer.email`). El usuario avisa cuando confirme para removerlo.
+- **NO se tocó:** `resolveProgram`, rama `cancelled`, cobro fallido, reactivación (invite/Resend), creación de
+  usuario, borrado del pending, mails. **Verificación:** chequeo estructural del TS destipado con `node --check`
+  → OK (0 errores). Flujo vivo (webhook de MP) no reproducible sin un pago real.
+
+### 🗄️ SQL del trigger anti-abuso (Pieza 4, Opción A) — correr a mano en Supabase
+```sql
+create or replace function public.throttle_pending() returns trigger language plpgsql as $$
+begin
+  -- Cap global: máx 30 inserts por minuto (el tráfico real son unos pocos por día).
+  if (select count(*) from public.pending_subscriptions
+        where created_at > now() - interval '1 minute') >= 30 then
+    raise exception 'Demasiadas solicitudes, probá en un momento.';
+  end if;
+  -- Cap por email: máx 5 intentos por hora del mismo email.
+  if (select count(*) from public.pending_subscriptions
+        where lower(email) = lower(NEW.email)
+          and created_at > now() - interval '1 hour') >= 5 then
+    raise exception 'Ya registraste varios intentos, escribinos por WhatsApp.';
+  end if;
+  return NEW;
+end $$;
+
+drop trigger if exists trg_throttle_pending on public.pending_subscriptions;
+create trigger trg_throttle_pending
+  before insert on public.pending_subscriptions
+  for each row execute function public.throttle_pending();
+```
+Rollback: `drop trigger trg_throttle_pending on public.pending_subscriptions; drop function public.throttle_pending();`
+
+### ⚠️ Pendiente de deploy
+- **Redeployar `process-payment`** en Supabase (ya usa los mismos secrets: `MP_ACCESS_TOKEN`, `SUPABASE_URL`,
+  `SERVICE_ROLE_KEY`, `RESEND_API_KEY`).
+- **Correr el SQL del trigger** de arriba.
+- Tras el 1er pago real: confirmar el `TEMP ap payload` en logs → **quitar** ese `console.log` (avisa el usuario).
