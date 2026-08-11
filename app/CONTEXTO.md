@@ -1,6 +1,11 @@
 # CONTEXTO.md — HB Performance App
 
 ## Estado actual
+> **Hosting activo: GitHub Pages** (repo `ekapradacoach/hbperformance`, dominio `hbperformance.fit`). El push a
+> `main` dispara el deploy del **sitio estático** (landing + `app/` + `admin/`). ⚠️ Las **Edge Functions** de
+> Supabase NO se auto-deployan con el push (se despliegan a mano). *Netlify fue dado de baja (migración a GitHub
+> Pages); si en entradas viejas de esta bitácora aparece "Netlify", es histórico.*
+
 Proyecto iniciado. Supabase configurado. Arquitectura definida en CLAUDE.md.
 Creados `supabase.js` (raíz), `app/login.html` (funcional) y `admin/index.html` (dashboard admin
 + **sección Planificación completa** con editor avanzado: vista día/mes, copiar/pegar días,
@@ -378,7 +383,7 @@ Dos cambios en un commit. **No se tocó el flujo de pago/checkout.**
   2027-12-31 (futuro)** → sin overlay, dashboard cargado. Las 4 páginas pasan `new Function` (syntax OK).
 
 ### 2026-07-27 (2) — 3 cambios de UI en las landing (WodUp, WhatsApp, avisos de demora del mail)
-Solo texto/UI, agrupados en un commit para minimizar deploys de Netlify. **No se tocó el flujo de
+Solo texto/UI, agrupados en un commit para minimizar deploys del hosting. **No se tocó el flujo de
 pago/checkout** (`create-subscription`/`process-payment`/`cancel-subscription` intactos).
 1. **WodUp**: se eliminó el `.notice-box` del footer de `crossfit.html` / `hybrid.html` /
    `fuerza-corredores.html` (el mismo aviso "📱 …WodUp… app.wodup.com" que ya se había sacado de
@@ -1525,7 +1530,7 @@ Guard en `init()` (mismo patrón que el corte por `subscription_end`, **sin cron
   `authorized_payment` completo → con el primer cobro fallido real en producción se pueden confirmar los
   valores exactos y ajustar si hiciera falta.
 - **Pendiente de deploy:** correr el `ALTER TABLE` de arriba + **redeployar `process-payment`** en Supabase.
-  (El cambio del dashboard sí se publica por Netlify como cualquier cambio del portal.)
+  (El cambio del dashboard sí se publica por el hosting —hoy GitHub Pages— como cualquier cambio del portal.)
 
 ## 2026-07-28 (b) — Refuerzo del corte de acceso a nivel RLS (además del guard del dashboard)
 **Objetivo:** que el corte por suscripción vencida/cancelada **y** por cobro fallido (>3 días) no dependa
