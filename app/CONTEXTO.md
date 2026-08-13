@@ -2215,21 +2215,27 @@ Continuación de la auditoría de seguridad (ver 2026-08-06 (c)). Estado de los 
   una tabla de estado → más cambio, no justificado por el riesgo). Si algún día se ve abuso directo, aplica la
   misma Opción B del backlog. (Nota menor aparte, no de I4: `create-subscription` devuelve `err.message` crudo
   al cliente —info leak leve, Me2 de la auditoría—; se puede endurecer a un mensaje genérico si se quiere.)
-- **I1 — firma del webhook de MP → ⏳ DISEÑO ENTREGADO, PENDIENTE DE OK DEL USUARIO (no se tocó código).**
-  Toca `process-payment` (webhook en vivo) → requiere confirmación del diseño antes de codear. Investigación de
-  la doc oficial de MP + plan en el chat (2026-08-13). Resumen del diseño:
-  · MP manda `x-signature: ts=<ts>,v1=<hmac>` + header `x-request-id`. Manifest a firmar:
-    `id:{data.id};request-id:{x-request-id};ts:{ts};` (el `data.id` es el del **query string**, en minúsculas;
-    si falta data.id o x-request-id, se omite ese segmento). HMAC-**SHA256** con la **clave secreta del panel de
-    Webhooks de MP** como key y el manifest como mensaje, hex; comparar contra `v1` en **tiempo constante**.
-  · Validación al **inicio** de `process-payment`, **antes** de cualquier fetch/mutación. Firma inválida → **401**.
-  · **Secret nuevo:** `MP_WEBHOOK_SECRET` en Supabase Secrets. El VALOR ya existe (está en el panel de Webhooks de
-    MP, "Clave secreta"), pero **no está en Supabase Secrets** (el código nunca lo usó) → hay que copiarlo.
-  · **Rollout seguro (por ser webhook en vivo):** fase 1 "monitor" (validar + loguear PASS/FAIL pero **seguir
-    procesando**) para confirmar que los webhooks reales pasan; fase 2 "enforce" (rechazar 401). Y guarda: si
-    `MP_WEBHOOK_SECRET` no está seteado → loguear warning y **no romper** el alta.
-  · Esperando OK del diseño para implementar. **No se pushea nada de `process-payment` hasta la confirmación.**
+- **I1 — firma del webhook de MP → ✅ IMPLEMENTADO EN MODO MONITOR (2026-08-13). Pendiente: setear el secret +
+  redeploy + confirmar en logs, luego pasar a enforce.** El usuario eligió rollout **monitor primero** (no enforce
+  directo). En `process-payment/index.ts`:
+  · Helper `verifyMpSignature(req, secret)` (no lanza; devuelve `'ok' | 'fail' | 'no-secret' | 'no-signature' |
+    'error'`): parsea `x-signature` (`ts=<>,v1=<>`) + header `x-request-id`, arma el manifest
+    `id:{data.id};request-id:{x-request-id};ts:{ts};` (`data.id` del **query string**, en minúsculas; omite el
+    segmento si falta), calcula **HMAC-SHA256(secret, manifest)** hex con Web Crypto y compara con `v1` en
+    **tiempo constante** (`constantTimeEqual`). En fail loguea el manifest + v1 recibido/computed (para debug del
+    monitoreo; no son secretos).
+  · Se llama **al inicio** del `try`, antes de todo fetch/mutación: `console.log('MP SIGNATURE:', sigResult)`.
+    ⚠️ **MONITOR:** hoy **solo loguea, NO bloquea**. La línea de enforce está escrita y comentada
+    (`// ENFORCE (futuro): if (sigResult === 'fail') return json(..., 401)`) para activarla después.
+  · **Guarda:** si `MP_WEBHOOK_SECRET` no está seteado → devuelve `'no-secret'` y NO rompe el alta.
+  · **Secret nuevo `MP_WEBHOOK_SECRET`** (agregado a la lista de secrets del header). El VALOR ya existe en
+    **MP → Tus integraciones → tu app → Webhooks → "Clave secreta"**; **no estaba en Supabase Secrets** → el
+    usuario lo copia ahí antes del redeploy.
+  · **Pasos de deploy:** (1) el usuario setea `MP_WEBHOOK_SECRET` en Supabase Secrets; (2) redeploy de
+    `process-payment`; (3) mirar los logs de altas reales → confirmar que dan `MP SIGNATURE: ok`; (4) recién ahí,
+    en otro cambio, **descomentar el enforce** (fail → 401). Syntax-check `node --check` (destipado) OK.
+  · **No se pushea `process-payment` hasta que el usuario lo redeploye** (mismo criterio que C1).
 
 ### Estado de git (2026-08-13)
-Sin pushear (a pedido del usuario): commit de docs de hosting (2026-08-11) + este trabajo (I2 código + I3/I4/estado
-docs). Nada de `process-payment` tocado en este commit. El push lo decide el usuario.
+Sin pushear: commit de docs de hosting (2026-08-11) + I2/I3/I4 (`e3f8f77`) + este commit de I1 (monitor) que **sí
+toca `process-payment`** → NO pushear hasta que el usuario setee el secret y redeploye (mismo criterio que C1).

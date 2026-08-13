@@ -37,7 +37,13 @@
 //   suscripción. Si el cobro fue APROBADO y había una falla previa → se limpia payment_failed_at
 //   (recuperación automática). El corte de acceso a los 3 días lo hace el guard del dashboard.
 //
-// Secretos: MP_ACCESS_TOKEN, SUPABASE_URL, SERVICE_ROLE_KEY, RESEND_API_KEY.
+// Cambio 2026-08-13 (I1 — firma del webhook, MODO MONITOR): al inicio se valida la firma x-signature
+//   de MP (HMAC-SHA256 del manifest "id:{data.id};request-id:{x-request-id};ts:{ts};" contra el v1 del
+//   header, con MP_WEBHOOK_SECRET). ⚠️ Por ahora es MONITOR: solo se loguea "MP SIGNATURE: ok|fail|..."
+//   y NO se rechaza nada (para no cortar altas reales). Cuando se confirme en logs que los pagos reales
+//   dan 'ok', se pasa a ENFORCE (rechazar 401 en fail). Si falta el secret, se loguea y NO se bloquea.
+//
+// Secretos: MP_ACCESS_TOKEN, SUPABASE_URL, SERVICE_ROLE_KEY, RESEND_API_KEY, MP_WEBHOOK_SECRET.
 // ============================================================================
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
@@ -53,6 +59,14 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   try {
+    // --- I1: validar la firma del webhook de MP (MODO MONITOR: loguea pero NO bloquea) ---
+    // Va primero, antes de cualquier fetch/mutación, para quedar listo para el enforce futuro.
+    // ⚠️ MONITOR: hoy solo se loguea el resultado; NO se corta el flujo aunque la firma falle.
+    //    Cuando los logs confirmen que los pagos reales dan 'ok' → pasar a enforce (descomentar el reject).
+    const sigResult = await verifyMpSignature(req, Deno.env.get('MP_WEBHOOK_SECRET'))
+    console.log('MP SIGNATURE:', sigResult)
+    // ENFORCE (futuro): if (sigResult === 'fail') return json({ ok: false, error: 'invalid signature' }, 401)
+
     const adminClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SERVICE_ROLE_KEY') ?? ''
@@ -351,6 +365,64 @@ function json(body: unknown, status = 200) {
     status,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' }
   })
+}
+
+// I1: valida la firma x-signature del webhook de MP. NO lanza; devuelve el resultado para loguear.
+// Retornos: 'ok' | 'fail' | 'no-secret' | 'no-signature' | 'error'.
+// Manifest oficial de MP: "id:{data.id};request-id:{x-request-id};ts:{ts};" (omitir data.id / request-id
+// si no vienen; data.id = el del QUERY STRING, en minúsculas). HMAC-SHA256(secret, manifest) hex vs v1.
+async function verifyMpSignature(req: Request, secret: string | undefined): Promise<string> {
+  try {
+    if (!secret) return 'no-secret'
+    const xSignature = req.headers.get('x-signature') || ''
+    const xRequestId = req.headers.get('x-request-id') || ''
+    if (!xSignature) return 'no-signature'
+
+    // Parsear "ts=<...>,v1=<...>"
+    let ts = '', v1 = ''
+    for (const part of xSignature.split(',')) {
+      const idx = part.indexOf('=')
+      if (idx === -1) continue
+      const k = part.slice(0, idx).trim()
+      const val = part.slice(idx + 1).trim()
+      if (k === 'ts') ts = val
+      else if (k === 'v1') v1 = val
+    }
+    if (!ts || !v1) return 'no-signature'
+
+    // data.id del query string, en minúsculas (fallback a 'id'); omitir el segmento si falta.
+    const url = new URL(req.url)
+    const dataId = (url.searchParams.get('data.id') || url.searchParams.get('id') || '').toLowerCase()
+
+    let manifest = ''
+    if (dataId) manifest += `id:${dataId};`
+    if (xRequestId) manifest += `request-id:${xRequestId};`
+    manifest += `ts:${ts};`
+
+    // HMAC-SHA256(secret, manifest) → hex
+    const enc = new TextEncoder()
+    const key = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign'])
+    const sigBuf = await crypto.subtle.sign('HMAC', key, enc.encode(manifest))
+    const computed = [...new Uint8Array(sigBuf)].map((b) => b.toString(16).padStart(2, '0')).join('')
+
+    if (!constantTimeEqual(computed, v1.toLowerCase())) {
+      // En modo monitor este log ayuda a confirmar por qué falla (los valores no son secretos; la key sí).
+      console.warn('MP SIGNATURE fail — manifest:', manifest, '| v1(recibido):', v1, '| computed:', computed)
+      return 'fail'
+    }
+    return 'ok'
+  } catch (err) {
+    console.warn('Error validando la firma de MP:', err)
+    return 'error'
+  }
+}
+
+// Comparación en tiempo constante de dos strings hex (evita timing attacks).
+function constantTimeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false
+  let diff = 0
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i)
+  return diff === 0
 }
 
 // Mail de aviso de cobro fallido (mismo mecanismo Resend que el de reactivación).
