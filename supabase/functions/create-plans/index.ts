@@ -8,13 +8,18 @@
 // Crear los planes por API es lo que los deja asociados a la app (a diferencia de
 // los del panel no-code). Después `create-subscription` usa esos IDs.
 //
-// Cómo correrla: deploy con verify_jwt OFF, invocala UNA vez (curl o el tester del
-// dashboard) y revisá el JSON devuelto (trae los preapproval_plan_id). Después
-// podés borrar/deshabilitar esta función. También quedan guardados en site_config.
-//   supabase functions deploy create-plans --no-verify-jwt
-//   curl -X POST https://frjlafrgdcbomdnentbe.supabase.co/functions/v1/create-plans
+// ⚠️ Endurecida (2026-08-13): ahora exige un JWT de ADMIN (mismo patrón que create-athlete).
+//   Sin un admin logueado, devuelve 401/403 y no crea ningún plan. Lo ideal, igualmente, es
+//   dejarla DESHABILITADA/undeployed cuando no se use (es de uso único; los ids ya están en site_config).
 //
-// Secretos: MP_ACCESS_TOKEN, SUPABASE_URL, SERVICE_ROLE_KEY.
+// Cómo correrla: deploy con verify_jwt OFF (para recibir el request; el control de acceso lo hace
+// el chequeo de admin interno). Invocala UNA vez CON el Authorization del admin y revisá el JSON
+// (trae los preapproval_plan_id). Después borrá/deshabilitá la función.
+//   supabase functions deploy create-plans --no-verify-jwt
+//   curl -X POST -H "Authorization: Bearer <ADMIN_ACCESS_TOKEN>" \
+//        https://frjlafrgdcbomdnentbe.supabase.co/functions/v1/create-plans
+//
+// Secretos: MP_ACCESS_TOKEN, SUPABASE_URL, SERVICE_ROLE_KEY, SUPABASE_ANON_KEY.
 // ============================================================================
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
@@ -38,6 +43,22 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   try {
+    // --- Solo admin: validar el JWT del que llama (mismo patrón que create-athlete) ---
+    // La función se deploya con verify_jwt OFF (para poder recibir el request), así que el
+    // control de acceso lo hace este chequeo: sin un JWT de admin válido, no crea ningún plan.
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader) return json({ ok: false, error: 'No autorizado.' }, 401)
+    const userClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      { global: { headers: { Authorization: authHeader } } }
+    )
+    const { data: { user } } = await userClient.auth.getUser()
+    if (!user) return json({ ok: false, error: 'No autorizado.' }, 401)
+    const { data: prof } = await userClient
+      .from('profiles').select('role').eq('id', user.id).single()
+    if (!prof || prof.role !== 'admin') return json({ ok: false, error: 'No autorizado.' }, 403)
+
     const MP_TOKEN = Deno.env.get('MP_ACCESS_TOKEN')
     if (!MP_TOKEN) return json({ ok: false, error: 'Falta MP_ACCESS_TOKEN en Secrets.' })
 

@@ -219,10 +219,13 @@ CREATE POLICY "Admin actualiza mensajes" ON public.messages
 - Nota: cuando se construya el lado del **atleta**, harán falta policies para que cada alumno vea/
   envíe solo en su canal (`channel = su program` o `channel = 'dm_' + su id`). Por ahora solo admin.
 
-## ⚠️ Seguridad — API key de YouTube
+## ✅ Seguridad — API key de YouTube (RESUELTO 2026-08-13)
 - La YouTube Data API v3 key está **hardcodeada en `admin/index.html`** (`const YT_API_KEY`), pública
-  en el front (así lo pidió el spec "por ahora"). **Restringirla en Google Cloud** por referrer HTTP
-  (dominio del sitio) para que no la reutilicen. Ideal a futuro: moverla a una Edge Function.
+  en el front (así lo pidió el spec "por ahora").
+- ✅ **RESUELTO (2026-08-13, hallazgo I3 de la auditoría):** la key fue **restringida por dominio/referrer
+  HTTP en Google Cloud Console** (fuera del repo, confirmado por el usuario). Aunque siga visible en el HTML
+  estático, no se puede reutilizar desde otro dominio → sin riesgo de robo de cuota. No hubo cambio de código.
+  Mejora futura opcional (no urgente): moverla a una Edge Function para sacarla del front.
 
 ## ⚠️ Pendiente (documentado, NO codeado) — cancelación de suscripciones vía MercadoPago
 - ✅✅ **Cancelación COMPLETA y PROBADA EN PRODUCCIÓN (2026-07-27):** front + Edge Function
@@ -2189,3 +2192,44 @@ Rollback: `drop trigger trg_throttle_pending on public.pending_subscriptions; dr
   `SERVICE_ROLE_KEY`, `RESEND_API_KEY`).
 - **Correr el SQL del trigger** de arriba.
 - Tras el 1er pago real: confirmar el `TEMP ap payload` en logs → **quitar** ese `console.log` (avisa el usuario).
+
+## 2026-08-13 — Auditoría: I1 (diseño), I2/I3/I4 (resueltas). Estado de los "importantes"
+Continuación de la auditoría de seguridad (ver 2026-08-06 (c)). Estado de los 4 hallazgos "Importante":
+
+- **I2 — `create-plans` sin auth interna → ✅ RESUELTO (código).** Se le agregó el **chequeo admin-por-JWT**
+  (mismo patrón que `create-athlete`): al inicio de la función valida `Authorization` → `getUser()` →
+  `profiles.role='admin'`; sin admin devuelve 401/403 y **no crea ningún plan**. Sigue con `verify_jwt` OFF a
+  nivel plataforma (para recibir el request), pero el control de acceso ahora lo hace el código. Se sumó
+  **`SUPABASE_ANON_KEY`** a la lista de secretos del header. Syntax-check `node --check` (destipado) OK.
+  ⚠️ **Pendiente de deploy:** redeployar `create-plans` (o, mejor aún, dejarla **undeployed** —es de uso único,
+  los `mp_plan_*` ya están en `site_config`). Solo `create-plans/index.ts`, no toca `process-payment`.
+- **I3 — YT API key en el front → ✅ RESUELTO.** La key se **restringió por dominio/referrer en Google Cloud
+  Console** (fuera del repo, confirmado por el usuario). Sin cambio de código. Ver sección "✅ Seguridad — API
+  key de YouTube (RESUELTO 2026-08-13)".
+- **I4 — anti-abuso de `create-subscription` → ✅ EVALUADO, sin cambios (riesgo bajo).** La función NO escribe
+  en la base: solo lee `mp_plan_<program>` de `site_config` y devuelve el `init_point` del plan (una URL
+  estática). Spamearla solo quema invocaciones, sin costo de datos ni de API de MP (no llama a MP). Además, en
+  el flujo real la landing hace **primero** el INSERT en `pending_subscriptions` (que **ya tiene el trigger de
+  rate-limit** de 2026-08-06 (d)) y **después** invoca `create-subscription`, así que el spam por el camino
+  normal choca antes con el trigger. Conclusión: **no amerita rate-limit propio** (agregar uno real necesitaría
+  una tabla de estado → más cambio, no justificado por el riesgo). Si algún día se ve abuso directo, aplica la
+  misma Opción B del backlog. (Nota menor aparte, no de I4: `create-subscription` devuelve `err.message` crudo
+  al cliente —info leak leve, Me2 de la auditoría—; se puede endurecer a un mensaje genérico si se quiere.)
+- **I1 — firma del webhook de MP → ⏳ DISEÑO ENTREGADO, PENDIENTE DE OK DEL USUARIO (no se tocó código).**
+  Toca `process-payment` (webhook en vivo) → requiere confirmación del diseño antes de codear. Investigación de
+  la doc oficial de MP + plan en el chat (2026-08-13). Resumen del diseño:
+  · MP manda `x-signature: ts=<ts>,v1=<hmac>` + header `x-request-id`. Manifest a firmar:
+    `id:{data.id};request-id:{x-request-id};ts:{ts};` (el `data.id` es el del **query string**, en minúsculas;
+    si falta data.id o x-request-id, se omite ese segmento). HMAC-**SHA256** con la **clave secreta del panel de
+    Webhooks de MP** como key y el manifest como mensaje, hex; comparar contra `v1` en **tiempo constante**.
+  · Validación al **inicio** de `process-payment`, **antes** de cualquier fetch/mutación. Firma inválida → **401**.
+  · **Secret nuevo:** `MP_WEBHOOK_SECRET` en Supabase Secrets. El VALOR ya existe (está en el panel de Webhooks de
+    MP, "Clave secreta"), pero **no está en Supabase Secrets** (el código nunca lo usó) → hay que copiarlo.
+  · **Rollout seguro (por ser webhook en vivo):** fase 1 "monitor" (validar + loguear PASS/FAIL pero **seguir
+    procesando**) para confirmar que los webhooks reales pasan; fase 2 "enforce" (rechazar 401). Y guarda: si
+    `MP_WEBHOOK_SECRET` no está seteado → loguear warning y **no romper** el alta.
+  · Esperando OK del diseño para implementar. **No se pushea nada de `process-payment` hasta la confirmación.**
+
+### Estado de git (2026-08-13)
+Sin pushear (a pedido del usuario): commit de docs de hosting (2026-08-11) + este trabajo (I2 código + I3/I4/estado
+docs). Nada de `process-payment` tocado en este commit. El push lo decide el usuario.
