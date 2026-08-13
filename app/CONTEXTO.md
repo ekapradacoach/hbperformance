@@ -2239,3 +2239,38 @@ Continuación de la auditoría de seguridad (ver 2026-08-06 (c)). Estado de los 
 ### Estado de git (2026-08-13)
 Sin pushear: commit de docs de hosting (2026-08-11) + I2/I3/I4 (`e3f8f77`) + este commit de I1 (monitor) que **sí
 toca `process-payment`** → NO pushear hasta que el usuario setee el secret y redeploye (mismo criterio que C1).
+
+## 2026-08-13 (b) — Nombre real del coach en el chat del atleta (vista coach_directory)
+**Tarea 1 (implementada).** Hasta ahora el atleta veía **"Coach" genérico** en las burbujas del chat: el
+`join sender:profiles!from_id(full_name, role)` de `loadChatMessages` devuelve **null** para admins (la RLS de
+`profiles` no deja al atleta leer perfiles de admin), y el fallback era `{ full_name: 'Coach', role: 'admin' }`.
+- **Fix (`app/dashboard.html`):** nueva `loadCoachNames()` que lee la **vista `coach_directory`** (solo
+  `id/full_name/role` de admins) y **siembra `chatSenderCache`** antes de renderizar. Se llama en `enterMensajes()`
+  antes de `loadChatMessages()`. Además, el fallback de `appendChatMessage` (realtime) pasó de consultar
+  `profiles` (que devolvía null → "Coach") a consultar **`coach_directory`** (`.maybeSingle()`), así los mensajes
+  nuevos del coach también muestran el nombre real. Degrada en silencio a "Coach" si la vista no existe.
+- **NO expone nada sensible:** la vista solo trae `id/full_name/role` y **solo de admins** (nada de email/
+  teléfono ni perfiles de atletas). La RLS de `profiles` queda intacta (no se agregó ninguna policy que abra
+  perfiles ajenos). Syntax-check inline (`new Function`) OK.
+- ⚠️ **Pendiente del usuario:** correr el DDL de la vista (abajo). Sin ella, el chat degrada al "Coach" de antes
+  (no rompe nada). Solo toca `dashboard.html` (frontend) → se puede pushear/deployar sin depender de Edge Functions.
+
+### 🗄️ DDL de la vista `coach_directory` — correr a mano en Supabase
+```sql
+-- Vista de SOLO LECTURA: expone únicamente id/full_name/role de los ADMINS (coaches).
+-- No expone email/teléfono ni ningún otro campo, ni perfiles de atletas.
+-- La usa el chat del dashboard del atleta para mostrar el nombre real del coach.
+-- Es una vista "definer" (default en PG15): corre con permisos del owner → ve los perfiles de admin
+-- aunque el atleta no pueda leerlos por RLS. Es seguro porque filtra a role='admin' y solo 3 columnas.
+create or replace view public.coach_directory as
+  select id, full_name, role
+  from public.profiles
+  where role = 'admin';
+
+-- Acceso: solo usuarios autenticados (no anónimos). Para vistas el control es por GRANT (no RLS/policy).
+revoke all on public.coach_directory from anon, public;
+grant select on public.coach_directory to authenticated;
+```
+(Nota: el linter de Supabase marca las vistas "SECURITY DEFINER" como warning; acá es intencional y seguro
+por el filtro a admins + columnas no sensibles. Alternativa equivalente: un RPC `security definer` que devuelva
+las mismas 3 columnas con `grant execute to authenticated`.)

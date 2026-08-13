@@ -2705,9 +2705,18 @@
       setChatHeader();
       chatRenderedIds = new Set();
       document.getElementById('chatMsgs').innerHTML = '<div class="chat-empty">Cargando…</div>';
+      await loadCoachNames();   // nombres reales de los coaches (admins) para las burbujas del chat
       await loadChatMessages();
       await markChatRead();
       subscribeChat();
+    }
+
+    // Siembra los nombres reales de los coaches (admins) en chatSenderCache desde la vista `coach_directory`
+    // (la RLS no deja al atleta leer perfiles de admin directamente). Así los mensajes del coach muestran
+    // "Erika/Gonza Prada" en vez del fallback genérico "Coach". Degrada en silencio si la vista no existe.
+    async function loadCoachNames() {
+      const { data } = await sb.from('coach_directory').select('id, full_name, role');
+      (data || []).forEach(c => { chatSenderCache[c.id] = { full_name: c.full_name, role: 'admin' }; });
     }
 
     function setChatHeader() {
@@ -2775,7 +2784,8 @@
       if (!row || row.channel !== chatChannel) return;
       if (chatRenderedIds.has(row.id)) return;   // dedupe (optimista + realtime)
       if (String(row.from_id) !== String(ATHLETE.id) && !chatSenderCache[row.from_id]) {
-        const { data } = await sb.from('profiles').select('full_name, role').eq('id', row.from_id).single();
+        // El atleta no puede leer perfiles de admin por RLS → resolver el nombre del coach por la vista.
+        const { data } = await sb.from('coach_directory').select('full_name, role').eq('id', row.from_id).maybeSingle();
         chatSenderCache[row.from_id] = data || { full_name: 'Coach', role: 'admin' };
       }
       const box = document.getElementById('chatMsgs');
