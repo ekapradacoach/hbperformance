@@ -1,0 +1,14 @@
+{
+  "name": "HB Performance",
+  "short_name": "HB Performance",
+  "description": "Portal de entrenamiento HB Performance — tu planificación, estadísticas y comunidad.",
+  "start_url": "/app/dashboard.html",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0A0A0A",
+  "theme_color": "#0A0A0A",
+  "icons": [
+    { "src": "/logo.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/logo.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

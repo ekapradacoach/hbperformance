@@ -2274,3 +2274,47 @@ grant select on public.coach_directory to authenticated;
 (Nota: el linter de Supabase marca las vistas "SECURITY DEFINER" como warning; acá es intencional y seguro
 por el filtro a admins + columnas no sensibles. Alternativa equivalente: un RPC `security definer` que devuelva
 las mismas 3 columnas con `grant execute to authenticated`.)
+
+## 2026-08-13 (c) — Web Push Fase 1 (PWA + Android): base PWA + send-push + UI atleta
+Feature nueva: **notificaciones push** cuando llega un mensaje de chat (atleta o admin), incluso con la app
+cerrada. Decidido en fases: **Fase 1 = PWA instalable + push andando en Android**; **Fase 2 = pulir iOS**.
+Disparador: solo `type='message'` (recomendación); trigger sobre la tabla `notifications` (reusa la resolución
+de destinatarios que ya hace el helper `notify()`). Este commit = **PWA base + send-push + UI del atleta**.
+
+### Lo construido (código)
+- **`manifest.webmanifest`** (raíz): PWA instalable (name "HB Performance", `display:standalone`, colores de la
+  identidad, íconos = `logo.png`). Requisito para instalar y —clave— para que iOS permita push (Fase 2).
+- **`sw.js`** (raíz, scope `/` cubre app+admin): **solo Web Push**, SIN handler de `fetch`/cache (para no servir
+  contenido stale). Maneja `push` (muestra la notif) y `notificationclick` (enfoca/abre la URL). El payload lo
+  manda `send-push` como JSON `{title, body, url, tag}`.
+- **Registro del SW + metas** (`apple-mobile-web-app-capable`, manifest link, theme-color) en `dashboard.html`
+  y `admin/index.html`. Verificado en localhost: SW activo scope `/`, manifest y sw.js 200, sin errores.
+- **Edge Function `send-push`** (`supabase/functions/send-push/index.ts`, verify_jwt OFF): la dispara el DB
+  Webhook de `notifications`. Filtra `type='message'`, busca `push_subscriptions` del `record.user_id`, arma la
+  URL según el rol (atleta→`/app/dashboard.html`, admin→`/admin/index.html`) + el `link`, y manda el Web Push.
+  **Cifrado hand-rolled con Web Crypto** (sin librería): VAPID JWT ES256 + aes128gcm (RFC 8291/8188). Borra
+  endpoints muertos (404/410). Lee la **VAPID pública de `site_config`** (`vapid_public_key`) y la **privada de
+  Secrets** (`VAPID_PRIVATE_KEY` + `VAPID_SUBJECT`). Syntax-check `node --check` (destipado) OK.
+- **UI de permiso en `dashboard.html`** (atleta): **banner de 1ª vez** (dismiss por dispositivo con
+  `localStorage.hb_push_dismissed`, se dispara en `init()` como el modal de acceso directo) **+ toggle
+  permanente** en Perfil (card "🔔 Notificaciones"). `enablePush()` pide permiso → `pushManager.subscribe` con la
+  VAPID pública de `site_config` → upsert en `push_subscriptions` (onConflict endpoint). `updatePushUI()` refleja
+  el estado (activadas / bloqueadas / no soportado). En iOS-pestaña `pushSupported()` es false → no molesta.
+  Syntax-check inline OK.
+
+### Infra (ya hecha por el usuario, 2026-08-13)
+- Secrets `VAPID_PRIVATE_KEY` + `VAPID_SUBJECT` cargados. `site_config.vapid_public_key` seteado.
+- Tabla `push_subscriptions` (user_id, endpoint unique, p256dh, auth, user_agent) + RLS
+  (`for all using auth.uid()=user_id`). VAPID pública:
+  `BIsgVizH8R5UUtFU0hQ6mCOzC4EHPr9ckaxK_0eZgk1RcaAxuYMpQETM5EhvGbbl7MfT-TvoFJBdLt4qg5Y7mx0`
+  (la privada quedó solo en Secrets; se puede rotar si se quiere).
+
+### Pendiente
+- **Deploy** de `send-push` (`supabase functions deploy send-push --no-verify-jwt`) + **crear el DB Webhook**
+  (`INSERT` en `public.notifications` → POST a `.../functions/v1/send-push`).
+- **UI de permiso en el admin** (`admin/index.html`): banner + toggle, para que los admins también reciban push
+  (usa `CURRENT_ADMIN_ID` en vez de `ATHLETE.id`). ← próximo turno, cierra Fase 1.
+- **Test real** en Android (el cifrado no se puede validar local): atleta activa push → admin le manda mensaje →
+  llega el push. Los logs de `send-push` muestran `sent/removed/total`.
+- **Fase 2 — iOS:** confirmar el flujo instalando la PWA en pantalla de inicio (en pestaña de Safari NO hay push);
+  ajustar textos/onboarding para iOS.
