@@ -8,3 +8,6 @@ Codigos.txt
 Thumbs.db
 .DS_Store
 desktop.ini
+
+# Scratch de la CLI de Supabase
+supabase/.temp/
