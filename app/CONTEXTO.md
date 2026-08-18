@@ -2402,3 +2402,24 @@ Cierre de la depuración de 2026-08-13 (d). **Diagnóstico completo de la cadena
   el push al repo NO actualiza la función. Hay que **redeployar `send-push`** (editor del dashboard, pegando el
   código nuevo, o CLI) para que el fix tome efecto. Después: re-test del mensaje desde el admin.
 - **Pendiente aparte (Fase 1):** UI de permiso en el admin (`admin/index.html`) para que los admins reciban push.
+
+## 2026-08-13 (f) — Badge de no leídos en el tab "Mensajes" (dashboard atleta)
+Mejora de UX (no bug): globito rojo con contador sobre el tab **Mensajes** cuando hay mensajes sin leer, estilo
+apps de chat. Solo frontend (`app/dashboard.html`), no toca Edge Functions.
+- **Diagnóstico de la campanita (base reusada):** fuente = tabla `notifications` + campo `read`. `loadNotifs()`
+  trae las 30 últimas (todos los tipos) → `NOTIFS` + `notifUnread`; `updateNotifBadge()` pinta `#notifBadge`;
+  realtime `subscribeNotifs` → `prependNotif` incrementa; `onNotifItemClick`/`markAllNotifsRead` marcan leído.
+  ⚠️ Hallazgo: entrar a Mensajes solo marcaba `messages.read` (no `notifications`) → la campanita quedaba mostrando
+  la notif de mensaje como no leída aunque ya leyeras el chat.
+- **Implementado:** badge del tab = `NOTIFS.filter(n => !n.read && n.type==='message').length` (**misma fuente que
+  la campanita → sincronizados**). Piezas: markup `<span class="tab-badge hidden" id="msgTabBadge">` dentro del
+  `.tico` del tab + CSS `.tab-badge` (rojo `#E23B3B`, absolute sobre el ícono, oculto si 0). `updateMsgTabBadge()`
+  se llama junto a cada `updateNotifBadge()` (loadNotifs ×2, prependNotif, onNotifItemClick, markAllNotifsRead).
+  Nuevo `markMessageNotifsRead()` (marca leídas las notifs `type='message'` en memoria + DB) se llama en
+  `enterMensajes` → limpia badge del tab **y** la parte de mensajes de la campanita (arregla la inconsistencia de
+  arriba). Si llega un push estando ya en Mensajes (`prependNotif` con vista `#view-mensajes` activa) → se marca
+  leído al toque. Requisitos del usuario (1 misma fuente, 2 sincronizado, 3 realtime + al entrar/salir) cumplidos.
+- Verificación: syntax-check inline `new Function` OK (0 errores); refs cableadas (updateMsgTabBadge ×7,
+  markMessageNotifsRead ×3). Prueba visual real es auth-gated (requiere sesión de atleta con notifs sin leer).
+- ⚠️ El **admin** (`admin/index.html`) tiene la misma campanita pero **no** se le agregó el badge de tab (su nav es
+  distinto; no lo pidió). Si se quisiera, mismo patrón con `CURRENT_ADMIN_ID`.

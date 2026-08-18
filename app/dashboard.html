@@ -167,8 +167,17 @@
     cursor: pointer;
     transition: color .15s ease;
   }
-  .tabbar a .tico { font-size: 1.3rem; line-height: 1; }
+  .tabbar a .tico { font-size: 1.3rem; line-height: 1; position: relative; }
   .tabbar a.active { color: var(--accent); }
+  /* Badge de no leídos sobre el ícono del tab Mensajes (mismo estilo que la campanita) */
+  .tab-badge {
+    position: absolute; top: -6px; left: 100%; transform: translateX(-45%);
+    min-width: 16px; height: 16px; padding: 0 4px; box-sizing: border-box;
+    border-radius: 8px; background: #E23B3B; color: #fff;
+    font-size: 0.6rem; font-weight: 800; font-family: var(--font-body);
+    display: flex; align-items: center; justify-content: center; line-height: 1;
+  }
+  .tab-badge.hidden { display: none; }
 
   /* ================= Main / views ================= */
   main { padding: 20px 16px 96px; max-width: 640px; margin: 0 auto; }
@@ -983,7 +992,7 @@
       <a data-view="inicio" class="active"><span class="tico">🏠</span> Inicio</a>
       <a data-view="programa"><span class="tico">📅</span> Mi programa</a>
       <a data-view="estadisticas"><span class="tico">📊</span> Estadísticas</a>
-      <a data-view="mensajes"><span class="tico">💬</span> Mensajes</a>
+      <a data-view="mensajes"><span class="tico">💬<span class="tab-badge hidden" id="msgTabBadge"></span></span> Mensajes</a>
       <a data-view="perfil"><span class="tico">👤</span> Perfil</a>
     </div>
   </nav>
@@ -2725,6 +2734,7 @@
       await loadChatMessages();
       await markChatRead();
       subscribeChat();
+      markMessageNotifsRead();   // limpia la campanita (parte mensajes) + el badge del tab, sincronizados
     }
 
     // Siembra los nombres reales de los coaches (admins) en chatSenderCache desde la vista `coach_directory`
@@ -3613,11 +3623,12 @@
         .eq('user_id', ATHLETE.id)
         .order('created_at', { ascending: false })
         .limit(30);
-      if (error) { NOTIFS = []; renderNotifs(); updateNotifBadge(); return; } // degrada si no existe la tabla
+      if (error) { NOTIFS = []; renderNotifs(); updateNotifBadge(); updateMsgTabBadge(); return; } // degrada si no existe la tabla
       NOTIFS = data || [];
       notifUnread = NOTIFS.filter(n => !n.read).length;
       renderNotifs();
       updateNotifBadge();
+      updateMsgTabBadge();
     }
 
     function updateNotifBadge(animate) {
@@ -3630,6 +3641,30 @@
         badge.classList.add('hidden');
       }
       document.getElementById('notifMarkAll').disabled = notifUnread === 0;
+    }
+
+    // Badge del tab "Mensajes": mismo origen que la campanita (notifications no leídas de type='message').
+    function updateMsgTabBadge() {
+      const b = document.getElementById('msgTabBadge');
+      if (!b) return;
+      const count = NOTIFS.filter(n => !n.read && n.type === 'message').length;
+      if (count > 0) { b.textContent = count > 99 ? '99+' : count; b.classList.remove('hidden'); }
+      else { b.classList.add('hidden'); }
+    }
+
+    // Marca leídas las notifs de mensaje (al abrir Mensajes) → sincroniza campanita + badge del tab.
+    // El UPDATE en DB cubre todas (aunque no estén en la ventana de 30 cargadas).
+    async function markMessageNotifsRead() {
+      const toMark = NOTIFS.filter(n => !n.read && n.type === 'message');
+      if (!toMark.length) return;
+      toMark.forEach(n => n.read = true);
+      notifUnread = NOTIFS.filter(n => !n.read).length;
+      renderNotifs();
+      updateNotifBadge();
+      updateMsgTabBadge();
+      const { error } = await sb.from('notifications').update({ read: true })
+        .eq('user_id', ATHLETE.id).eq('type', 'message').eq('read', false);
+      if (error) console.warn('marcar msg notifs:', error.message);
     }
 
     function notifItemHtml(n) {
@@ -3661,6 +3696,11 @@
       if (!n.read) notifUnread++;
       renderNotifs();
       updateNotifBadge(true);
+      updateMsgTabBadge();
+      // Si el atleta ya está viendo Mensajes, no dejar el badge colgado: marcar leído el msg entrante.
+      if (n.type === 'message' && document.getElementById('view-mensajes').classList.contains('active')) {
+        markMessageNotifsRead();
+      }
     }
 
     function notifNavigate(link) {
@@ -3680,6 +3720,7 @@
         notifUnread = Math.max(0, notifUnread - 1);
         renderNotifs();
         updateNotifBadge();
+        updateMsgTabBadge();
         sb.from('notifications').update({ read: true }).eq('id', n.id).then(({ error }) => {
           if (error) console.warn('marcar leída:', error.message);
         });
@@ -3693,6 +3734,7 @@
       notifUnread = 0;
       renderNotifs();
       updateNotifBadge();
+      updateMsgTabBadge();
       const { error } = await sb.from('notifications').update({ read: true })
         .eq('user_id', ATHLETE.id).eq('read', false);
       if (error) console.warn('marcar todas:', error.message);

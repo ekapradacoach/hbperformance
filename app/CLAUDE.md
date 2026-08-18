@@ -481,6 +481,13 @@ navega a su `link` (`showView`). **Íconos:** message 💬 · planning 📅 · l
   4. **comment** — al comentar un post ajeno → notif para el autor. body 60 chars, link `#comunidad`.
   5. **new_athlete** (solo admins) — al crear atleta OK (`create-athlete`) → notif para **todos los admins**.
      body "[nombre] se unió a [programa]", link `#alumnos`.
+- **Badge del tab "Mensajes"** (`app/dashboard.html`, 2026-08-13): globito rojo con contador sobre el tab
+  Mensajes cuando hay mensajes sin leer. **Misma fuente que la campanita** (`NOTIFS` no leídas de `type='message'`
+  → siempre sincronizados). `updateMsgTabBadge()` se llama junto a cada `updateNotifBadge()` (load/realtime/marcar).
+  **Al entrar a Mensajes** (`enterMensajes`) `markMessageNotifsRead()` marca leídas las notifs de mensaje (memoria +
+  `UPDATE notifications set read=true where type='message'`) → limpia el badge del tab **Y** la parte de mensajes
+  de la campanita (antes, entrar al chat solo marcaba `messages.read`, no `notifications`, y la campanita quedaba
+  colgada). Si llega un push mientras el atleta ya está en Mensajes, se marca leído al toque (no queda el badge).
 
 ## Roles
 - admin → acceso total
