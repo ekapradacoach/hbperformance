@@ -118,11 +118,18 @@ como en admin: grupal filtra por `program_slug`; asesoría además por `athlete_
   ('chat_'+canal).on(postgres_changes INSERT filter channel=eq.X)`), se desuscribe al salir de la vista.
   Marca leídos al abrir (`UPDATE read=true WHERE channel=X AND from_id != uid AND read=false`). La vista
   usa `position:fixed` entre topbar y tabbar (el área de mensajes scrollea internamente).
-  ⚠️ **Nombre del coach:** el atleta NO puede leer perfiles de admin por RLS → el nombre real (Erika/Gonza) se
-  resuelve por la **vista `coach_directory`** (`loadCoachNames()` siembra `chatSenderCache` en `enterMensajes`;
-  fallback en realtime en `appendChatMessage`). Si esa vista **NO existe en la base**, cae al genérico **"Coach"**.
-  **La vista requiere correr su DDL** (ver CONTEXTO 2026-08-06 / 2026-08-13 (g)). Confirmado **2026-08-13: la vista
-  NO estaba creada** → por eso el chat grupal mostraba "Coach"; el fix es **solo correr el DDL** (el front ya la usa).
+  ⚠️ **Nombres en el chat (RLS):** el atleta NO puede leer perfiles ajenos por RLS → los nombres se resuelven por
+  **2 vistas "definer"** que siembran `chatSenderCache` en `enterMensajes` (con fallback en realtime vía
+  `resolveChatSender` en `appendChatMessage`):
+  · **`coach_directory`** (`loadCoachNames`) → nombre real del coach (Erika/Gonza) + badge "Coach" (`role='admin'`).
+  · **`athlete_directory`** (`loadPeerNames`, solo grupal) → nombre real de los **atletas pares del MISMO programa
+    grupal** (la vista está **acotada por `auth.uid()`** a `program in (crossfit/hybrid/corredores)` = el del que
+    consulta → **no expone otros programas ni la lista completa**; solo id+full_name). Fallback si no resuelve:
+    grupal→"Atleta" (sin badge), asesoría→"Coach". El **contador "N miembros"** del header grupal también sale de
+    `athlete_directory` (antes contaba sobre `profiles`, que la RLS limitaba a la fila propia → decía "1 miembro").
+  **Ambas vistas requieren correr su DDL** (ver CONTEXTO 2026-08-06 / 2026-08-13 (g)/(h)). Sin migración de datos:
+  el nombre no se guarda en `messages`, se resuelve en vivo por `from_id` → apenas existe la vista, se arreglan
+  todos los mensajes (viejos y nuevos).
 - Vista **Perfil** (✅ desarrollada): 3 cards. **Datos personales** (**avatar 80px con FOTO o iniciales**;
   nombre + teléfono editables, email solo lectura; "✏️ Editar datos" → inputs con borde dorado → "Guardar"
   `UPDATE profiles`; feedback toast "✓ Datos actualizados"; refresca topbar/avatar/saludo). **Foto de

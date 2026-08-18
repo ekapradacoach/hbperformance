@@ -2732,6 +2732,7 @@
       chatRenderedIds = new Set();
       document.getElementById('chatMsgs').innerHTML = '<div class="chat-empty">Cargando…</div>';
       await loadCoachNames();   // nombres reales de los coaches (admins) para las burbujas del chat
+      if (!IS_ASESORIA) await loadPeerNames();   // nombres de los atletas pares (solo chat grupal)
       await loadChatMessages();
       await markChatRead();
       subscribeChat();
@@ -2746,6 +2747,26 @@
       (data || []).forEach(c => { chatSenderCache[c.id] = { full_name: c.full_name, role: 'admin' }; });
     }
 
+    // Siembra los nombres de los atletas PARES del chat grupal desde la vista `athlete_directory` (acotada por
+    // RLS al mismo programa grupal → no expone otros programas ni la lista completa). Así los mensajes de otros
+    // alumnos muestran su nombre real en vez del genérico. Solo chats grupales. Degrada en silencio si no existe.
+    async function loadPeerNames() {
+      const { data } = await sb.from('athlete_directory').select('id, full_name');
+      (data || []).forEach(a => { if (!chatSenderCache[a.id]) chatSenderCache[a.id] = { full_name: a.full_name, role: 'athlete' }; });
+    }
+
+    // Resuelve el remitente de un mensaje entrante (realtime): coach primero, luego atleta par del mismo grupo.
+    // Devuelve SIEMPRE un objeto {full_name, role} (nunca null): si no resuelve, un genérico no engañoso.
+    async function resolveChatSender(id) {
+      let { data } = await sb.from('coach_directory').select('full_name').eq('id', id).maybeSingle();
+      if (data) return { full_name: data.full_name, role: 'admin' };
+      if (!IS_ASESORIA) {
+        ({ data } = await sb.from('athlete_directory').select('full_name').eq('id', id).maybeSingle());
+        if (data) return { full_name: data.full_name, role: 'athlete' };
+      }
+      return { full_name: IS_ASESORIA ? 'Coach' : 'Atleta', role: IS_ASESORIA ? 'admin' : 'athlete' };
+    }
+
     function setChatHeader() {
       const titleEl = document.getElementById('chatTitle');
       const subEl = document.getElementById('chatSub');
@@ -2755,8 +2776,9 @@
       } else {
         titleEl.textContent = 'Chat ' + programLabel(ATHLETE.program);
         subEl.textContent = 'Cargando…';
-        sb.from('profiles').select('id', { count: 'exact', head: true })
-          .eq('program', ATHLETE.program).eq('role', 'athlete')
+        // `athlete_directory` ya viene acotada por RLS al programa grupal del atleta → contar filas = miembros.
+        // (Antes contaba sobre `profiles`, que la RLS limitaba a la fila propia → mostraba siempre "1 miembro".)
+        sb.from('athlete_directory').select('id', { count: 'exact', head: true })
           .then(({ count }) => {
             const n = count || 0;
             subEl.textContent = `${n} miembro${n === 1 ? '' : 's'}`;
@@ -2792,7 +2814,7 @@
     function chatMsgNode(m) {
       const mine = String(m.from_id) === String(ATHLETE.id);
       const cached = chatSenderCache[m.from_id];
-      const name = mine ? (ATHLETE.full_name || 'Vos') : ((cached && cached.full_name) || 'Coach');
+      const name = mine ? (ATHLETE.full_name || 'Vos') : ((cached && cached.full_name) || (IS_ASESORIA ? 'Coach' : 'Atleta'));
       const isCoach = !mine && cached && cached.role === 'admin';
       const row = document.createElement('div');
       row.className = 'm-row' + (mine ? ' mine' : '');
@@ -2811,9 +2833,8 @@
       if (!row || row.channel !== chatChannel) return;
       if (chatRenderedIds.has(row.id)) return;   // dedupe (optimista + realtime)
       if (String(row.from_id) !== String(ATHLETE.id) && !chatSenderCache[row.from_id]) {
-        // El atleta no puede leer perfiles de admin por RLS → resolver el nombre del coach por la vista.
-        const { data } = await sb.from('coach_directory').select('full_name, role').eq('id', row.from_id).maybeSingle();
-        chatSenderCache[row.from_id] = data || { full_name: 'Coach', role: 'admin' };
+        // La RLS no deja leer perfiles ajenos → resolver por las vistas (coach o atleta par del grupo).
+        chatSenderCache[row.from_id] = await resolveChatSender(row.from_id);
       }
       const box = document.getElementById('chatMsgs');
       const empty = box.querySelector('.chat-empty');

@@ -2457,3 +2457,48 @@ iPhone (iOS)'."*. Es un elemento **nuevo** (no `#pfPushDesc`, que `updatePushUI(
   Verificación post-DDL: el mismo GET anon debería pasar de 404 (PGRST205) a **permission denied** (la vista existe
   pero anon no puede leer — correcto; solo `authenticated`). Y el chat grupal debería mostrar "Erika/Gonza".
 - Pendiente: que el usuario corra el DDL. (El ajuste 1 sí va en commit + push; el 2 no toca código.)
+
+## 2026-08-13 (h) — Nombre real de los atletas pares en el chat grupal (vista athlete_directory)
+Bug hermano del de coach_directory: en el chat grupal, los mensajes de OTROS ALUMNOS mostraban el remitente
+genérico ("Coach", con badge equivocado) en vez del nombre real del atleta. Mismo criterio de fix que
+coach_directory: **sin migración de datos históricos** (el nombre no se guarda en `messages`, se resuelve en vivo
+por `from_id`) → apenas existe la vista + el front la usa, se arreglan todos los mensajes (viejos y nuevos).
+
+### Diagnóstico
+- La resolución de nombres solo consultaba `coach_directory`; si el `from_id` no matcheaba ahí (un atleta par),
+  caía directo a `'Coach'` (y el fallback de realtime le ponía `role:'admin'` → badge Coach equivocado).
+- No existía ninguna vista/tabla con id+nombre de otros atletas accesible bajo RLS (`profiles` = fila propia +
+  admin; `coach_directory` = solo admins).
+
+### Dato — nueva vista `athlete_directory` (acotada por programa grupal del que consulta; correr a mano)
+```sql
+create or replace view public.athlete_directory as
+  select p.id, p.full_name
+  from public.profiles p
+  where p.role = 'athlete'
+    and p.program in ('crossfit','hybrid','corredores')
+    and p.program = (select me.program from public.profiles me where me.id = auth.uid());
+revoke all on public.athlete_directory from anon, public;
+grant select on public.athlete_directory to authenticated;
+```
+- Vista "definer" (como coach_directory): lee `profiles` como owner, pero el WHERE la limita a `role='athlete'` +
+  **mismo programa grupal que `auth.uid()`**. Devuelve solo **id + full_name**.
+- **Privacidad:** un atleta ve solo nombres de atletas de SU programa grupal (= compañeros de ese chat), NO otros
+  programas ni la lista completa. Un asesorado (programa no grupal) → no matchea → no ve pares (y las asesorías no
+  tienen pares en el chat). Admin → programa null/no-grupal → nada (igual lee `profiles` directo).
+
+### Frontend (`app/dashboard.html`)
+1. **`loadPeerNames()`** (nueva): consulta `athlete_directory` y siembra `chatSenderCache` con
+   `{full_name, role:'athlete'}`. Se llama en `enterMensajes` **solo si `!IS_ASESORIA`** (antes de `loadChatMessages`).
+2. **`resolveChatSender(id)`** (nueva): para el fallback de realtime (`appendChatMessage`) resuelve coach primero,
+   luego atleta par; devuelve siempre `{full_name, role}` (genérico no engañoso si no resuelve). Reemplazó la
+   consulta a solo `coach_directory`.
+3. **`chatMsgNode`**: fallback contextual → grupal sin resolver = **"Atleta"** (sin badge); asesoría = "Coach"
+   (antes era "Coach" fijo para todos).
+4. **Bonus — contador de miembros:** el header del chat grupal ("N miembros") ahora cuenta filas de
+   `athlete_directory` (antes contaba sobre `profiles`, que la RLS limitaba a la fila propia → mostraba siempre
+   "1 miembro"; ahora muestra el número real del programa).
+- Verificación: syntax-check inline `new Function` OK (0 errores); refs cableadas (loadPeerNames ×2,
+  resolveChatSender ×2, athlete_directory ×5). Prueba visual real es auth-gated.
+- ⚠️ **Pendiente del usuario:** correr el DDL de `athlete_directory`. Sin él, el front degrada al genérico "Atleta"
+  (no rompe). Solo frontend + 1 vista; no toca Edge Functions.
