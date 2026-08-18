@@ -420,6 +420,45 @@ created_at timestamptz (default now())
 RLS: **INSERT público** (WITH CHECK true → la landing es sin login) + SELECT admin. El `service_role`
 de la Edge Function `process-payment` la lee/borra (bypassa RLS). ⚠️ Crear tabla + policy (SQL en CONTEXTO.md).
 
+### push_subscriptions   ← ✅ (2026-08-13) suscripciones Web Push por dispositivo/navegador (notificaciones al celular)
+id uuid (default gen_random_uuid())
+user_id uuid (not null, FK profiles.id on delete cascade)   — dueño de la suscripción (atleta o admin)
+endpoint text (not null, **unique**)   — URL del push service (FCM/APNs/…). El unique habilita el upsert onConflict.
+p256dh text (not null)   — clave pública del navegador (de PushSubscription.toJSON().keys)
+auth text (not null)     — secreto de auth (idem)
+user_agent text
+created_at timestamptz (default now())
+RLS: **cada usuario gestiona SOLO lo suyo** (`for all using auth.uid()=user_id with check auth.uid()=user_id`).
+La Edge Function `send-push` (service_role) las lee para enviar (bypassa RLS). El front hace `upsert(onConflict:'endpoint')`.
+
+## Notificaciones PUSH al celular (Web Push — PWA) ← ✅ Fase 1 (Android); iOS = Fase 2
+Push del navegador/celular cuando llega un **mensaje de chat** (a atleta o admin), incluso con la app cerrada.
+- **PWA:** `manifest.webmanifest` (raíz, `display:standalone`, íconos = `logo.png`) + `sw.js` (raíz, scope `/`,
+  **solo push, SIN cache de fetch**: maneja `push` → `showNotification` y `notificationclick` → enfoca/abre la URL).
+  Registro del SW + metas `apple-mobile-web-app-capable`/manifest link en `dashboard.html` y `admin/index.html`.
+- **Cadena de envío:** `notify()` inserta fila en `notifications` → **trigger SQL en `public.notifications`** →
+  `net.http_post()` (pg_net) a la Edge Function **`send-push`** → lee `push_subscriptions` del `record.user_id` →
+  manda el Web Push cifrado. ⚠️ El **Database Webhook nativo de Supabase fallaba** (bug del schema
+  `supabase_functions`), así que el trigger se creó **a mano por SQL** (función + trigger + `net.http_post`).
+- **`send-push`** (`supabase/functions/send-push/index.ts`, `verify_jwt` OFF): **tolera 2 formatos de body** —
+  el sobre del webhook nativo `{type:'INSERT', record:{…}}` **y** la **fila cruda** (`to_jsonb(NEW)`) del trigger
+  manual (`record = payload.record ?? payload`; con el sobre además exige `type='INSERT'` para no re-enviar en
+  UPDATE/DELETE). Filtra `type='message'`, arma la URL según rol (atleta→`/app/dashboard.html`,
+  admin→`/admin/index.html`) + `link`, cifra con **Web Crypto** (VAPID **JWT ES256** + **aes128gcm** RFC 8291/8188,
+  sin librería), borra endpoints muertos (404/410). ⚠️ **Ojo:** devuelve **200 igual** en los no-op (`skipped` si
+  el body no matchea o no es 'message'; `sent:0` si el envío falla) → un 200 NO garantiza que se envió el push.
+- **VAPID:** pública en `site_config.vapid_public_key` (la lee el front **y** send-push); privada + subject en
+  **Secrets** `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT`. (`SUPABASE_URL`/`SERVICE_ROLE_KEY` como las otras funciones.)
+- **UI de permiso:** **banner de 1ª vez** (dismiss por dispositivo con `localStorage.hb_push_dismissed`) + **toggle
+  en Perfil** ("🔔 Notificaciones"). `enablePush()` → `Notification.requestPermission()` → `pushManager.subscribe`
+  (con la pública de site_config) → `upsert` en `push_subscriptions`. ✅ **atleta** (`dashboard.html`) hecho;
+  ⚠️ **admin** (`admin/index.html`) **pendiente** (usar `CURRENT_ADMIN_ID`) → cierra Fase 1.
+- **iOS (Fase 2):** Web Push **solo** funciona si la PWA está **instalada en la pantalla de inicio** y se abre
+  desde ahí (en pestaña de Safari la Push API no existe). Android (Chrome): completo, en navegador y PWA.
+- **Estado (2026-08-13):** ✅ cadena diagnosticada y fix de formato de body aplicado (ver CONTEXTO 2026-08-13 (e)).
+  ⚠️ Requiere **redeploy manual de `send-push`** para que el fix tome efecto (la función se deploya a mano, el push
+  al repo NO la actualiza). Falta: redeploy + re-test en Android + UI de permiso del admin (cierra Fase 1).
+
 ## Sistema de notificaciones (campana 🔔 — `app/dashboard.html` + `admin/index.html`)
 Idéntico en ambos portales. **Campana en la topbar** (dashboard: entre nombre y avatar; admin: junto al
 "Hola, [nombre] 👋") con **badge rojo** de no leídas (oculto si 0). Click → **dropdown** (320px, máx 400px

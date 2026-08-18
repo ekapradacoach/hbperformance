@@ -2318,3 +2318,87 @@ de destinatarios que ya hace el helper `notify()`). Este commit = **PWA base + s
   llega el push. Los logs de `send-push` muestran `sent/removed/total`.
 - **Fase 2 — iOS:** confirmar el flujo instalando la PWA en pantalla de inicio (en pestaña de Safari NO hay push);
   ajustar textos/onboarding para iOS.
+
+## 2026-08-13 (d) — Web Push: deploy + fix "no aparecía el botón" + depuración "no llega la notif"
+Continuación de Fase 1. Varias cosas resueltas + una en depuración.
+
+### Resuelto: la UI de push no aparecía en vivo → los commits no estaban pusheados
+Síntoma: como atleta en Chrome Android no salía ni el banner ni el botón 🔔 del Perfil. **Causa raíz
+diagnosticada:** los commits `3436abd` (coach) y `3cd59f2` (Web Push Fase 1) estaban **committeados pero NO
+pusheados** — `origin/main` seguía en `d153555`, y el sitio en vivo (`hbperformance.fit`) servía la versión
+previa a toda la UI de push (`pfPushBtn`/`maybeShowPushBanner`/`rel=manifest` = 0 en vivo; `/sw.js` y
+`/manifest.webmanifest` en 404). Confirmado con `git fetch` + `curl` al sitio. **Fix: `git push`** (`d153555..3cd59f2`)
+→ Pages redeploya → hard-reload en el celular. (El código estaba bien y syntax-checkeado; solo faltaba subirlo.)
+Aprendizaje: NO es `profile.html` — el botón vive en la vista `#view-perfil` dentro de `app/dashboard.html`.
+
+### Resuelto (por el usuario): deploy de send-push + workaround del Database Webhook
+- `send-push` **deployada** con **Verify JWT desactivado**.
+- El **Database Webhook nativo de Supabase fallaba** (bug de su lado: schema `supabase_functions` roto). El usuario
+  lo reemplazó creando **a mano por SQL Editor** una **función + trigger en `public.notifications`** que llama a
+  `send-push` vía **`net.http_post()`** (pg_net). Está creado y "funcionando en la base" según el usuario.
+- Secrets y tabla ya estaban (ver 2026-08-13 (c)).
+
+### ⚠️ EN DEPURACIÓN: la notificación push NO llega end-to-end
+Prueba: atleta activó push en Chrome Android (Chrome pidió permiso, aceptó) → admin mandó un mensaje de prueba →
+**no llegó la notif al celular**. **Dato clave del usuario:** los logs de `send-push` (última hora) muestran solo
+`booted`/`shutdown` del contenedor, **CERO invocaciones reales** → la función **nunca se ejecutó**. Esto descarta
+send-push/VAPID (puntos 3/4) y ubica el corte **ANTES** de send-push: o la suscripción no se guardó, o el trigger
+no disparó / `net.http_post` no llegó a la función.
+- **Auditoría de código (repo) — OK, sin bugs:** en `admin/index.html`, `sendMsg` (INSERT en messages) llama a
+  `notifyChannelAthletes` → resuelve destinatarios (`dm_`→atleta; grupal→atletas del programa) → `notify(ids,
+  {type:'message',…})` → INSERT en `notifications`. En `dashboard.html`, `enablePush()` hace `pushManager.subscribe`
+  + `upsert` en `push_subscriptions` (onConflict endpoint), con toast si falla. El código está bien; el problema es
+  de **estado en la base / config del trigger**, no del repo.
+- **Limitación:** desde el entorno de Claude **no se puede consultar la base** (CLI de Supabase sin login; la anon
+  key no lee `push_subscriptions`/`notifications` por RLS). Diagnóstico fino = correr queries en el SQL Editor.
+- **Queries de diagnóstico entregadas al usuario (correr en orden, SQL Editor):**
+  1. `select user_id, left(endpoint,40), created_at from public.push_subscriptions order by created_at desc limit 5;`
+     → ¿se guardó la suscripción del atleta? (si vacío → corte en punto 1: el `upsert` de `enablePush` falló, p.ej.
+     falta el UNIQUE en `endpoint` para el onConflict, o RLS).
+  2. `select id, user_id, type, title, created_at from public.notifications where type='message' order by created_at desc limit 5;`
+     → ¿se insertó la fila cuando el admin mandó el mensaje? (si vacío → `notify()` del admin falló: RLS de
+     notifications, o el canal/destinatarios no matchearon).
+  3. `select tgname, tgenabled, pg_get_triggerdef(oid) from pg_trigger where tgrelid='public.notifications'::regclass and not tgisinternal;`
+     → ¿existe y está habilitado el trigger manual? ¿a qué URL apunta el `net.http_post`?
+  4. `select id, status_code, error_msg, created from net._http_response order by created desc limit 10;`
+     (y `select * from net.http_request_queue;`) → ¿pg_net envió el request y qué status devolvió?
+- **Hipótesis rankeadas (dado "cero invocaciones"):**
+  · **(A, más probable)** el `net.http_post` del trigger llega al gateway de Supabase pero **falta el header
+    `Authorization: Bearer <anon/service key>`** (o va a la URL equivocada) → el gateway rechaza (401/404) **antes**
+    de que la función bootee → cero invocaciones. Se ve en `net._http_response` (query 4) como status 401/404.
+  · **(B)** no se insertó la fila en `notifications` (query 2 vacía) → el trigger no tenía qué disparar.
+  · **(C)** la suscripción no se guardó (query 1 vacía) → aunque el trigger funcione, no habría a quién enviar
+    (pero eso NO explica cero invocaciones; el corte de invocación es A o B).
+- **Pendiente:** con el resultado de las 4 queries, ubicar el corte exacto y corregir (probable: ajustar headers/URL
+  del `net.http_post`, o la policy/columnas de la tabla). NO se tocó nada aún.
+
+## 2026-08-13 (e) — Web Push: bug de formato de body en send-push (RESUELTO en código, pend. redeploy)
+Cierre de la depuración de 2026-08-13 (d). **Diagnóstico completo de la cadena:**
+1. **Database Webhook nativo de Supabase roto** (bug del schema `supabase_functions` del lado de ellos) → no se
+   podía disparar send-push por la vía estándar.
+2. **Workaround:** se creó a mano un **trigger `on_notification_insert` en `public.notifications`** que llama a
+   send-push vía **`net.http_post()`** (pg_net), con el body = **`to_jsonb(NEW)`** (la fila cruda de notifications).
+3. **Bug encontrado:** `send-push` estaba escrita para el **sobre del webhook nativo** (`{type:'INSERT',
+   record:{...}}`). Su guard (`if (!record || payload.type!=='INSERT' || record.type!=='message')`) recibía la
+   **fila cruda** (sin `record` ni `type='INSERT'`) → entraba al guard y devolvía **`{ok:true,
+   skipped:'not-a-message-notification'}` con HTTP 200**, **sin buscar la suscripción ni enviar**. Por eso
+   `net._http_response`=200 en cada intento pero el push **nunca llegaba** (un 200 no-op).
+   - Cómo se confirmó (sin acceso a la base desde Claude): el usuario verificó por SQL que la suscripción estaba
+     (`push_subscriptions` con endpoint FCM válido), la fila en `notifications` se insertó (mismo user_id/ts), el
+     trigger estaba `enabled`, y `net._http_response`=200. Con eso + el guard de la línea 37 quedó claro que el
+     corte era el **formato del body**. El usuario confirmó que el trigger manda `to_jsonb(NEW)`.
+4. **Fix aplicado (opción i, la más robusta):** `send-push` ahora **tolera ambos formatos**:
+   `const isEnvelope = payload.record != null; const record = isEnvelope ? payload.record : payload;`. Con el
+   sobre además exige `payload.type==='INSERT'` (ignora UPDATE/DELETE → no re-push al marcar leído); con la fila
+   cruda no aplica ese check (el trigger ya es INSERT-only). Si algún día se arregla y se usa el **webhook nativo**,
+   sigue funcionando sin tocar nada. Syntax-check `node --check` OK.
+- **Aprendizaje clave:** `send-push` devuelve **200 en todos los no-op** (`skipped` si el body no matchea o no es
+  'message'; `sent:0` si el envío a FCM falla). **Un 200 NO garantiza envío.** Para depurar hay que mirar el
+  **body de la response** en la pestaña *Invocations* (no *Logs*): `skipped` = cortó en el guard; `sent:0` =
+  encontró sub pero falló el push (VAPID/cifrado/FCM); `sent:1` = FCM aceptó.
+- **Nota VAPID:** el front y send-push leen la **pública de `site_config.vapid_public_key`** (misma fila → no
+  puede haber mismatch de pública). La privada va en Secrets. Un mismatch de la privada daría `sent:0`, no `skipped`.
+- ⚠️ **PENDIENTE DE REDEPLOY:** el fix está en el repo (commit + push), pero **`send-push` se deploya a mano** —
+  el push al repo NO actualiza la función. Hay que **redeployar `send-push`** (editor del dashboard, pegando el
+  código nuevo, o CLI) para que el fix tome efecto. Después: re-test del mensaje desde el admin.
+- **Pendiente aparte (Fase 1):** UI de permiso en el admin (`admin/index.html`) para que los admins reciban push.

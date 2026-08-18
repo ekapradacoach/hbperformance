@@ -1,9 +1,11 @@
 // ============================================================================
 // Edge Function: send-push   (Web Push de notificaciones de chat)
 // ----------------------------------------------------------------------------
-// Se dispara desde un DATABASE WEBHOOK de Supabase: INSERT en `public.notifications`.
-// Filtra en la función a `type='message'` (los webhooks de la UI no filtran por columna),
-// busca las `push_subscriptions` del destinatario (`record.user_id`) y les manda un
+// Se dispara desde un INSERT en `public.notifications`. Acepta DOS formatos de body:
+//   - Webhook nativo de Supabase:  { type:'INSERT', record:{...fila...} }
+//   - Trigger manual (net.http_post con to_jsonb(NEW)):  la fila cruda de notifications
+//   (hoy usamos el trigger manual porque el Database Webhook nativo estaba roto; ver CONTEXTO 2026-08-13 (d/e)).
+// Filtra a `type='message'`, busca las `push_subscriptions` del destinatario (`record.user_id`) y les manda un
 // Web Push firmado con VAPID (ES256) y cifrado aes128gcm (RFC 8291 / RFC 8188).
 //
 // Implementado con Web Crypto (crypto.subtle) — sin librería externa. Los endpoints
@@ -31,10 +33,20 @@ Deno.serve(async (req) => {
 
   try {
     const payload = await req.json().catch(() => ({}))
-    const record = payload?.record
 
-    // Solo INSERTs de notificaciones de tipo 'message'.
-    if (!record || payload?.type !== 'INSERT' || record.type !== 'message') {
+    // Acepta 2 formatos de body (robusto a futuro):
+    //  - Webhook nativo de Supabase:  { type:'INSERT', record:{...fila...}, table, schema, old_record }
+    //  - Trigger manual (net.http_post con to_jsonb(NEW)):  la fila cruda de `notifications`
+    const isEnvelope = payload && typeof payload === 'object' && payload.record != null
+    const record = isEnvelope ? payload.record : payload
+
+    // Con el sobre del webhook nativo, actuar SOLO en INSERT (no re-enviar en UPDATE/DELETE, p.ej. al marcar leído).
+    // Con el trigger manual (fila cruda) no hay `type` de evento → el trigger ya es INSERT-only por definición.
+    if (isEnvelope && payload.type && payload.type !== 'INSERT') {
+      return json({ ok: true, skipped: `ignored-event:${payload.type}` })
+    }
+    // Solo notificaciones de tipo 'message'.
+    if (!record || record.type !== 'message') {
       return json({ ok: true, skipped: 'not-a-message-notification' })
     }
 
