@@ -118,6 +118,11 @@ como en admin: grupal filtra por `program_slug`; asesoría además por `athlete_
   ('chat_'+canal).on(postgres_changes INSERT filter channel=eq.X)`), se desuscribe al salir de la vista.
   Marca leídos al abrir (`UPDATE read=true WHERE channel=X AND from_id != uid AND read=false`). La vista
   usa `position:fixed` entre topbar y tabbar (el área de mensajes scrollea internamente).
+  ⚠️ **Nombre del coach:** el atleta NO puede leer perfiles de admin por RLS → el nombre real (Erika/Gonza) se
+  resuelve por la **vista `coach_directory`** (`loadCoachNames()` siembra `chatSenderCache` en `enterMensajes`;
+  fallback en realtime en `appendChatMessage`). Si esa vista **NO existe en la base**, cae al genérico **"Coach"**.
+  **La vista requiere correr su DDL** (ver CONTEXTO 2026-08-06 / 2026-08-13 (g)). Confirmado **2026-08-13: la vista
+  NO estaba creada** → por eso el chat grupal mostraba "Coach"; el fix es **solo correr el DDL** (el front ya la usa).
 - Vista **Perfil** (✅ desarrollada): 3 cards. **Datos personales** (**avatar 80px con FOTO o iniciales**;
   nombre + teléfono editables, email solo lectura; "✏️ Editar datos" → inputs con borde dorado → "Guardar"
   `UPDATE profiles`; feedback toast "✓ Datos actualizados"; refresca topbar/avatar/saludo). **Foto de
@@ -452,12 +457,15 @@ Push del navegador/celular cuando llega un **mensaje de chat** (a atleta o admin
 - **UI de permiso:** **banner de 1ª vez** (dismiss por dispositivo con `localStorage.hb_push_dismissed`) + **toggle
   en Perfil** ("🔔 Notificaciones"). `enablePush()` → `Notification.requestPermission()` → `pushManager.subscribe`
   (con la pública de site_config) → `upsert` en `push_subscriptions`. ✅ **atleta** (`dashboard.html`) hecho;
-  ⚠️ **admin** (`admin/index.html`) **pendiente** (usar `CURRENT_ADMIN_ID`) → cierra Fase 1.
+  ⚠️ **admin** (`admin/index.html`) **pendiente** (usar `CURRENT_ADMIN_ID`) → cierra Fase 1. La card del Perfil
+  incluye un **aviso para iOS** (las notifs solo andan con el acceso directo instalado; remite a la card
+  "📲 Acceso directo") — agregado 2026-08-13 (g).
 - **iOS (Fase 2):** Web Push **solo** funciona si la PWA está **instalada en la pantalla de inicio** y se abre
   desde ahí (en pestaña de Safari la Push API no existe). Android (Chrome): completo, en navegador y PWA.
-- **Estado (2026-08-13):** ✅ cadena diagnosticada y fix de formato de body aplicado (ver CONTEXTO 2026-08-13 (e)).
-  ⚠️ Requiere **redeploy manual de `send-push`** para que el fix tome efecto (la función se deploya a mano, el push
-  al repo NO la actualiza). Falta: redeploy + re-test en Android + UI de permiso del admin (cierra Fase 1).
+- **Estado (2026-08-13):** ✅ **push funciona end-to-end, probado en real en Android Y iPhone** (Fase 2 cerrada en
+  lo funcional). El fix de formato de body de `send-push` está deployado. **Pendientes:** (1) UI de permiso del
+  **admin** (cierra Fase 1 del lado admin); (2) correr el **DDL de `coach_directory`** (nombre real del coach en
+  el chat, hoy muestra "Coach").
 
 ## Sistema de notificaciones (campana 🔔 — `app/dashboard.html` + `admin/index.html`)
 Idéntico en ambos portales. **Campana en la topbar** (dashboard: entre nombre y avatar; admin: junto al

@@ -2423,3 +2423,37 @@ apps de chat. Solo frontend (`app/dashboard.html`), no toca Edge Functions.
   markMessageNotifsRead ×3). Prueba visual real es auth-gated (requiere sesión de atleta con notifs sin leer).
 - ⚠️ El **admin** (`admin/index.html`) tiene la misma campanita pero **no** se le agregó el badge de tab (su nav es
   distinto; no lo pidió). Si se quisiera, mismo patrón con `CURRENT_ADMIN_ID`.
+
+## 2026-08-13 (g) — Aviso iOS en Perfil + diagnóstico del "Coach" genérico en el chat grupal
+Push confirmado funcionando **en real en iPhone Y Android** (Fase 2 cerrada en lo funcional, según el usuario).
+Dos ajustes independientes:
+
+### 1) Aviso iOS en la card de Notificaciones del Perfil (HECHO — solo copy/UI)
+En `app/dashboard.html`, card "🔔 Notificaciones" del Perfil: se agregó **debajo del botón "Activar
+notificaciones"** un `<p>` fijo: *"📱 En iPhone: las notificaciones solo funcionan si agregaste la app a la
+pantalla de inicio (no desde Safari normal). Instrucciones en '📲 Acceso directo' acá arriba → botón '🍎 Ver en
+iPhone (iOS)'."*. Es un elemento **nuevo** (no `#pfPushDesc`, que `updatePushUI()` sobrescribe en algunos estados)
+→ siempre visible. Sin lógica nueva. Syntax-check inline OK.
+
+### 2) BUG chat grupal muestra "Coach" genérico — DIAGNÓSTICO (fix = solo DB)
+- **(a) La vista `coach_directory` NO existe en la base.** Confirmado con un GET read-only a la API REST (anon key):
+  `GET /rest/v1/coach_directory` → **`PGRST205 "Could not find the table 'public.coach_directory' in the schema
+  cache"` (HTTP 404)**. O sea: el DDL de la vista (documentado el 2026-08-06) **nunca se corrió**.
+- **(b) El frontend YA la usa correctamente** (y está live): `loadCoachNames()` (`dashboard.html:2743`) hace
+  `sb.from('coach_directory').select('id, full_name, role')` y siembra `chatSenderCache`; se llama en
+  `enterMensajes` antes de renderizar. El fallback de realtime (`appendChatMessage`, ~2814) también consulta la
+  vista. Como la vista no existe, ese `select` devuelve error → `data` null → nada se siembra → `chatMsgNode` cae
+  al fallback `'Coach'`.
+- **(c) NO es un problema de datos históricos.** El nombre del coach **no se guarda** en `messages` (esa tabla no
+  tiene columna de nombre; el nombre se resuelve **en vivo por `from_id`** vía la vista). Por eso **TODOS** los
+  mensajes (viejos y nuevos) muestran "Coach" mientras la vista no exista, y **todos** se arreglan apenas se cree.
+- **Conclusión: el fix es SOLO correr el DDL** (no hay cambio de frontend ni migración de datos). DDL a correr:
+  ```sql
+  create or replace view public.coach_directory as
+    select id, full_name, role from public.profiles where role = 'admin';
+  revoke all on public.coach_directory from anon, public;
+  grant select on public.coach_directory to authenticated;
+  ```
+  Verificación post-DDL: el mismo GET anon debería pasar de 404 (PGRST205) a **permission denied** (la vista existe
+  pero anon no puede leer — correcto; solo `authenticated`). Y el chat grupal debería mostrar "Erika/Gonza".
+- Pendiente: que el usuario corra el DDL. (El ajuste 1 sí va en commit + push; el 2 no toca código.)
