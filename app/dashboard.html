@@ -3066,13 +3066,24 @@
       const cancelEl = document.getElementById('pfCancelSubBtn');
       if (cancelEl) cancelEl.addEventListener('click', openCancelModal);
 
-      // Precio desde site_config (solo programas grupales; en asesorías no se muestra la fila)
+      // Precio (solo programas grupales; en asesorías la fila no se muestra):
+      //  · custom_price cargado (alta manual)  → ese precio manual (ARS)
+      //  · manual SIN custom_price             → "A coordinar con tu coach"
+      //  · atleta de MP (sin custom_price)     → precio general del programa desde site_config (como antes)
       if (!isAse) {
-        const { data, error } = await sb.from('site_config').select('key, value');
-        const config = {};
-        if (!error && data) data.forEach(r => { config[r.key] = r.value; });
         const pEl = document.getElementById('pfPrice');
-        if (pEl) pEl.textContent = priceLabel(ATHLETE.program, config);
+        const cp = Number(ATHLETE.custom_price);
+        const hasCustom = ATHLETE.custom_price != null && ATHLETE.custom_price !== '' && !isNaN(cp) && cp > 0;
+        if (hasCustom) {
+          if (pEl) pEl.textContent = `$${cp.toLocaleString('es-AR')} / mes`;
+        } else if (!ATHLETE.mp_subscription_id) {
+          if (pEl) pEl.textContent = 'A coordinar con tu coach';
+        } else {
+          const { data, error } = await sb.from('site_config').select('key, value');
+          const config = {};
+          if (!error && data) data.forEach(r => { config[r.key] = r.value; });
+          if (pEl) pEl.textContent = priceLabel(ATHLETE.program, config);
+        }
       }
     }
 

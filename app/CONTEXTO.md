@@ -289,7 +289,7 @@ Lista textual dejada por el usuario para que quede registrada:
   `process-payment`). Hoy no hay forma de distinguirlos en la lista. Pista de implementación: los de MP tienen
   `mp_subscription_id` seteado; los manuales lo tienen en `null` — se podría usar eso para un badge/columna
   (verificar que sea confiable como criterio antes de basarse solo en eso).
-- **Mostrar el `custom_price` en el perfil del atleta de alta manual (solo grupales).** Que a los atletas de
+- ✅ **HECHO (2026-08-13 (m))** — **Mostrar el `custom_price` en el perfil del atleta de alta manual (solo grupales).** Que a los atletas de
   alta manual de un **programa grupal** (crossfit/hybrid/corredores) les aparezca en su card "Mi suscripción"
   el **precio manual** (`profiles.custom_price`) que se les cargó, en vez del precio general del programa
   (`site_config`) que ven los de MP. ⚠️ **NO aplica a asesorías**: ahí ya se decidió que el precio **nunca**
@@ -2591,3 +2591,20 @@ entre tipos de chat; era uniforme. **Son 2 lugares** (el chat no comparte compon
 - Verificación: syntax-check inline OK en ambos (0 errores); refs cableadas (daySepNode ×3 y clase del chip ×3 por
   archivo); test de `fmtDaySep` en Node → Hoy/Ayer/"Vie, 14 ago"/"Lun, 18 ago 2025"/"" (inválido). Solo frontend,
   sin redeploy. Prueba visual real es auth-gated.
+
+## 2026-08-13 (m) — Precio manual (custom_price) visible en el perfil del atleta (alta manual, grupales)
+Backlog cerrado: los atletas de **alta manual** (badge "Manual", `!mp_subscription_id`) no veían su `custom_price`
+en ningún lado; los de MP sí ven su precio. Ahora los manuales también.
+- **Diagnóstico:** `custom_price` vive en `profiles`. El atleta ya lo tiene en el cliente (`ATHLETE.custom_price`,
+  porque el perfil se carga con `select('*')`), y la RLS de `profiles` solo deja leer la **fila propia** → **sin
+  cambio de RLS ni riesgo de exponer precios ajenos**. Los de MP ven el precio en **Perfil → card "💳 Mi
+  suscripción" → fila "Precio del plan"** (`#pfPrice`), hoy vía `priceLabel(program, site_config)`.
+- **Fix (`app/dashboard.html`, `renderSubscription`, solo grupales):** la fila de precio ahora decide:
+  · `custom_price` cargado (número > 0) → **"$<custom_price> / mes"** (ARS, `toLocaleString('es-AR')`, mismo estilo);
+  · manual sin `custom_price` (`!ATHLETE.mp_subscription_id`) → **"A coordinar con tu coach"** (mismo tono que las
+    páginas de asesoría, a pedido del usuario);
+  · atleta de MP (sin custom_price) → precio de `site_config` (**igual que antes**).
+  Asesorías: la fila sigue **oculta** (sin cambios; el precio de asesoría nunca se muestra al atleta). Cuando hay
+  custom_price o es manual-null, se **evita el fetch a site_config** (el dato ya está en `ATHLETE`).
+- **Sin cambios** de RLS/DDL/backend. Solo `dashboard.html`. Syntax-check inline OK (0 errores). Prueba real
+  auth-gated. Sin redeploy (frontend).

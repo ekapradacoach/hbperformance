@@ -144,8 +144,10 @@ como en admin: grupal filtra por `program_slug`; asesoría además por `athlete_
   topbar y perfil; si no, iniciales (`paintAvatar`/`avatarSrc`). Valida tipo y tamaño (toast si falla);
   degrada si falta el bucket/columna. **Mi
   suscripción** (badge de programa con colores del admin + badge de estado Activo/Cancelado/Pendiente;
-  fecha inicio/vencimiento; **precio leído de `site_config`** según programa — "$45.000 / mes" o "USD 150
-  / mes"; texto informativo según estado; si cancelado → botón "Volver a suscribirme" al landing del
+  fecha inicio/vencimiento; **precio** (solo grupales; asesorías ocultan la fila; `renderSubscription`, fila
+  `#pfPrice`): alta manual con `custom_price` cargado → **ese precio ARS** ("$XX.000 / mes"); manual SIN
+  `custom_price` (detección `!mp_subscription_id`) → **"A coordinar con tu coach"**; atleta de MP → precio general
+  del programa desde `site_config` (2026-08-13 (m)). Texto informativo según estado; si cancelado → botón "Volver a suscribirme" al landing del
   programa; si **activo** → botón "Cancelar suscripción" (outline rojo) que abre un modal de confirmación
   → "Sí, cancelar" muestra "Procesando cancelación…" (spinner) y llama a la **Edge Function real**
   `POST /functions/v1/cancel-subscription` (Bearer = access_token de la sesión). Si `result.ok` → guarda
