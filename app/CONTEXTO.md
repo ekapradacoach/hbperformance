@@ -2541,3 +2541,37 @@ reemplazaron por **un solo botón ⋮** (`.ex-lib-more`) por fila que abre un **
   quedan igual.
 - Verificación: syntax-check inline OK (0 errores); refs cableadas (ex-lib-more ×4, openExLibMenu ×2, hideExLibMenu
   ×3), y `ex-lib-edit`/`ex-lib-del` en 0 (removidas). Prueba visual real es auth-gated. Solo frontend.
+
+## 2026-08-13 (k) — Push del ADMIN + fix getAdminIds + badge del item Mensajes (admin). Cierra Fase 1.
+Feature: que Erika/Gonza también reciban push cuando un alumno les escribe. Reusa push_subscriptions + trigger +
+send-push **tal cual** (send-push ya resolvía la URL por rol → `/admin/index.html`). Solo frontend.
+
+### ⚠️ Bug encontrado y arreglado (el punto 3 del pedido): getAdminIds devolvía vacío
+`sendChatMessage` (atleta) llama `getAdminIds().then(ids => notify(ids, {type:'message'}))`, pero `getAdminIds()`
+hacía `select id from profiles where role='admin'` → **bajo la RLS del atleta, `profiles` solo devuelve la fila
+propia** → `[]` → `notify([])` no insertaba nada → **el admin NUNCA recibía notif de mensajes** (ni campanita ni,
+a futuro, push). **Fix (`dashboard.html`):** `getAdminIds()` ahora lee de **`coach_directory`** (vista legible por
+`authenticated` que expone los ids de admins). La notif se crea vía la policy "Sistema inserta" (WITH CHECK true),
+igual que likes/comentarios. **Bonus:** también arregla la campanita del admin para mensajes.
+
+### Push del admin (`admin/index.html`)
+- Se portó el módulo de push del atleta con **`CURRENT_ADMIN_ID`**: `pushSupported` / `urlB64ToUint8` /
+  `getVapidPublic` (site_config.vapid_public_key) / `enablePush` (upsert en `push_subscriptions`) / `updatePushUI`.
+- **UI:** card "🔔 Notificaciones" arriba de **Configuración** (`#view-config`) con botón **`#cfgPushBtn`**
+  ("Activar notificaciones") + aviso iOS (agregar a pantalla de inicio). **Sin banner** (decisión del usuario).
+  `updatePushUI()` se llama en `loadConfig`; el botón dispara `enablePush()`.
+- El SW ya estaba registrado en admin (base PWA de 2026-08-13 (c)). **Sin cambios** en push_subscriptions/trigger/
+  send-push. **Sin DDL nuevo** (push_subscriptions y coach_directory ya existen).
+
+### Badge del item "Mensajes" en el sidebar del admin
+Mismo patrón que el atleta: `updateMsgTabBadge()` (cuenta `NOTIFS` no leídas de `type='message'`) + `markMessage
+NotifsRead()` (al entrar a `loadMensajes`, marca leídas en memoria + `UPDATE notifications`). Badge `.nav-badge`
+(rojo, `margin-left:auto` → a la derecha del item) con id `#msgTabBadge`. Se sincroniza en load/realtime/marcar
+(mismos puntos que `updateNotifBadge`), y si llega un mensaje estando ya en la vista Mensajes se marca al toque.
+
+### Verificación
+Syntax-check inline `new Function` OK en ambos (0 errores). Refs cableadas (admin: cfgPushBtn/enablePush/
+updatePushUI ×3, updateMsgTabBadge ×7, markMessageNotifsRead ×3, msgTabBadge/nav-badge; dashboard: getAdminIds →
+coach_directory). Prueba real es auth-gated. **Sin redeploy** (todo frontend). **Cierra la Fase 1 del push** (atleta
++ admin). ⚠️ Para probar: el admin activa en Configuración → un alumno le manda un mensaje → le llega el push +
+badge/campanita.

@@ -3633,9 +3633,11 @@
       if (error) console.warn('notify:', error.message);
     }
 
-    // Ids de todos los admins (para avisarles de mensajes nuevos del atleta)
+    // Ids de todos los admins (para avisarles de mensajes nuevos del atleta).
+    // ⚠️ Vía `coach_directory`: la RLS del atleta NO deja leer `profiles` de admins (devolvería []), pero esa
+    // vista (legible por authenticated) sí expone los ids de los admins → la notif del admin se crea de verdad.
     async function getAdminIds() {
-      const { data } = await sb.from('profiles').select('id').eq('role', 'admin');
+      const { data } = await sb.from('coach_directory').select('id');
       return (data || []).map(r => r.id);
     }
 

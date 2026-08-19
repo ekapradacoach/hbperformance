@@ -103,6 +103,9 @@
   .nav a .ico { font-size: 1.15rem; width: 24px; text-align: center; }
   .nav a:hover { background: #161616; color: var(--text); }
   .nav a.active { background: rgba(245,168,0,0.12); color: var(--accent); }
+  /* Badge de no leídos en el item Mensajes del sidebar */
+  .nav-badge { margin-left: auto; min-width: 18px; height: 18px; padding: 0 5px; box-sizing: border-box; border-radius: 9px; background: #E23B3B; color: #fff; font-size: 0.66rem; font-weight: 800; font-family: var(--font-body); display: flex; align-items: center; justify-content: center; line-height: 1; }
+  .nav-badge.hidden { display: none; }
 
   .sidebar-footer { padding: 16px 12px 0; }
   .btn-logout {
@@ -1580,7 +1583,7 @@
         <a data-view="dashboard" class="active"><span class="ico">📊</span> Dashboard</a>
         <a data-view="planificacion"><span class="ico">📅</span> Planificación</a>
         <a data-view="alumnos"><span class="ico">👥</span> Alumnos</a>
-        <a data-view="mensajes"><span class="ico">💬</span> Mensajes</a>
+        <a data-view="mensajes"><span class="ico">💬</span> Mensajes<span class="nav-badge hidden" id="msgTabBadge"></span></a>
         <a data-view="metricas"><span class="ico">📈</span> Métricas</a>
         <a data-view="config"><span class="ico">⚙️</span> Configuración</a>
       </nav>
@@ -1897,6 +1900,14 @@
 
       <!-- =============== VIEW: CONFIGURACIÓN =============== -->
       <section id="view-config" class="view">
+
+        <!-- Notificaciones push del admin -->
+        <div class="cfg-card">
+          <h2 class="cfg-title">🔔 Notificaciones</h2>
+          <p style="color:var(--text-secondary);font-size:.9rem;margin:0 0 12px;line-height:1.45;">Recibí un aviso push en tu celular cuando un alumno te manda un mensaje, aunque tengas el panel cerrado.</p>
+          <button class="btn-primary" id="cfgPushBtn">Activar notificaciones</button>
+          <p style="color:var(--text-secondary);font-size:.8rem;margin:10px 0 0;line-height:1.45;">📱 <b>En iPhone:</b> las notificaciones solo funcionan si agregaste el panel a la pantalla de inicio (Compartir → “Agregar a inicio”) y lo abrís desde ese ícono, no desde Safari normal.</p>
+        </div>
 
         <!-- Sección 1: Precios -->
         <div class="cfg-card">
@@ -4465,6 +4476,7 @@
     }
 
     async function loadMensajes() {
+      markMessageNotifsRead();   // limpia la campanita (parte mensajes) + el badge del item Mensajes, sincronizados
       // Reset del panel de chat al (re)entrar a la vista: sin canal activo
       unsubscribeRealtime();
       msgActiveChannel = null;
@@ -4882,6 +4894,7 @@
     function addCC(v) { const d = String(v || '').replace(/\D/g, ''); return d ? (d.startsWith('54') ? d : '54' + d) : ''; }
 
     async function loadConfig() {
+      updatePushUI();   // refleja el estado del botón "Activar notificaciones"
       const { data, error } = await sb.from('site_config').select('key, value');
       if (error) { flash('No se pudo cargar la config (¿creaste la tabla site_config?).'); return; }
       const c = {};
@@ -5108,17 +5121,87 @@
       return (data || []).map(r => r.id);
     }
 
+    // ============================================================
+    // NOTIFICACIONES PUSH del admin (Web Push) — botón en Configuración.
+    // Mismo patrón que el atleta (dashboard.html): reusa push_subscriptions + trigger + send-push tal cual.
+    // ============================================================
+    function pushSupported() {
+      return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+    }
+    function urlB64ToUint8(b64) {
+      const pad = '='.repeat((4 - (b64.length % 4)) % 4);
+      const s = (b64 + pad).replace(/-/g, '+').replace(/_/g, '/');
+      const raw = atob(s);
+      const arr = new Uint8Array(raw.length);
+      for (let i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+      return arr;
+    }
+    let vapidPubCache = null;
+    async function getVapidPublic() {
+      if (vapidPubCache !== null) return vapidPubCache;
+      const { data } = await sb.from('site_config').select('value').eq('key', 'vapid_public_key').maybeSingle();
+      vapidPubCache = (data && data.value) || '';
+      return vapidPubCache;
+    }
+    async function enablePush() {
+      if (!pushSupported()) { flash('Tu navegador no soporta notificaciones push.'); return false; }
+      let perm = Notification.permission;
+      if (perm === 'default') perm = await Notification.requestPermission();
+      if (perm !== 'granted') { flash('No se activaron las notificaciones (permiso no concedido).'); return false; }
+      const pub = await getVapidPublic();
+      if (!pub) { flash('Las notificaciones no están configuradas todavía.'); return false; }
+      try {
+        const reg = await navigator.serviceWorker.ready;
+        let sub = await reg.pushManager.getSubscription();
+        if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToUint8(pub) });
+        const j = sub.toJSON();
+        const { error } = await sb.from('push_subscriptions').upsert({
+          user_id: CURRENT_ADMIN_ID,
+          endpoint: sub.endpoint,
+          p256dh: j.keys.p256dh,
+          auth: j.keys.auth,
+          user_agent: navigator.userAgent
+        }, { onConflict: 'endpoint' });
+        if (error) { flash('No se pudo guardar la suscripción: ' + error.message); return false; }
+        flash('🔔 Notificaciones activadas');
+        return true;
+      } catch (e) {
+        console.warn('enablePush:', e);
+        flash('No se pudieron activar las notificaciones.');
+        return false;
+      }
+    }
+    async function updatePushUI() {
+      const btn = document.getElementById('cfgPushBtn');
+      if (!btn) return;
+      if (!pushSupported()) { btn.disabled = true; btn.textContent = 'No disponible en este navegador'; return; }
+      if (Notification.permission === 'denied') { btn.disabled = true; btn.textContent = 'Bloqueadas en el navegador'; return; }
+      if (Notification.permission === 'granted') {
+        try {
+          const reg = await navigator.serviceWorker.ready;
+          const sub = await reg.pushManager.getSubscription();
+          if (sub) { btn.disabled = true; btn.textContent = '✓ Notificaciones activadas'; return; }
+        } catch (_) { /* estado por defecto */ }
+      }
+      btn.disabled = false; btn.textContent = 'Activar notificaciones';
+    }
+    document.getElementById('cfgPushBtn').addEventListener('click', async () => {
+      await enablePush();
+      updatePushUI();
+    });
+
     async function loadNotifs() {
       const { data, error } = await sb.from('notifications')
         .select('id, type, title, body, link, read, created_at')
         .eq('user_id', CURRENT_ADMIN_ID)
         .order('created_at', { ascending: false })
         .limit(30);
-      if (error) { NOTIFS = []; renderNotifs(); updateNotifBadge(); return; } // degrada si no existe la tabla
+      if (error) { NOTIFS = []; renderNotifs(); updateNotifBadge(); updateMsgTabBadge(); return; } // degrada si no existe la tabla
       NOTIFS = data || [];
       notifUnread = NOTIFS.filter(n => !n.read).length;
       renderNotifs();
       updateNotifBadge();
+      updateMsgTabBadge();
     }
 
     function updateNotifBadge(animate) {
@@ -5131,6 +5214,28 @@
         badge.classList.add('hidden');
       }
       document.getElementById('notifMarkAll').disabled = notifUnread === 0;
+    }
+
+    // Badge del item "Mensajes" del sidebar: mismo origen que la campanita (notifications no leídas type='message').
+    function updateMsgTabBadge() {
+      const b = document.getElementById('msgTabBadge');
+      if (!b) return;
+      const count = NOTIFS.filter(n => !n.read && n.type === 'message').length;
+      if (count > 0) { b.textContent = count > 99 ? '99+' : count; b.classList.remove('hidden'); }
+      else { b.classList.add('hidden'); }
+    }
+    // Marca leídas las notifs de mensaje (al entrar a Mensajes) → sincroniza campanita + badge del item.
+    async function markMessageNotifsRead() {
+      const toMark = NOTIFS.filter(n => !n.read && n.type === 'message');
+      if (!toMark.length) return;
+      toMark.forEach(n => n.read = true);
+      notifUnread = NOTIFS.filter(n => !n.read).length;
+      renderNotifs();
+      updateNotifBadge();
+      updateMsgTabBadge();
+      const { error } = await sb.from('notifications').update({ read: true })
+        .eq('user_id', CURRENT_ADMIN_ID).eq('type', 'message').eq('read', false);
+      if (error) console.warn('marcar msg notifs:', error.message);
     }
 
     function notifItemHtml(n) {
@@ -5161,6 +5266,11 @@
       if (!n.read) notifUnread++;
       renderNotifs();
       updateNotifBadge(true);
+      updateMsgTabBadge();
+      // Si el admin ya está viendo Mensajes, no dejar el badge colgado: marcar leído el msg entrante.
+      if (n.type === 'message' && document.getElementById('view-mensajes').classList.contains('active')) {
+        markMessageNotifsRead();
+      }
     }
 
     function notifNavigate(link) {
@@ -5179,6 +5289,7 @@
         notifUnread = Math.max(0, notifUnread - 1);
         renderNotifs();
         updateNotifBadge();
+        updateMsgTabBadge();
         sb.from('notifications').update({ read: true }).eq('id', n.id).then(({ error }) => {
           if (error) console.warn('marcar leída:', error.message);
         });
@@ -5192,6 +5303,7 @@
       notifUnread = 0;
       renderNotifs();
       updateNotifBadge();
+      updateMsgTabBadge();
       const { error } = await sb.from('notifications').update({ read: true })
         .eq('user_id', CURRENT_ADMIN_ID).eq('read', false);
       if (error) console.warn('marcar todas:', error.message);

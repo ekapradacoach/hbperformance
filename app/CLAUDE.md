@@ -473,16 +473,18 @@ Push del navegador/celular cuando llega un **mensaje de chat** (a atleta o admin
   **Secrets** `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT`. (`SUPABASE_URL`/`SERVICE_ROLE_KEY` como las otras funciones.)
 - **UI de permiso:** **banner de 1ª vez** (dismiss por dispositivo con `localStorage.hb_push_dismissed`) + **toggle
   en Perfil** ("🔔 Notificaciones"). `enablePush()` → `Notification.requestPermission()` → `pushManager.subscribe`
-  (con la pública de site_config) → `upsert` en `push_subscriptions`. ✅ **atleta** (`dashboard.html`) hecho;
-  ⚠️ **admin** (`admin/index.html`) **pendiente** (usar `CURRENT_ADMIN_ID`) → cierra Fase 1. La card del Perfil
-  incluye un **aviso para iOS** (las notifs solo andan con el acceso directo instalado; remite a la card
-  "📲 Acceso directo") — agregado 2026-08-13 (g).
+  (con la pública de site_config) → `upsert` en `push_subscriptions`. ✅ **atleta** (`dashboard.html`, `user_id=
+  ATHLETE.id`): banner + toggle en Perfil (con **aviso iOS** que remite a la card "📲 Acceso directo", 2026-08-13 (g)).
+  ✅ **admin** (`admin/index.html`, `user_id=CURRENT_ADMIN_ID`, 2026-08-13 (k)): botón "Activar notificaciones" en
+  **Configuración** (`#cfgPushBtn`, mismo módulo `pushSupported/getVapidPublic/enablePush/updatePushUI`) + aviso iOS;
+  sin banner. ⚠️ **Requisito clave (2026-08-13 (k)):** para que la notif del admin exista, `getAdminIds()` de
+  `dashboard.html` se arregló para leer de **`coach_directory`** (la RLS del atleta no deja leer `profiles` de
+  admins → antes devolvía `[]` y el admin NUNCA recibía notif/push de mensajes; ahora sí).
 - **iOS (Fase 2):** Web Push **solo** funciona si la PWA está **instalada en la pantalla de inicio** y se abre
   desde ahí (en pestaña de Safari la Push API no existe). Android (Chrome): completo, en navegador y PWA.
-- **Estado (2026-08-13):** ✅ **push funciona end-to-end, probado en real en Android Y iPhone** (Fase 2 cerrada en
-  lo funcional). El fix de formato de body de `send-push` está deployado. **Pendientes:** (1) UI de permiso del
-  **admin** (cierra Fase 1 del lado admin); (2) correr el **DDL de `coach_directory`** (nombre real del coach en
-  el chat, hoy muestra "Coach").
+- **Estado (2026-08-13):** ✅ **push end-to-end, probado en real en Android Y iPhone; UI de atleta Y admin hechas**
+  (Fase 1 y 2 cerradas en lo funcional). `send-push` deployado. Requiere que `coach_directory` + `athlete_directory`
+  existan en la base (DDL ya corrido según el usuario).
 
 ## Sistema de notificaciones (campana 🔔 — `app/dashboard.html` + `admin/index.html`)
 Idéntico en ambos portales. **Campana en la topbar** (dashboard: entre nombre y avatar; admin: junto al
@@ -506,13 +508,15 @@ navega a su `link` (`showView`). **Íconos:** message 💬 · planning 📅 · l
   4. **comment** — al comentar un post ajeno → notif para el autor. body 60 chars, link `#comunidad`.
   5. **new_athlete** (solo admins) — al crear atleta OK (`create-athlete`) → notif para **todos los admins**.
      body "[nombre] se unió a [programa]", link `#alumnos`.
-- **Badge del tab "Mensajes"** (`app/dashboard.html`, 2026-08-13): globito rojo con contador sobre el tab
-  Mensajes cuando hay mensajes sin leer. **Misma fuente que la campanita** (`NOTIFS` no leídas de `type='message'`
-  → siempre sincronizados). `updateMsgTabBadge()` se llama junto a cada `updateNotifBadge()` (load/realtime/marcar).
-  **Al entrar a Mensajes** (`enterMensajes`) `markMessageNotifsRead()` marca leídas las notifs de mensaje (memoria +
-  `UPDATE notifications set read=true where type='message'`) → limpia el badge del tab **Y** la parte de mensajes
-  de la campanita (antes, entrar al chat solo marcaba `messages.read`, no `notifications`, y la campanita quedaba
-  colgada). Si llega un push mientras el atleta ya está en Mensajes, se marca leído al toque (no queda el badge).
+- **Badge del tab/item "Mensajes"** (`app/dashboard.html` 2026-08-13; `admin/index.html` 2026-08-13 (k)): globito
+  rojo con contador sobre el tab Mensajes (atleta, `.tab-badge`) / el item Mensajes del sidebar (admin, `.nav-badge`
+  a la derecha del item) cuando hay mensajes sin leer. **Misma fuente que la campanita** (`NOTIFS` no leídas de
+  `type='message'` → siempre sincronizados). `updateMsgTabBadge()` se llama junto a cada `updateNotifBadge()`
+  (load/realtime/marcar). **Al entrar a Mensajes** (`enterMensajes` atleta / `loadMensajes` admin)
+  `markMessageNotifsRead()` marca leídas las notifs de mensaje (memoria + `UPDATE notifications set read=true where
+  type='message'`) → limpia el badge **Y** la parte de mensajes de la campanita. Si llega un push mientras ya está
+  en Mensajes, se marca leído al toque. **El del admin depende del fix de `getAdminIds`→`coach_directory`** (sin él,
+  la notif de mensaje del admin nunca se creaba).
 
 ## Roles
 - admin → acceso total
