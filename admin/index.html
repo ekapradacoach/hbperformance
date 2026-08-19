@@ -862,8 +862,8 @@
   .ex-cancel-link:hover { color: var(--text); }
   .ex-lib-row { display: flex; align-items: center; }
   .ex-lib-row .ex-lib-item { flex: 1; min-width: 0; }
-  .ex-lib-link { flex-shrink: 0; background: none; border: none; cursor: pointer; opacity: 0.55; font-size: 0.85rem; padding: 0 8px; align-self: stretch; }
-  .ex-lib-link:hover { opacity: 1; }
+  .ex-lib-link, .ex-lib-edit, .ex-lib-del { flex-shrink: 0; background: none; border: none; cursor: pointer; opacity: 0.55; font-size: 0.85rem; padding: 0 8px; align-self: stretch; }
+  .ex-lib-link:hover, .ex-lib-edit:hover, .ex-lib-del:hover { opacity: 1; }
 
   /* ---- Vincular RM (editor) ---- */
   .rm-linkbar { margin: 6px 0 2px; }
@@ -2140,6 +2140,28 @@
   </div>
 
   <!-- =============== Modal: Vincular RM entre variantes =============== -->
+  <div class="modal-backdrop" id="modalLibEdit">
+    <div class="modal">
+      <div class="modal-head">
+        <h3>Editar ejercicio</h3>
+        <button class="modal-close" data-close="modalLibEdit">✕</button>
+      </div>
+      <div class="field">
+        <label for="libEditName">Nombre</label>
+        <input type="text" id="libEditName" placeholder="Nombre del ejercicio">
+      </div>
+      <div class="field">
+        <label for="libEditUrl">Link de YouTube (opcional)</label>
+        <input type="text" id="libEditUrl" placeholder="https://youtube.com/...">
+      </div>
+      <div class="modal-error" id="libEditError"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px;">
+        <button class="btn-sm" data-close="modalLibEdit">Cancelar</button>
+        <button class="btn-primary" id="libEditSave">Guardar cambios</button>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-backdrop" id="modalRmLink">
     <div class="modal">
       <div class="modal-head">
@@ -3116,6 +3138,8 @@
              ${e.rm_source_id ? '<span class="ex-lib-has" title="Hereda RM">🔗</span>' : ''}
            </button>
            <button type="button" class="ex-lib-link" data-id="${esc(e.id)}" title="Vincular RM a…">🔗</button>
+           <button type="button" class="ex-lib-edit" data-id="${esc(e.id)}" title="Editar nombre/link">✏️</button>
+           <button type="button" class="ex-lib-del" data-id="${esc(e.id)}" title="Borrar de la biblioteca">🗑️</button>
          </div>`).join('');
       listEl.querySelectorAll('.ex-lib-item').forEach(it => {
         it.addEventListener('click', () => {
@@ -3128,6 +3152,20 @@
           e.stopPropagation();
           const ex = (exerciseLibrary || []).find(x => String(x.id) === String(lk.dataset.id));
           if (ex) openRmLinkModal(ex);
+        });
+      });
+      listEl.querySelectorAll('.ex-lib-edit').forEach(ed => {
+        ed.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const ex = (exerciseLibrary || []).find(x => String(x.id) === String(ed.dataset.id));
+          if (ex) openLibEdit(ex, card);
+        });
+      });
+      listEl.querySelectorAll('.ex-lib-del').forEach(dl => {
+        dl.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const ex = (exerciseLibrary || []).find(x => String(x.id) === String(dl.dataset.id));
+          if (ex) deleteFromLibrary(ex, card);
         });
       });
     }
@@ -3177,6 +3215,71 @@
         flash('✓ Añadido a la biblioteca.');
       }
       refreshLibAddBtn(card);
+    }
+
+    // ---- Editar / borrar un ejercicio de la biblioteca ----
+    let libEditCtx = null; // { id, card }
+    function openLibEdit(ex, card) {
+      libEditCtx = { id: ex.id, card };
+      document.getElementById('libEditName').value = ex.name || '';
+      document.getElementById('libEditUrl').value = ex.video_url || '';
+      const err = document.getElementById('libEditError'); err.classList.remove('show'); err.textContent = '';
+      openModal('modalLibEdit');
+      setTimeout(() => document.getElementById('libEditName').focus(), 60);
+    }
+    // UPDATE simple de nombre/url (sin cascada: las marcas [[rm:...]] viejas se corrigen a mano en el caso raro).
+    async function saveLibEdit() {
+      if (!libEditCtx) return;
+      const name = document.getElementById('libEditName').value.trim();
+      const video_url = document.getElementById('libEditUrl').value.trim() || null;
+      const err = document.getElementById('libEditError');
+      if (!name) { err.textContent = 'Poné un nombre para el ejercicio.'; err.classList.add('show'); return; }
+      const btn = document.getElementById('libEditSave'); btn.disabled = true;
+      const { data, error } = await sb.from('exercise_library')
+        .update({ name, video_url }).eq('id', libEditCtx.id).select().single();
+      btn.disabled = false;
+      if (error) {
+        err.textContent = (error.code === '23505')
+          ? 'Ya existe otro ejercicio con ese nombre en la biblioteca.'
+          : ('No se pudo guardar: ' + error.message);
+        err.classList.add('show'); return;
+      }
+      const ex = (exerciseLibrary || []).find(x => String(x.id) === String(libEditCtx.id));
+      if (ex) { ex.name = data.name; ex.video_url = data.video_url; }
+      (exerciseLibrary || []).sort((x, y) => String(x.name).localeCompare(String(y.name)));
+      const card = libEditCtx.card;
+      closeModal('modalLibEdit');
+      libEditCtx = null;
+      flash('✓ Ejercicio actualizado.');
+      if (card) { renderLibList(card, card.querySelector('.ex-lib-search').value); refreshLibAddBtn(card); }
+    }
+    document.getElementById('libEditSave').addEventListener('click', saveLibEdit);
+
+    // Borra un ejercicio del catálogo. ⚠️ athlete_rm.exercise_id → exercise_library.id es ON DELETE CASCADE:
+    // si hay historial de RM de atletas, borrarlo perdería esos datos → se BLOQUEA (chequeo previo). Los chips de
+    // bloque y las marcas [[rm:...]] son copias/texto denormalizados: no se rompen (una marca con el nombre borrado
+    // deja de resolver, mismo caso raro que el rename, aceptado).
+    async function deleteFromLibrary(ex, card) {
+      const { count: rmCount, error: rmErr } = await sb.from('athlete_rm')
+        .select('id', { count: 'exact', head: true }).eq('exercise_id', ex.id);
+      if (rmErr) { alert('No se pudo verificar el historial de RM (' + rmErr.message + '). Por seguridad no se borra.'); return; }
+      if (rmCount && rmCount > 0) {
+        alert('No se puede borrar "' + ex.name + '": tiene historial de RM de ' + rmCount + ' registro(s) de atletas. ' +
+              'Borrarlo perdería esos datos. Si de verdad hay que sacarlo, primero hay que migrar/eliminar ese historial a mano.');
+        return;
+      }
+      const { count: varCount } = await sb.from('exercise_library')
+        .select('id', { count: 'exact', head: true }).eq('rm_source_id', ex.id);
+      const extra = (varCount && varCount > 0)
+        ? '\n\n⚠️ Otros ' + varCount + ' ejercicio(s) heredan el RM de este; al borrarlo van a manejar su propio RM.'
+        : '';
+      if (!confirm('¿Borrar "' + ex.name + '" de la biblioteca?\n\nNo afecta los ejercicios ya guardados en bloques ' +
+                   '(son copias); solo lo saca del catálogo.' + extra)) return;
+      const { error } = await sb.from('exercise_library').delete().eq('id', ex.id);
+      if (error) { alert('No se pudo borrar: ' + error.message); return; }
+      exerciseLibrary = (exerciseLibrary || []).filter(x => String(x.id) !== String(ex.id));
+      flash('🗑️ Ejercicio borrado de la biblioteca.');
+      if (card) { renderLibList(card, card.querySelector('.ex-lib-search').value); refreshLibAddBtn(card); }
     }
 
     // ---- Vincular RM (marca en el texto libre del bloque) ----

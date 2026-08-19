@@ -2502,3 +2502,27 @@ grant select on public.athlete_directory to authenticated;
   resolveChatSender ×2, athlete_directory ×5). Prueba visual real es auth-gated.
 - ⚠️ **Pendiente del usuario:** correr el DDL de `athlete_directory`. Sin él, el front degrada al genérico "Atleta"
   (no rompe). Solo frontend + 1 vista; no toca Edge Functions.
+
+## 2026-08-13 (i) — Editar/borrar ejercicios de la biblioteca (admin → Planificación)
+Feature: hasta ahora la biblioteca (`exercise_library`) solo se podía crear y autocompletar; no se podía editar
+ni borrar (quedaban duplicados/mal cargados porque el flujo real es "creo uno nuevo bien en vez de corregir").
+
+### Diagnóstico de riesgo (antes de tocar código)
+- **Chips de bloque (`exercise_links`) y marcas `[[rm:Nombre]]`:** son **copias denormalizadas** (name+url sin FK)
+  y **texto** respectivamente → editar/borrar la biblioteca NO los rompe ni cascadea. Único matiz: una marca con un
+  nombre renombrado/borrado deja de **resolver** (mismo caso raro que el rename; el usuario lo acepta).
+- **`athlete_rm.exercise_id → exercise_library.id` es `ON DELETE CASCADE`** (CLAUDE.md:323) → un DELETE directo
+  **cascadearía y borraría el historial de RM** de los atletas de ese ejercicio. **Riesgo real de pérdida de datos.**
+- **Decisión (confirmada con el usuario):** edición = UPDATE simple de nombre/url **sin cascada**; delete = **bloquear
+  si el ejercicio tiene historial en `athlete_rm`**, permitir si no.
+
+### Implementado (`admin/index.html`, solo frontend)
+- **✏️ Editar** por fila de la biblioteca → modal **`#modalLibEdit`** (nombre + URL) + "Guardar cambios" →
+  `UPDATE exercise_library`. Maneja `23505` (nombre duplicado por el índice único). Sin cascada. Refresca la lista.
+- **🗑️ Borrar** (`deleteFromLibrary`): **chequea `athlete_rm` por `exercise_id`**; si ≥1 → **bloquea** con aviso
+  (no perder historial). Si es base de variantes (`rm_source_id`) → aviso extra en el confirm (FK set null → esas
+  variantes pasan a manejar su propio RM, sin pérdida de datos). Si pasa → confirm + DELETE + refresca. El chequeo
+  protege **aunque la FK real difiera** de lo documentado (si fuera RESTRICT, evita el error crudo).
+- CSS: ✏️/🗑️ reusan el estilo de `.ex-lib-link` (selector ampliado). Verificación: syntax-check inline `new Function`
+  OK (0 errores); refs cableadas (openLibEdit/saveLibEdit/deleteFromLibrary ×2, modalLibEdit ×5, ex-lib-edit/-del ×4).
+  Prueba visual real es auth-gated (panel admin). No toca Edge Functions.
