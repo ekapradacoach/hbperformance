@@ -662,6 +662,8 @@
   }
   .chat-send:hover { box-shadow: 0 0 16px rgba(245,168,0,0.4); }
   .chat-empty { margin: auto; color: var(--text-secondary); text-align: center; padding: 20px; font-size: 0.95rem; }
+  .chat-daysep { align-self: center; margin: 10px 0 4px; }
+  .chat-daysep span { background: #222; color: var(--text-secondary); font-size: 0.7rem; font-weight: 600; padding: 3px 12px; border-radius: 999px; }
 
   .m-row { display: flex; gap: 10px; max-width: 82%; }
   .m-row.mine { align-self: flex-end; flex-direction: row-reverse; }
@@ -1430,6 +1432,35 @@
       const d = new Date(ts);
       if (isNaN(d)) return '';
       return d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+    }
+    // ---- Separadores de fecha del chat (estilo WhatsApp: "Hoy" / "Ayer" / "Lun 18 ago" [+ año si difiere]) ----
+    let chatLastDay = null;   // día del último mensaje renderizado (para insertar el separador al cambiar de día)
+    function dayKey(ts) {
+      const d = new Date(ts);
+      if (isNaN(d)) return '';
+      return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+    }
+    function fmtDaySep(ts) {
+      const d = new Date(ts);
+      if (isNaN(d)) return '';
+      const a = new Date(); a.setHours(0, 0, 0, 0);
+      const b = new Date(d); b.setHours(0, 0, 0, 0);
+      const diff = Math.round((a - b) / 86400000);
+      if (diff === 0) return 'Hoy';
+      if (diff === 1) return 'Ayer';
+      const opts = (d.getFullYear() === new Date().getFullYear())
+        ? { weekday: 'short', day: 'numeric', month: 'short' }
+        : { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' };
+      const s = d.toLocaleDateString('es-AR', opts);
+      return s.charAt(0).toUpperCase() + s.slice(1);
+    }
+    function daySepNode(ts) {
+      const wrap = document.createElement('div');
+      wrap.className = 'chat-daysep';
+      const span = document.createElement('span');
+      span.textContent = fmtDaySep(ts);
+      wrap.appendChild(span);
+      return wrap;
     }
     // Fecha relativa: "hace un momento", "hace 3 min", "hace 2 horas", "ayer", "hace 3 días"…
     function fmtRelative(ts) {
@@ -2807,7 +2838,12 @@
         return;
       }
       box.innerHTML = '';
-      list.forEach(m => box.appendChild(chatMsgNode(m)));
+      chatLastDay = null;
+      list.forEach(m => {
+        const dk = dayKey(m.created_at);
+        if (dk !== chatLastDay) { box.appendChild(daySepNode(m.created_at)); chatLastDay = dk; }
+        box.appendChild(chatMsgNode(m));
+      });
       scrollChatBottom();
     }
 
@@ -2838,7 +2874,9 @@
       }
       const box = document.getElementById('chatMsgs');
       const empty = box.querySelector('.chat-empty');
-      if (empty) box.innerHTML = '';
+      if (empty) { box.innerHTML = ''; chatLastDay = null; }
+      const dk = dayKey(row.created_at);
+      if (dk !== chatLastDay) { box.appendChild(daySepNode(row.created_at)); chatLastDay = dk; }
       box.appendChild(chatMsgNode(row));
       scrollChatBottom();
       if (String(row.from_id) !== String(ATHLETE.id)) markChatRead();

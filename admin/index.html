@@ -1262,6 +1262,8 @@
   }
   .coach-badge { font-size: 0.66rem; font-weight: 700; padding: 1px 7px; border-radius: 999px; background: rgba(245,168,0,0.15); color: var(--accent); flex-shrink: 0; }
   .msg-empty-list { color: var(--text-secondary); font-size: 0.85rem; padding: 10px 18px; }
+  .msg-daysep { align-self: center; margin: 10px 0 4px; }
+  .msg-daysep span { background: #222; color: var(--text-secondary); font-size: 0.7rem; font-weight: 600; padding: 3px 12px; border-radius: 999px; }
 
   .msg-chat { flex: 1; display: flex; min-width: 0; background: #0D0D0D; }
   .msg-chat-empty { margin: auto; color: var(--text-secondary); font-size: 0.98rem; text-align: center; padding: 20px; }
@@ -4474,6 +4476,35 @@
       if (isNaN(d)) return '';
       return d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
     }
+    // ---- Separadores de fecha del chat (estilo WhatsApp: "Hoy" / "Ayer" / "Lun 18 ago" [+ año si difiere]) ----
+    let msgLastDay = null;   // día del último mensaje renderizado (para insertar el separador al cambiar de día)
+    function dayKey(ts) {
+      const d = new Date(ts);
+      if (isNaN(d)) return '';
+      return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
+    }
+    function fmtDaySep(ts) {
+      const d = new Date(ts);
+      if (isNaN(d)) return '';
+      const a = new Date(); a.setHours(0, 0, 0, 0);
+      const b = new Date(d); b.setHours(0, 0, 0, 0);
+      const diff = Math.round((a - b) / 86400000);
+      if (diff === 0) return 'Hoy';
+      if (diff === 1) return 'Ayer';
+      const opts = (d.getFullYear() === new Date().getFullYear())
+        ? { weekday: 'short', day: 'numeric', month: 'short' }
+        : { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' };
+      const s = d.toLocaleDateString('es-AR', opts);
+      return s.charAt(0).toUpperCase() + s.slice(1);
+    }
+    function daySepNode(ts) {
+      const wrap = document.createElement('div');
+      wrap.className = 'msg-daysep';
+      const span = document.createElement('span');
+      span.textContent = fmtDaySep(ts);
+      wrap.appendChild(span);
+      return wrap;
+    }
 
     async function loadMensajes() {
       markMessageNotifsRead();   // limpia la campanita (parte mensajes) + el badge del item Mensajes, sincronizados
@@ -4594,7 +4625,12 @@
         return;
       }
       box.innerHTML = '';
-      list.forEach(m => box.appendChild(messageNode(m)));
+      msgLastDay = null;
+      list.forEach(m => {
+        const dk = dayKey(m.created_at);
+        if (dk !== msgLastDay) { box.appendChild(daySepNode(m.created_at)); msgLastDay = dk; }
+        box.appendChild(messageNode(m));
+      });
       scrollMessagesBottom();
     }
 
@@ -4623,7 +4659,9 @@
       }
       const box = document.getElementById('msgMessages');
       const empty = box.querySelector('.msg-empty-list');
-      if (empty) box.innerHTML = '';
+      if (empty) { box.innerHTML = ''; msgLastDay = null; }
+      const dk = dayKey(row.created_at);
+      if (dk !== msgLastDay) { box.appendChild(daySepNode(row.created_at)); msgLastDay = dk; }
       box.appendChild(messageNode(row));
       scrollMessagesBottom();
       // Si el mensaje entrante es de un alumno y el canal está abierto → marcar leído

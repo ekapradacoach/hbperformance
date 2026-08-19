@@ -118,6 +118,10 @@ como en admin: grupal filtra por `program_slug`; asesoría además por `athlete_
   ('chat_'+canal).on(postgres_changes INSERT filter channel=eq.X)`), se desuscribe al salir de la vista.
   Marca leídos al abrir (`UPDATE read=true WHERE channel=X AND from_id != uid AND read=false`). La vista
   usa `position:fixed` entre topbar y tabbar (el área de mensajes scrollea internamente).
+  **Separadores de fecha (2026-08-13 (l)):** el chat inserta un chip centrado ("Hoy" / "Ayer" / "Lun 18 ago",
+  + año si es de otro año) al cambiar de día entre mensajes (helper `fmtDaySep`/`dayKey`/`daySepNode`, var
+  `chatLastDay`); antes solo se veía la hora. **Mismo cambio en el admin** (`admin/index.html`, clase `.msg-daysep`,
+  var `msgLastDay`) — son 2 lugares de código distintos (el chat no comparte componente entre atleta y admin).
   ⚠️ **Nombres en el chat (RLS):** el atleta NO puede leer perfiles ajenos por RLS → los nombres se resuelven por
   **2 vistas "definer"** que siembran `chatSenderCache` en `enterMensajes` (con fallback en realtime vía
   `resolveChatSender` en `appendChatMessage`):

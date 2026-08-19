@@ -2575,3 +2575,19 @@ updatePushUI ×3, updateMsgTabBadge ×7, markMessageNotifsRead ×3, msgTabBadge/
 coach_directory). Prueba real es auth-gated. **Sin redeploy** (todo frontend). **Cierra la Fase 1 del push** (atleta
 + admin). ⚠️ Para probar: el admin activa en Configuración → un alumno le manda un mensaje → le llega el push +
 badge/campanita.
+
+## 2026-08-13 (l) — Separadores de fecha en el chat (estilo WhatsApp) — atleta + admin
+Ajuste de UI: el chat mostraba solo la hora ("07:31 p. m.") en TODOS los chats (grupal y asesoría, atleta y admin)
+— `fmtTime` = `toLocaleTimeString` sin fecha → difícil ubicar mensajes viejos al scrollear. No había inconsistencia
+entre tipos de chat; era uniforme. **Son 2 lugares** (el chat no comparte componente): `dashboard.html` y
+`admin/index.html`.
+- **Fix (ambos archivos):** chip separador centrado por día, insertado al recorrer los mensajes cuando cambia el
+  día respecto del anterior, y también en el realtime/optimista (`appendChatMessage`/`appendMessage`) cuando el
+  mensaje entrante es de otro día (para el caso de pasar la medianoche con el chat abierto). Helpers nuevos por
+  archivo: `dayKey(ts)` (clave de día local), `fmtDaySep(ts)` (**"Hoy" / "Ayer" / "Lun 18 ago"**, con **año solo si
+  el mensaje es de otro año** → "Lun 18 ago 2025"), `daySepNode(ts)` (crea el `<div class="chat-daysep|msg-daysep">`).
+  Var de estado `chatLastDay` / `msgLastDay` (se resetea en el render y al limpiar el empty-state). La **hora sigue
+  en cada mensaje**; la fecha va solo en el separador (no se repite). CSS: chip gris centrado (`align-self:center`).
+- Verificación: syntax-check inline OK en ambos (0 errores); refs cableadas (daySepNode ×3 y clase del chip ×3 por
+  archivo); test de `fmtDaySep` en Node → Hoy/Ayer/"Vie, 14 ago"/"Lun, 18 ago 2025"/"" (inválido). Solo frontend,
+  sin redeploy. Prueba visual real es auth-gated.
