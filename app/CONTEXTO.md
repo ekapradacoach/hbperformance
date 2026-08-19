@@ -2526,3 +2526,18 @@ ni borrar (quedaban duplicados/mal cargados porque el flujo real es "creo uno nu
 - CSS: ✏️/🗑️ reusan el estilo de `.ex-lib-link` (selector ampliado). Verificación: syntax-check inline `new Function`
   OK (0 errores); refs cableadas (openLibEdit/saveLibEdit/deleteFromLibrary ×2, modalLibEdit ×5, ex-lib-edit/-del ×4).
   Prueba visual real es auth-gated (panel admin). No toca Edge Functions.
+
+## 2026-08-13 (j) — Biblioteca: acciones (editar/vincular RM/borrar) en un menú ⋮ (UX)
+Feedback del usuario: con los 3 íconos inline (🔗 ✏️ 🗑️) por fila, la lista de la biblioteca quedaba muy cargada
+y no se leían bien los nombres (se truncaban). **Fix (solo UI, `admin/index.html`):** los 3 botones de acción se
+reemplazaron por **un solo botón ⋮** (`.ex-lib-more`) por fila que abre un **menú popover `#exLibMenu`** con
+**Editar / Vincular RM / Borrar**. El nombre del ejercicio ahora ocupa casi todo el ancho.
+- Menú: `position:fixed`, posicionado con `getBoundingClientRect` del ⋮ (se alinea a la derecha del botón, y si no
+  entra abajo se abre hacia arriba); cierra al clickear fuera (`document` click; el ⋮ hace `stopPropagation` para
+  no cerrarse al abrir). Cada item llama a la función que ya existía (`openLibEdit` / `openRmLinkModal` /
+  `deleteFromLibrary`) — **la lógica y las protecciones del delete NO cambiaron** (sigue el bloqueo por
+  historial de `athlete_rm`). Se eliminaron las clases/handlers viejos `.ex-lib-link`/`.ex-lib-edit`/`.ex-lib-del`
+  de las filas (el 🔗 de "hereda RM" como indicador dentro del item se mantiene). Los indicadores 🎥/🔗 del item
+  quedan igual.
+- Verificación: syntax-check inline OK (0 errores); refs cableadas (ex-lib-more ×4, openExLibMenu ×2, hideExLibMenu
+  ×3), y `ex-lib-edit`/`ex-lib-del` en 0 (removidas). Prueba visual real es auth-gated. Solo frontend.

@@ -862,8 +862,16 @@
   .ex-cancel-link:hover { color: var(--text); }
   .ex-lib-row { display: flex; align-items: center; }
   .ex-lib-row .ex-lib-item { flex: 1; min-width: 0; }
-  .ex-lib-link, .ex-lib-edit, .ex-lib-del { flex-shrink: 0; background: none; border: none; cursor: pointer; opacity: 0.55; font-size: 0.85rem; padding: 0 8px; align-self: stretch; }
-  .ex-lib-link:hover, .ex-lib-edit:hover, .ex-lib-del:hover { opacity: 1; }
+  .ex-lib-link { flex-shrink: 0; background: none; border: none; cursor: pointer; opacity: 0.55; font-size: 0.85rem; padding: 0 8px; align-self: stretch; }
+  .ex-lib-link:hover { opacity: 1; }
+  .ex-lib-more { flex-shrink: 0; background: none; border: none; cursor: pointer; opacity: 0.6; font-size: 1.15rem; line-height: 1; padding: 0 6px; align-self: stretch; color: inherit; }
+  .ex-lib-more:hover { opacity: 1; }
+  /* Menú de opciones (⋮) de la biblioteca */
+  .ex-lib-menu-pop { position: fixed; display: none; z-index: 4000; background: #1A1A1A; border: 1px solid #333; border-radius: 10px; padding: 4px; min-width: 160px; box-shadow: 0 8px 24px rgba(0,0,0,.5); }
+  .ex-lib-menu-pop.show { display: block; }
+  .ex-lib-menu-pop .elm-item { display: block; width: 100%; text-align: left; background: none; border: none; color: #eaeaea; font-size: 0.9rem; padding: 8px 10px; border-radius: 6px; cursor: pointer; }
+  .ex-lib-menu-pop .elm-item:hover { background: rgba(245,168,0,0.12); color: var(--accent); }
+  .ex-lib-menu-pop .elm-item.danger:hover { background: rgba(226,59,59,0.12); color: #e05252; }
 
   /* ---- Vincular RM (editor) ---- */
   .rm-linkbar { margin: 6px 0 2px; }
@@ -2140,6 +2148,12 @@
   </div>
 
   <!-- =============== Modal: Vincular RM entre variantes =============== -->
+  <div id="exLibMenu" class="ex-lib-menu-pop">
+    <button type="button" class="elm-item" data-act="edit">✏️ Editar</button>
+    <button type="button" class="elm-item" data-act="rm">🔗 Vincular RM</button>
+    <button type="button" class="elm-item danger" data-act="del">🗑️ Borrar</button>
+  </div>
+
   <div class="modal-backdrop" id="modalLibEdit">
     <div class="modal">
       <div class="modal-head">
@@ -3137,9 +3151,7 @@
              ${e.video_url ? '<span class="ex-lib-has">🎥</span>' : ''}
              ${e.rm_source_id ? '<span class="ex-lib-has" title="Hereda RM">🔗</span>' : ''}
            </button>
-           <button type="button" class="ex-lib-link" data-id="${esc(e.id)}" title="Vincular RM a…">🔗</button>
-           <button type="button" class="ex-lib-edit" data-id="${esc(e.id)}" title="Editar nombre/link">✏️</button>
-           <button type="button" class="ex-lib-del" data-id="${esc(e.id)}" title="Borrar de la biblioteca">🗑️</button>
+           <button type="button" class="ex-lib-more" data-id="${esc(e.id)}" title="Opciones">⋮</button>
          </div>`).join('');
       listEl.querySelectorAll('.ex-lib-item').forEach(it => {
         it.addEventListener('click', () => {
@@ -3147,25 +3159,11 @@
           if (ex) pickFromLibrary(card, ex);
         });
       });
-      listEl.querySelectorAll('.ex-lib-link').forEach(lk => {
-        lk.addEventListener('click', (e) => {
+      listEl.querySelectorAll('.ex-lib-more').forEach(mb => {
+        mb.addEventListener('click', (e) => {
           e.stopPropagation();
-          const ex = (exerciseLibrary || []).find(x => String(x.id) === String(lk.dataset.id));
-          if (ex) openRmLinkModal(ex);
-        });
-      });
-      listEl.querySelectorAll('.ex-lib-edit').forEach(ed => {
-        ed.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const ex = (exerciseLibrary || []).find(x => String(x.id) === String(ed.dataset.id));
-          if (ex) openLibEdit(ex, card);
-        });
-      });
-      listEl.querySelectorAll('.ex-lib-del').forEach(dl => {
-        dl.addEventListener('click', (e) => {
-          e.stopPropagation();
-          const ex = (exerciseLibrary || []).find(x => String(x.id) === String(dl.dataset.id));
-          if (ex) deleteFromLibrary(ex, card);
+          const ex = (exerciseLibrary || []).find(x => String(x.id) === String(mb.dataset.id));
+          if (ex) openExLibMenu(ex, card, mb);
         });
       });
     }
@@ -3281,6 +3279,42 @@
       flash('🗑️ Ejercicio borrado de la biblioteca.');
       if (card) { renderLibList(card, card.querySelector('.ex-lib-search').value); refreshLibAddBtn(card); }
     }
+
+    // ---- Menú de opciones (⋮) por ejercicio de la biblioteca ----
+    let exLibMenuEx = null, exLibMenuCard = null;
+    function openExLibMenu(ex, card, btnEl) {
+      exLibMenuEx = ex; exLibMenuCard = card;
+      const menu = document.getElementById('exLibMenu');
+      menu.classList.add('show');
+      menu.style.visibility = 'hidden';   // medir sin flicker
+      const r = btnEl.getBoundingClientRect();
+      let left = r.right - menu.offsetWidth;               // alinea el borde derecho del menú con el botón
+      let top = r.bottom + 4;
+      if (left < 8) left = 8;
+      if (top + menu.offsetHeight > window.innerHeight - 8) top = r.top - menu.offsetHeight - 4; // si no entra abajo → arriba
+      menu.style.left = left + 'px';
+      menu.style.top = top + 'px';
+      menu.style.visibility = 'visible';
+    }
+    function hideExLibMenu() {
+      document.getElementById('exLibMenu').classList.remove('show');
+      exLibMenuEx = null; exLibMenuCard = null;
+    }
+    document.querySelectorAll('#exLibMenu .elm-item').forEach(it => {
+      it.addEventListener('click', () => {
+        const act = it.dataset.act, ex = exLibMenuEx, card = exLibMenuCard;
+        hideExLibMenu();
+        if (!ex) return;
+        if (act === 'edit') openLibEdit(ex, card);
+        else if (act === 'rm') openRmLinkModal(ex);
+        else if (act === 'del') deleteFromLibrary(ex, card);
+      });
+    });
+    // Cerrar el menú al clickear fuera (el click en ⋮ hace stopPropagation → no lo cierra al abrir).
+    document.addEventListener('click', (e) => {
+      const menu = document.getElementById('exLibMenu');
+      if (menu.classList.contains('show') && !menu.contains(e.target)) hideExLibMenu();
+    });
 
     // ---- Vincular RM (marca en el texto libre del bloque) ----
     let vincularCtx = null; // { b, ta, selStart, selEnd, percent }

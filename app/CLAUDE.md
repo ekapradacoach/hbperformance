@@ -312,9 +312,12 @@ rm_tracked boolean (not null default false)   ← ⚠️ AGREGAR (2026-07-28 (i)
 rm_unit_meters numeric (nullable)   ← ⚠️ AGREGAR (2026-07-28 (i)). Solo time: cada cuántos metros se mide el ritmo (1000, 500).
 rm_unit_label text (nullable)   ← ⚠️ AGREGAR (2026-07-28 (i)). Solo time: etiqueta del ritmo ('/km', '/500m', '/1000m').
 ⚠️ RLS: admin FOR ALL + atleta SELECT (lee nombres/max_type/unidad para resolver las marcas) + gate restrictive is_active_athlete().
-**UI editar/borrar (2026-08-13 (i)):** en la lista de la biblioteca (`renderLibList`), cada fila tiene ✏️ (abre
-`#modalLibEdit` → UPDATE simple de nombre/url, **sin cascada**: las marcas `[[rm:...]]` viejas se corrigen a mano
-en el caso raro; maneja el 23505 de nombre duplicado) y 🗑️ (`deleteFromLibrary`). ⚠️ **El delete está protegido**:
+**UI editar/borrar (2026-08-13 (i); menú ⋮ en (j)):** en la lista de la biblioteca (`renderLibList`), cada fila
+tiene un botón **⋮** (`.ex-lib-more`) que abre un menú popover (`#exLibMenu`, posición fixed calculada con
+`getBoundingClientRect`, cierra al clickear fuera) con **Editar / Vincular RM / Borrar** (se pasó a menú para no
+comer el ancho del nombre). **Editar** → `#modalLibEdit` → UPDATE simple de nombre/url, **sin cascada** (las marcas
+`[[rm:...]]` viejas se corrigen a mano en el caso raro; maneja el 23505 de nombre duplicado). **Borrar** →
+`deleteFromLibrary`. ⚠️ **El delete está protegido**:
 como `athlete_rm.exercise_id → exercise_library.id` es **ON DELETE CASCADE**, antes de borrar se cuenta
 `athlete_rm` por ese `exercise_id`; si hay ≥1 → **se BLOQUEA** (no perder historial de RM de atletas). Si es base
 de variantes (`rm_source_id`) → aviso en el confirm (esa FK es set null → pierden la herencia, sin pérdida de datos).
