@@ -567,6 +567,14 @@ despliegan a mano en Supabase):
   mapeando el `preapproval_plan_id` de la suscripción contra `site_config`** (`mp_plan_<program>`, helper
   `resolveProgram`); `external_reference` es respaldo/validación. Si no puede determinar el programa → 422
   (no crea nada; antes caía a un fallback peligroso a 'crossfit', eliminado 2026-07-26).
+  **Matching del pending (2026-08-13 (n)):** primario por **email del pagador** (payerEmail, del pago de MP);
+  fallback **por recencia SOLO si hay UN único pending del programa creado en los últimos 15 min** (si hay 2+ →
+  ambiguo → no adivina, cae a manual, para no cruzar datos entre compradores casi simultáneos). **Anti-falso-positivo
+  de webhook duplicado:** si no hay pending pero **YA existe un profile con ese `mp_subscription_id` (o el email del
+  pagador)** → **skip silencioso** (`already_provisioned`), NO "ALTA MANUAL REQUERIDA" (los `preapproval updated`
+  redundantes de MP entran a la rama authorized con el pending ya borrado y antes tiraban falso positivo).
+  **Mail de reactivación (Resend):** ahora incluye una línea de aviso de **spam** (el mail de un alta NUEVA es el
+  **invite de Supabase Auth**, cuyo texto/aviso de spam se edita en el dashboard → Auth → Email Templates → Invite).
 ⚠️ Secretos en Supabase (nunca hardcodeados): `MP_ACCESS_TOKEN` (lo usan `create-plans` y `process-payment`,
 NO `create-subscription`), `SUPABASE_URL`, `SERVICE_ROLE_KEY`.
 ⚠️ Las claves `mp_link_<prog>` de `site_config` quedaron **legacy/sin uso** (ya no se redirige a ellas).

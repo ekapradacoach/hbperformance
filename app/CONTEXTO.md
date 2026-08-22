@@ -2608,3 +2608,36 @@ en ningún lado; los de MP sí ven su precio. Ahora los manuales también.
   custom_price o es manual-null, se **evita el fetch a site_config** (el dato ya está en `ATHLETE`).
 - **Sin cambios** de RLS/DDL/backend. Solo `dashboard.html`. Syntax-check inline OK (0 errores). Prueba real
   auth-gated. Sin redeploy (frontend).
+
+## 2026-08-13 (n) — process-payment: anti-falso-positivo webhook duplicado + recencia acotada + spam en mail; .gitignore videos
+Raíz: análisis de logs reales del 21/08 (mariano.osteocursos@gmail.com, hybrid). Secuencia: preapproval pending →
+preapproval authorized (alta OK por recencia, se borra el pending) → authorized_payment ×2 (renovación, correcto)
+→ **preapproval updated v2** (MP reenvía) → entra a la rama authorized, el pending ya no existe → **ERROR falso
+"ALTA MANUAL REQUERIDA"** aunque el alta ya se había hecho. (El mail de bienvenida SÍ se mandó — cayó en spam del
+usuario; no es bug de envío, pero es señal de que puede pasarle a otros.)
+
+### Cambios (todos en `supabase/functions/process-payment/index.ts` — ⚠️ requiere REDEPLOY)
+1. **Anti-falso-positivo (punto 2):** antes de tirar `manual_required`, se chequea si **ya existe un profile con
+   ese `mp_subscription_id`** (la preapproval) **o con el email del pagador** (ambos con `.eq` exacto, sin comodines).
+   Si existe → **skip silencioso** `return {ok:true, status:'already_provisioned'}` (como la renovación), sin log de
+   alarma. Los `preapproval updated` redundantes de MP dejan de ensuciar los logs con falsos "ALTA MANUAL REQUERIDA".
+2. **Recencia acotada (punto 3):** la ventana bajó de **30 → 15 min**, y el fallback por recencia se usa **SOLO si
+   hay EXACTAMENTE UN pending** del programa en la ventana (`gte created_at` + `length===1`). Si hay **2+ recientes**
+   y el email no matcheó → **no adivina** (loguea "Recencia AMBIGUA" y cae al chequeo de redundancia / manual). Evita
+   cruzar datos entre dos compradores del mismo programa casi simultáneos (decisión del usuario: mejor manual que
+   arriesgar el cruce). El caso de un único pending (como mariano) sigue andando.
+3. **Aviso de spam (punto 1):** el **mail de reactivación (Resend)** ahora incluye una línea:
+   *"💡 Si no ves nuestros mails en tu bandeja de entrada, revisá la carpeta de spam o 'promociones'…"*. ⚠️ El mail
+   de un **alta NUEVA NO es Resend** → es el **invite de Supabase Auth** (`inviteUserByEmail`); su aviso de spam se
+   agrega en **Supabase → Authentication → Email Templates → "Invite user"** (lo pega el usuario; línea entregada en
+   el chat). `pago-exitoso.html` y el modal de la landing ya avisaban de spam en la web.
+
+### Otros
+- **`.gitignore`:** se agregó **`videos/`** (material de trabajo pesado, ~73 MB incl. un `.mov` de 39 MB; no van al
+  sitio ni a git).
+- Verificación: `node --check` (TS destipado) OK. El webhook en vivo no se puede probar sin un pago real.
+- **Feature "Historial de pagos" (payments): EN PAUSA** — el usuario frenó hasta definir 3 puntos (histórico desde
+  cero vs seed; campos exactos del `ap` para monto/`mp_payment_id`; asesorías dentro/fuera). Diagnóstico + plan ya
+  entregados en el chat (tabla `payments` con `mp_payment_id` unique para idempotencia; auto-registro en
+  process-payment en el cobro aprobado; sección en Métricas + modal "Cargar pago manual" + botón en Alumnos;
+  Ingresos = SUM real del mes). Retomar cuando confirme.

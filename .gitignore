@@ -11,3 +11,6 @@ desktop.ini
 
 # Scratch de la CLI de Supabase
 supabase/.temp/
+
+# Material de trabajo (videos sin editar / placas) — NO van al sitio ni a git (pesados)
+videos/

@@ -238,23 +238,45 @@ Deno.serve(async (req) => {
       }
 
       if (!pending) {
-        const { data: recent } = await adminClient
+        // FALLBACK por recencia (solo si el email no matcheó). Para NO cruzar datos entre compradores casi
+        // simultáneos, se usa SOLO si hay EXACTAMENTE UN pending del programa creado en la ventana (15 min).
+        // Si hay 2+ recientes es ambiguo → no se adivina (cae al chequeo de redundancia / manual de más abajo).
+        const RECENT_MS = 15 * 60 * 1000
+        const sinceIso = new Date(Date.now() - RECENT_MS).toISOString()
+        const { data: recents } = await adminClient
           .from('pending_subscriptions')
           .select('*')
           .eq('program', program)
+          .gte('created_at', sinceIso)
           .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle()
-        const RECENT_MS = 30 * 60 * 1000
-        if (recent && (Date.now() - new Date(recent.created_at).getTime()) <= RECENT_MS) {
-          pending = recent
-          console.warn('Pending por recencia (email no matcheó exacto). payer:', payerEmail || '(desconocido)',
-            '| pending.email:', recent.email, '| program:', program)
+        if (recents && recents.length === 1) {
+          pending = recents[0]
+          console.warn('Pending por recencia (email no matcheó exacto; ÚNICO pending reciente). payer:',
+            payerEmail || '(desconocido)', '| pending.email:', pending.email, '| program:', program)
+        } else if (recents && recents.length > 1) {
+          console.warn('Recencia AMBIGUA: ' + recents.length + ' pendings recientes de "' + program +
+            '" y el email del pagador no matcheó → no se adivina (queda para manual).')
         }
       }
 
       if (!pending) {
-        // Ni email ni pending reciente → no damos de alta a nadie automático. Erika lo resuelve a mano.
+        // ¿Ya existe un profile provisionado para esta suscripción (o el email del pagador)? → webhook REDUNDANTE.
+        // (Ej.: MP reenvía otro "preapproval updated" DESPUÉS de que el alta ya se hizo; el pending ya se borró.)
+        // Skip silencioso —como la renovación—, NO alarma. Chequeo exacto (sin comodines) → si no matchea, cae a manual.
+        const { data: bySub } = await adminClient
+          .from('profiles').select('id').eq('mp_subscription_id', mpSubscriptionId).maybeSingle()
+        let byEmail = null
+        if (!bySub && payerEmail) {
+          const { data } = await adminClient
+            .from('profiles').select('id').eq('email', payerEmail).maybeSingle()
+          byEmail = data
+        }
+        if (bySub || byEmail) {
+          console.log('Webhook redundante: el alta ya existe para esta suscripción/email → skip silencioso.',
+            'preapproval:', preapprovalId, '| payer_email:', payerEmail || '(desconocido)')
+          return json({ ok: true, status: 'already_provisioned' })
+        }
+        // Ni pending, ni profile previo → no damos de alta a nadie automático. Erika lo resuelve a mano.
         // Buscar "ALTA MANUAL REQUERIDA" en los logs. Devuelve 200 para que MP no reintente (no se auto-resuelve).
         console.error('ALTA MANUAL REQUERIDA: pago autorizado sin pending matcheable.',
           'program:', program, '| payer_email:', payerEmail || '(desconocido)', '| preapproval:', preapprovalId)
@@ -305,6 +327,7 @@ Deno.serve(async (req) => {
 <p>Entrá a tu portal con <strong>tu mismo usuario y contraseña de siempre</strong>:</p>
 <p><a href="https://hbperformance.fit/app/login.html">https://hbperformance.fit/app/login.html</a></p>
 <p>Si no te acordás la contraseña, desde esa misma pantalla podés recuperarla.</p>
+<p style="color:#888;font-size:13px;">💡 Si no ves nuestros mails en tu bandeja de entrada, revisá la carpeta de <strong>spam</strong> o "promociones" y marcanos como remitente confiable.</p>
 <p>— El equipo de HB Performance</p>`
               })
             })
