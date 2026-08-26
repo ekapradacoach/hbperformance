@@ -2641,3 +2641,24 @@ usuario; no es bug de envío, pero es señal de que puede pasarle a otros.)
   entregados en el chat (tabla `payments` con `mp_payment_id` unique para idempotencia; auto-registro en
   process-payment en el cobro aprobado; sección en Métricas + modal "Cargar pago manual" + botón en Alumnos;
   Ingresos = SUM real del mes). Retomar cuando confirme.
+
+## 2026-08-13 (o) — Meta Pixel en las 7 páginas públicas + evento Purchase con monto real
+Feature de tracking para medir tráfico/conversiones de campañas. **Solo páginas públicas** (no app/ni admin).
+- **Pixel base** (id `1008115118926012`, código exacto provisto por el usuario) en el `<head>` (tras `<meta
+  viewport>`) de: `index.html`, `crossfit.html`, `hybrid.html`, `fuerza-corredores.html`, `asesoria-erika.html`,
+  `asesoria-gonza.html`, `pago-exitoso.html`. Dispara `PageView`.
+- **Purchase con monto real (enfoque localStorage, confirmado con el usuario):** `pago-exitoso.html` no sabía el
+  programa/monto (es estático; MP no manda el monto en el back_url; el pending ya se borró). Solución: las **3
+  landings grupales**, en `submitPay()` **antes** de `window.location.href = init_point`, guardan
+  `localStorage.hb_purchase = {program: PAY_PROGRAM, value: <ARS parseado de #precio-ars>, currency:'ARS'}`.
+  `pago-exitoso.html` (nuevo `<script>` al final del body) lee ese localStorage → `fbq('track','Purchase',
+  {value,currency})` con el monto real → **borra** el localStorage + setea `sessionStorage.hb_purchase_fired`
+  (dedupe: no re-dispara en un refresh de la misma pestaña). **Fallback** si no hay stash (otro dispositivo /
+  limpiado / entrada directa): `Purchase` **sin value** (cuenta la conversión igual, sin inventar un número).
+  El value se saca del texto de `#precio-ars` (`replace(/[^\d]/g,'')` → entero ARS; refleja site_config o el
+  default del HTML). localStorage sobrevive el ida/vuelta a MP (por-origen).
+- **Verificación:** syntax-check inline de las 7 (0 errores); en el navegador (localhost) `window.fbq` = función,
+  librería real cargada (v2.9.385), id correcto, cola drenada (init+PageView OK), sin errores de consola.
+- ⚠️ **Limitación (aclarada por el usuario):** el pixel de navegador pierde compras con ad-blocker / Safari ITP.
+  **Mejora futura:** Conversions API server-side desde `process-payment` (no implementado; por ahora estándar).
+- Nota: doc estructural del pixel en el **CLAUDE.md raíz** (guía del sitio público), sección "Tracking — Meta Pixel".

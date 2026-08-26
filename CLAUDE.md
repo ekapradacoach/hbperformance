@@ -123,6 +123,19 @@ en el muro para revelar las 4 restantes (`.testi-more`), cambiando a "Ver menos"
 - Logo: **imágenes reales** (dorado). Navbar = lockup horizontal `logo-hb.png` + `logo-perf.png`;
   footer = `logo.png` completo. Fallback automático a texto "HB *Performance*" si faltan los archivos.
 
+## Tracking — Meta Pixel (2026-08-13)
+- **Pixel base** (id `1008115118926012`) en el `<head>` (justo tras `<meta viewport>`) de las **7 páginas
+  públicas**: `index`, `crossfit`, `hybrid`, `fuerza-corredores`, `asesoria-erika`, `asesoria-gonza`,
+  `pago-exitoso`. Dispara `PageView`. **NO** va en `app/` ni `admin/` (no son públicas).
+- **Evento `Purchase`** (solo `pago-exitoso.html`): las 3 landings grupales, antes del redirect a MP en
+  `submitPay()`, guardan en **`localStorage.hb_purchase`** `{program, value (ARS de `#precio-ars`), currency}`.
+  `pago-exitoso` lo lee → `fbq('track','Purchase',{value,currency:'ARS'})` con el **monto real** → borra el
+  `localStorage` + flag `sessionStorage.hb_purchase_fired` (dedupe: no duplica en refresh). **Fallback:** si no
+  hay stash (otro dispositivo / limpiado), dispara `Purchase` **sin value** (cuenta la conversión igual).
+  `localStorage` sobrevive el ida/vuelta a MP (es por-origen `hbperformance.fit`).
+- ⚠️ Limitación conocida: el pixel del navegador **pierde compras** con ad-blockers / Safari ITP. Mejora futura:
+  **Conversions API server-side** desde `process-payment` (no implementado). Por ahora, versión estándar.
+
 ## Cómo trabajar
 1. Leé `CONTEXTO.md` para el estado actual.
 2. Hacé el cambio pedido respetando colores y tipografía salvo indicación contraria.
