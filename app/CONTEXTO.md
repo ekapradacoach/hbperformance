@@ -2781,3 +2781,11 @@ Mismo tratamiento que Alumnos para la tabla de Pagos: las acciones de los pagos 
 pasaron de 2 botones a un botón **"⋮"** (`.al-kebab`) que abre el popup compartido `#pagRowMenu`
 (`openPagRowMenu`/`closePagRowMenu`, mismo `position:fixed`). Los pagos de MP siguen mostrando "—" (sin acciones).
 Solo frontend, syntax-check OK.
+
+## 2026-09-10 (i) — Copy de #expiredScreen (baja): genérico + precio vigente
+Se reescribió el cuerpo de la pantalla de vencimiento del atleta (`app/dashboard.html`, `#expiredScreen`) para
+que sirva a CUALQUIER baja manual sin mencionar motivos (atraso, corte por decisión, etc.). Nuevo cuerpo:
+"Tu acceso a HB Performance fue dado de baja. Si querés volver a entrenar, podés reactivar tu suscripción desde
+el link de tu programa. La suscripción se toma al valor vigente hoy en esa página." — deja explícito que el
+precio es el ACTUAL de la landing (no uno viejo/especial). Título ("Tu suscripción venció"), botón "Volver a
+suscribirme" (→ PROGRAM_LANDING[program]) y "Cerrar sesión" sin cambios. Solo copy.
