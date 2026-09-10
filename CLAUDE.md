@@ -35,7 +35,7 @@ cover + `.coach-hero-overlay` gradiente) + back-link "← Volver" + badge + "Ase
 personalizadas. El valor se coordina directamente con tu coach.") → **CTA WhatsApp** (`btn-filled`).
 ⚠️ **Ya NO hay precio ni botones de pago** (MP/PayPal): se eliminó la sección de precio (2026-07-23);
 solo queda la nota y el CTA de WhatsApp. (Las reglas CSS `.price-box` quedaron sin uso, inofensivas.)
-- Links WhatsApp con mensaje pre-cargado: Erika `wa.me/5491136433379` · Gonza `wa.me/5491122895924`.
+- Links WhatsApp con mensaje pre-cargado: Erika `wa.me/5491169377543` · Gonza `wa.me/5491122895924`.
 - Fotos hero: `coach-erika.png` (bg-position `center 18%`) · `coach-gonza.png` (`center 8%`).
 
 ### Sub-páginas de programas (crossfit / hybrid / fuerza-corredores)

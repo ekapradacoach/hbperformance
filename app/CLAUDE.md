@@ -155,7 +155,7 @@ como en admin: grupal filtra por `program_slug`; asesoría además por `athlete_
   el modal dice "…**Seguís con acceso hasta el <fecha>**". `renderSubscription`: cancelado + `subscription_end
   >= hoy` → info **"Cancelada. Seguís con acceso hasta el <fecha>."** (badge Cancelado, se oculta "Cancelar",
   aparece "Volver a suscribirme"); si ya venció → texto genérico de cancelada. Si error (o `ok:false`) →
-  `showCancelError`: "No se pudo cancelar" + `result.error` en rojo + botón **WhatsApp** `wa.me/5491136433379`
+  `showCancelError`: "No se pudo cancelar" + `result.error` en rojo + botón **WhatsApp** `wa.me/5491169377543`
   + "Cerrar" (sin tocar el estado).
   ⚠️ La Edge Function **`cancel-subscription`** (`supabase/functions/`, deploy con `verify_jwt` ON): identifica
   al atleta por su JWT (`getUser`), toma `mp_subscription_id`, hace GET+PUT `status:cancelled` a MP, y setea
@@ -212,7 +212,7 @@ contraseña" y "¿Olvidaste tu contraseña?" con `redirectTo` a esta página, ya
 invitación" mientras detecta el token; (2) **formulario** — "Activá tu *cuenta*" + 2 campos (nueva
 contraseña / repetir, mín. 8) + botón dorado "ACTIVAR CUENTA", valida coincidencia y longitud (error en
 rojo); (3) **link inválido/expirado** — ⚠️ + "Este link ya fue usado o expiró" + botón WhatsApp
-`wa.me/5491136433379`; (4) **éxito** — ✅ mensaje verde "¡Cuenta activada! Redirigiendo…" → `dashboard.html`
+`wa.me/5491169377543`; (4) **éxito** — ✅ mensaje verde "¡Cuenta activada! Redirigiendo…" → `dashboard.html`
 a los 2 s. **Detección del token** (`detectInvite`): `getSession()` (Supabase parsea el hash con
 `detectSessionInUrl`) → si no, parseo manual del hash `#access_token=...` (`setSession`) y detección de
 `error`/`error_description` en el hash → si nada aparece en ~4 s, estado inválido. También escucha

@@ -275,7 +275,7 @@ Registro cronológico de lo que se va haciendo. Entrada nueva arriba o abajo seg
   aclaración tipo de cambio) → **CTA WhatsApp** (`btn-filled` ancho).
 - **Acordeón:** `.acc-item`/`.acc-header`/`.acc-body`; abre/cierra con `max-height` (JS setea
   `scrollHeight`), **uno abierto a la vez**, ícono "+" que rota a "×". Verificado.
-- Links CTA (WhatsApp con mensaje pre-cargado): Erika `wa.me/5491136433379`, Gonza `wa.me/5491122895924`.
+- Links CTA (WhatsApp con mensaje pre-cargado): Erika `wa.me/5491169377543`, Gonza `wa.me/5491122895924`.
 - Los botones "Quiero esta asesoría" del index **ya linkeaban** a estas páginas (no hubo que tocar el index).
 - ⚠️ Las fotos de coach son recortes verticales con fondo transparente; como hero a pantalla completa
   (cover) se ven a lo ancho con overlay. Erika queda bien con `cover` (`center 18%`).
