@@ -2775,3 +2775,9 @@ Las 3 acciones (Ver / Pago / Dar de baja) se apilaban y agrandaban la fila. Se r
 lo recorta el `overflow` de `.table-wrap`), posicionado bajo el botón y clampeado al viewport. Opciones: 👁️ Ver,
 💵 Registrar pago, 🚫 Dar de baja (esta solo si `subscription_status==='active'`). `openAlRowMenu(e,a)` guarda el
 atleta en `alMenuAthlete`; cierre por click afuera. Solo frontend, syntax-check OK (0 errores).
+
+## 2026-09-10 (h) — Pagos: acciones de fila también en menú "⋮"
+Mismo tratamiento que Alumnos para la tabla de Pagos: las acciones de los pagos manuales (Editar / Anular)
+pasaron de 2 botones a un botón **"⋮"** (`.al-kebab`) que abre el popup compartido `#pagRowMenu`
+(`openPagRowMenu`/`closePagRowMenu`, mismo `position:fixed`). Los pagos de MP siguen mostrando "—" (sin acciones).
+Solo frontend, syntax-check OK.

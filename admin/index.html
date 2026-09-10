@@ -2410,6 +2410,12 @@
     <button id="alMenuBaja" class="danger">🚫 Dar de baja</button>
   </div>
 
+  <!-- =============== Menú "⋮" de acciones de fila de Pagos (solo manuales) =============== -->
+  <div class="day-ctx-menu" id="pagRowMenu" style="display:none;">
+    <button id="pagMenuEdit">✏️ Editar</button>
+    <button id="pagMenuDel" class="danger">🗑️ Anular</button>
+  </div>
+
   <!-- =============== Modal: Pegar semana — reemplazar o agregar =============== -->
   <div class="modal-backdrop" id="modalPasteMode">
     <div class="modal">
@@ -5230,7 +5236,7 @@
       body.innerHTML = rows.map(r => {
         const a = pagAthById[r.athlete_id] || {};
         const actions = (r.method === 'manual')
-          ? `<div class="pag-actions"><button class="btn-sm act-pay-edit">✏️ Editar</button><button class="btn-sm danger act-pay-del">🗑️ Anular</button></div>`
+          ? '<button class="al-kebab" title="Acciones">⋮</button>'
           : '<span class="pay-type">—</span>';
         return `<tr data-pid="${esc(r.id)}">
           <td>${fmtDayOnly(r.paid_at)}</td>
@@ -5246,10 +5252,31 @@
       body.querySelectorAll('tr[data-pid]').forEach(tr => {
         const r = pagRows.find(x => String(x.id) === String(tr.dataset.pid));
         if (!r) return;
-        const be = tr.querySelector('.act-pay-edit'); if (be) be.addEventListener('click', () => openPagoEdit(r));
-        const bd = tr.querySelector('.act-pay-del'); if (bd) bd.addEventListener('click', () => anularPago(r));
+        const kebab = tr.querySelector('.al-kebab');
+        if (kebab) kebab.addEventListener('click', (e) => { e.stopPropagation(); openPagRowMenu(e, r); });
       });
     }
+
+    // Menú "⋮" de acciones por fila de Pagos (popup compartido, mismo patrón que Alumnos)
+    let pagMenuRow = null;
+    function openPagRowMenu(e, r) {
+      if (!r) return;
+      pagMenuRow = r;
+      closePagRowMenu();
+      const menu = document.getElementById('pagRowMenu');
+      menu.style.display = 'block';
+      const rect = e.currentTarget.getBoundingClientRect();
+      const mw = 190, mh = 110;
+      menu.style.left = Math.min(rect.left, window.innerWidth - mw - 8) + 'px';
+      menu.style.top = Math.min(rect.bottom + 4, window.innerHeight - mh - 8) + 'px';
+    }
+    function closePagRowMenu() { document.getElementById('pagRowMenu').style.display = 'none'; }
+    document.getElementById('pagMenuEdit').addEventListener('click', () => { const r = pagMenuRow; closePagRowMenu(); if (r) openPagoEdit(r); });
+    document.getElementById('pagMenuDel').addEventListener('click', () => { const r = pagMenuRow; closePagRowMenu(); if (r) anularPago(r); });
+    document.addEventListener('click', (e) => {
+      const m = document.getElementById('pagRowMenu');
+      if (m && m.style.display === 'block' && !m.contains(e.target)) closePagRowMenu();
+    });
 
     document.getElementById('pagMonth').addEventListener('change', loadPagos);
     document.getElementById('pagProgram').addEventListener('change', (e) => { pagProgram = e.target.value; renderPagosTable(); });
