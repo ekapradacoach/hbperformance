@@ -1343,6 +1343,12 @@
   .met-header { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 8px; }
   .met-header .section-title { margin: 0; }
   .met-month { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+  /* Ranking de actividad: selector de programa + toggle "Ver todos" */
+  .rank-controls { display: flex; align-items: center; gap: 8px; margin: 4px 0 12px; }
+  .rank-controls label { color: var(--text-secondary); font-size: 0.88rem; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .rank-controls select { background: #1A1A1A; border: 1px solid #333; border-radius: 8px; padding: 8px 10px; color: var(--text); font-family: var(--font-body); font-size: 0.9rem; color-scheme: dark; }
+  .rank-toggle { display: block; width: 100%; margin-top: 12px; background: transparent; border: 1px dashed #3a3a3a; color: var(--text-secondary); border-radius: 8px; padding: 9px; font-family: var(--font-body); font-weight: 600; font-size: 0.85rem; cursor: pointer; }
+  .rank-toggle:hover { border-color: var(--accent); color: var(--accent); }
   .met-month label { color: var(--text-secondary); font-size: 0.88rem; font-weight: 600; }
 
   .met-section-title {
@@ -1884,16 +1890,29 @@
         </div>
         <div class="met-note">Nota: las bajas todavía no registran fecha, por eso figuran como <b>N/D</b>. “Total activos” cuenta los alumnos hoy activos que ya existían al cierre de ese mes.</div>
 
-        <!-- Sección 4: Top activos -->
+        <!-- Sección 4: Ranking de actividad -->
         <div class="met-section-title">🔥 Alumnos más activos</div>
+        <div class="rank-controls">
+          <label>Programa
+            <select id="rankProgram">
+              <option value="all">Todos</option>
+              <option value="crossfit">CrossFit</option>
+              <option value="hybrid">Hybrid</option>
+              <option value="corredores">Corredores</option>
+              <option value="asesoria-erika">Asesoría Erika</option>
+              <option value="asesoria-gonza">Asesoría Gonza</option>
+            </select>
+          </label>
+        </div>
         <div class="table-wrap">
           <table class="al-table met-table">
             <thead>
-              <tr><th>Nombre</th><th>Programa</th><th>Bloques completados</th><th>Último acceso</th></tr>
+              <tr><th>Nombre</th><th>Programa</th><th>Bloques completados (mes)</th><th>Última actividad</th></tr>
             </thead>
             <tbody id="metTop"><tr><td class="loading-row" colspan="4">Cargando…</td></tr></tbody>
           </table>
         </div>
+        <button type="button" class="rank-toggle" id="rankToggle" style="display:none;">Ver ranking completo</button>
 
         <!-- Sección 5: Actividad en chats -->
         <div class="met-section-title">💬 Actividad en chats (mes seleccionado)</div>
@@ -4797,7 +4816,7 @@
       renderIngresos(athletes, config);
       renderDistribucion(athletes);
       renderEvolucion(athletes, y, m);
-      renderTopActivos(athById);
+      renderTopActivos(athById, y, m);
       renderChatActividad(y, m, athById);
     }
     document.getElementById('metMonth').addEventListener('change', loadMetricas);
@@ -4853,38 +4872,70 @@
     }
 
     // ---- Sección 4: alumnos más activos ----
-    async function renderTopActivos(athById) {
+    // Ranking de actividad. El CONTEO es del MES seleccionado (consistente con el resto de Métricas);
+    // la "Última actividad" es GLOBAL (última completion de siempre → detecta inactivos aunque mires meses pasados).
+    // Incluye a TODOS los alumnos (los que tienen 0 completions del mes figuran con 0 y "—").
+    // Colapsado = top 5; el botón "Ver ranking completo" lo expande. Filtro por programa arriba de la tabla.
+    let rankRows = null;        // [{ id, name, program, count(mes), last(global) }] cacheado
+    let rankProgram = 'all';
+    let rankExpanded = false;
+    async function renderTopActivos(athById, y, m) {
       const body = document.getElementById('metTop');
-      const { data, error } = await sb.from('block_completions')
-        .select('*, athlete:profiles!athlete_id(full_name, program)');
+      const { data, error } = await sb.from('block_completions').select('athlete_id, completed_at, created_at');
       if (error) {
+        rankRows = null;
+        document.getElementById('rankToggle').style.display = 'none';
         body.innerHTML = '<tr><td class="empty-row" colspan="4">No se pudo cargar la actividad (¿existe block_completions?).</td></tr>';
         return;
       }
-      const map = {};
+      const { start, next } = monthBounds(y, m);
+      const agg = {}; // id -> { monthCount, lastGlobal }
       (data || []).forEach(c => {
-        const id = c.athlete_id;
-        if (!id) return;
+        const id = c.athlete_id; if (!id) return;
         const when = c.completed_at || c.created_at || null;
-        if (!map[id]) {
-          const prof = c.athlete || athById[id] || {};
-          map[id] = { name: prof.full_name || '—', program: prof.program, count: 0, last: null };
-        }
-        map[id].count++;
-        if (when && (!map[id].last || when > map[id].last)) map[id].last = when;
+        if (!agg[id]) agg[id] = { monthCount: 0, lastGlobal: null };
+        const ds = when ? String(when).slice(0, 10) : null;
+        if (ds && ds >= start && ds < next) agg[id].monthCount++;          // conteo del mes
+        if (when && (!agg[id].lastGlobal || when > agg[id].lastGlobal)) agg[id].lastGlobal = when; // última global
       });
-      const top = Object.values(map).sort((a, b) => b.count - a.count).slice(0, 5);
-      if (!top.length) {
-        body.innerHTML = '<tr><td class="empty-row" colspan="4">Todavía no hay bloques completados.</td></tr>';
+      rankRows = Object.keys(athById).map(id => {
+        const a = athById[id], g = agg[id] || {};
+        return { id, name: a.full_name || '—', program: a.program, count: g.monthCount || 0, last: g.lastGlobal || null };
+      });
+      renderRankTable();
+    }
+    function renderRankTable() {
+      const body = document.getElementById('metTop');
+      const toggle = document.getElementById('rankToggle');
+      if (!rankRows) { if (toggle) toggle.style.display = 'none'; return; }
+      let rows = (rankProgram === 'all') ? rankRows.slice() : rankRows.filter(r => r.program === rankProgram);
+      rows.sort((a, b) =>
+        (b.count - a.count) ||
+        String(b.last || '').localeCompare(String(a.last || '')) ||   // desempate: más reciente primero
+        String(a.name).localeCompare(String(b.name)));
+      const shown = rankExpanded ? rows : rows.slice(0, 5);
+      if (!shown.length) {
+        body.innerHTML = '<tr><td class="empty-row" colspan="4">Sin alumnos para este filtro.</td></tr>';
+        if (toggle) toggle.style.display = 'none';
         return;
       }
-      body.innerHTML = top.map(t => `<tr>
+      body.innerHTML = shown.map(t => `<tr>
         <td>${esc(t.name)}</td>
         <td><span class="prog-badge prog-${progKey(t.program)}">${programLabel(t.program)}</span></td>
         <td>${t.count}</td>
         <td>${t.last ? fmtDate(t.last) : '—'}</td>
       </tr>`).join('');
+      if (toggle) {
+        if (rows.length > 5) {
+          toggle.style.display = 'block';
+          toggle.textContent = rankExpanded ? 'Ver top 5' : ('Ver ranking completo (' + rows.length + ')');
+        } else {
+          toggle.style.display = 'none';
+        }
+      }
     }
+    document.getElementById('rankProgram').addEventListener('change', (e) => { rankProgram = e.target.value; renderRankTable(); });
+    document.getElementById('rankToggle').addEventListener('click', () => { rankExpanded = !rankExpanded; renderRankTable(); });
 
     // ---- Sección 5: actividad en chats ----
     function chatChannelName(ch, athById) {

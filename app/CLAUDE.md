@@ -58,7 +58,9 @@ Realtime): columna izq de canales (Programas = chat grupal por slug; Asesorías 
 `dm_<athlete_id>`), columna der con la conversación. Los mensajes se guardan en `messages.channel`.
 Idem **Métricas**: vista `#view-metricas` (no existe `metricas.html`). Selector de mes + 5 secciones:
 ingresos (cards, precios hardcodeados en `PRICES`), distribución de alumnos por programa (barras CSS),
-evolución 6 meses (altas/bajas/total; bajas = N/D), top-5 activos (block_completions), y actividad de
+evolución 6 meses (altas/bajas/total; bajas = N/D), **ranking de actividad** (block_completions: conteo del
+**mes seleccionado**, "Última actividad" **global**; incluye a TODOS los alumnos —0 completions figuran con 0/"—";
+**selector de programa** + toggle **"Ver ranking completo"** que expande del top-5 a todos — 2026-09-10), y actividad de
 chats del mes (top-3 canales, barras). Barras CSS puras, sin librerías.
 Idem **Configuración**: vista `#view-config` (⚙️ en el sidebar). Edita la tabla `site_config`
 (precios por programa, links MP/PayPal, WhatsApp Erika/Gonza). Guardar → `upsert(onConflict:'key')` con

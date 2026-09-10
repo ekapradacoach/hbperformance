@@ -2695,3 +2695,18 @@ esa fecha. Solo frontend (`app/dashboard.html`), reusando la navegación existen
   fechas de medición) y la fecha del último post de **Comunidad** (`loadCommunity`).
 - Verificación: syntax-check inline OK (0 errores); `goToProgramaDay` ×5 (1 def + 4 call sites); las 4 clases
   clickeables presentes. Prueba interactiva es auth-gated. Sin backend/RLS, sin redeploy.
+
+## 2026-09-10 (c) — Métricas: "Top activos" → ranking completo (mes) + filtro por programa + Ver todos
+La sección Top mostraba solo el top-5 acumulado histórico (ignoraba el selector de mes) sin filtro ni detalle.
+Rediseño (`admin/index.html`, `renderTopActivos` + nuevo `renderRankTable`):
+- **Conteo por MES** seleccionado (`#metMonth`), consistente con el resto de Métricas (antes era histórico y no
+  usaba el mes). Columna renombrada "Bloques completados (mes)".
+- **Columna "Última actividad" GLOBAL** (última completion de siempre, no limitada al mes) → detecta inactivos
+  aunque se miren meses pasados. (Antes se llamaba "Último acceso", nombre engañoso.)
+- **Incluye a TODOS los alumnos** (merge con `athById`): los que tienen 0 completions del mes figuran con `0` y "—".
+- **Filtro por programa** (`#rankProgram`: Todos / los 5 programas) arriba de la tabla.
+- **Toggle "Ver ranking completo (N)" / "Ver top 5"** (`#rankToggle`): colapsado por default = top 5; expande a
+  todos. El filtro aplica a ambos. Estado en memoria (`rankProgram`, `rankExpanded`, `rankRows` cacheado → el
+  filtro/toggle re-renderizan sin re-query; solo el cambio de mes re-consulta).
+- Orden: `count` desc, desempate por última actividad (más reciente) y luego nombre. Solo frontend, sin backend.
+  Syntax-check OK.
