@@ -4881,7 +4881,9 @@
     let rankExpanded = false;
     async function renderTopActivos(athById, y, m) {
       const body = document.getElementById('metTop');
-      const { data, error } = await sb.from('block_completions').select('athlete_id, completed_at, created_at');
+      // OJO: seleccionar '*' (no columnas nombradas). Si 'completed_at' no existiera como columna,
+      // PostgREST rechaza toda la query; con '*' una columna ausente queda undefined y degrada bien.
+      const { data, error } = await sb.from('block_completions').select('*');
       if (error) {
         rankRows = null;
         document.getElementById('rankToggle').style.display = 'none';
