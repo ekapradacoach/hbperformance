@@ -1018,6 +1018,10 @@
     cursor: pointer;
   }
   .day-ctx-menu button:hover { background: #222; color: var(--accent); }
+  .day-ctx-menu button.danger:hover { background: #3a1414; color: #e05252; }
+  /* Botón "⋮" de acciones por fila (Alumnos) — deja la fila en una sola línea */
+  .al-kebab { width: 34px; height: 34px; line-height: 1; border-radius: 8px; background: #1A1A1A; border: 1px solid #333; color: var(--text-secondary); font-size: 1.15rem; cursor: pointer; padding: 0; }
+  .al-kebab:hover { border-color: var(--accent); color: var(--accent); }
 
   /* ---- Buscador de YouTube ---- */
   .modal.modal-lg { max-width: 720px; }
@@ -2397,6 +2401,13 @@
   <div class="day-ctx-menu" id="weekCtxMenu" style="display:none;">
     <button id="wkCopy">📋 Copiar semana</button>
     <button id="wkPaste">📌 Pegar semana aquí</button>
+  </div>
+
+  <!-- =============== Menú "⋮" de acciones de fila de Alumnos =============== -->
+  <div class="day-ctx-menu" id="alRowMenu" style="display:none;">
+    <button id="alMenuVer">👁️ Ver</button>
+    <button id="alMenuPago">💵 Registrar pago</button>
+    <button id="alMenuBaja" class="danger">🚫 Dar de baja</button>
   </div>
 
   <!-- =============== Modal: Pegar semana — reemplazar o agregar =============== -->
@@ -4307,8 +4318,6 @@
         }
       }
       body.innerHTML = shown.map(a => {
-        const bajaBtn = (a.subscription_status === 'active')
-          ? '<button class="btn-sm danger act-baja">🚫 Dar de baja</button>' : '';
         return `<tr data-id="${esc(a.id)}">
           <td>${esc(a.full_name) || '—'}</td>
           <td>${esc(a.email) || '—'}</td>
@@ -4317,23 +4326,40 @@
           <td>${estadoBadge(a.subscription_status)}${vencBadge(a)}</td>
           <td>${tipoBadge(a.program)}${origenBadge(a)}</td>
           <td>${fmtDayOnly(a.subscription_start)}</td>
-          <td><div class="al-actions">
-            <button class="btn-sm act-ver">👁️ Ver</button>
-            <button class="btn-sm act-pago">💵 Pago</button>
-            ${bajaBtn}
-          </div></td>
+          <td><button class="al-kebab" title="Acciones">⋮</button></td>
         </tr>`;
       }).join('');
 
       body.querySelectorAll('tr[data-id]').forEach(tr => {
         const a = allAthletes.find(x => String(x.id) === String(tr.dataset.id));
-        tr.querySelector('.act-ver').addEventListener('click', () => openPanel(a));
-        const pago = tr.querySelector('.act-pago');
-        if (pago) pago.addEventListener('click', () => openPagoNew(a));
-        const baja = tr.querySelector('.act-baja');
-        if (baja) baja.addEventListener('click', () => darDeBaja(a));
+        const kebab = tr.querySelector('.al-kebab');
+        if (kebab) kebab.addEventListener('click', (e) => { e.stopPropagation(); openAlRowMenu(e, a); });
       });
     }
+
+    // Menú "⋮" de acciones por fila de Alumnos (popup compartido, posicionado en el cursor).
+    let alMenuAthlete = null;
+    function openAlRowMenu(e, a) {
+      if (!a) return;
+      alMenuAthlete = a;
+      closeAlRowMenu();
+      const menu = document.getElementById('alRowMenu');
+      // "Dar de baja" solo si está activo
+      document.getElementById('alMenuBaja').style.display = (a.subscription_status === 'active') ? 'block' : 'none';
+      menu.style.display = 'block';
+      const rect = e.currentTarget.getBoundingClientRect();
+      const mw = 190, mh = 150;
+      menu.style.left = Math.min(rect.left, window.innerWidth - mw - 8) + 'px';
+      menu.style.top = Math.min(rect.bottom + 4, window.innerHeight - mh - 8) + 'px';
+    }
+    function closeAlRowMenu() { document.getElementById('alRowMenu').style.display = 'none'; }
+    document.getElementById('alMenuVer').addEventListener('click', () => { const a = alMenuAthlete; closeAlRowMenu(); if (a) openPanel(a); });
+    document.getElementById('alMenuPago').addEventListener('click', () => { const a = alMenuAthlete; closeAlRowMenu(); if (a) openPagoNew(a); });
+    document.getElementById('alMenuBaja').addEventListener('click', () => { const a = alMenuAthlete; closeAlRowMenu(); if (a) darDeBaja(a); });
+    document.addEventListener('click', (e) => {
+      const m = document.getElementById('alRowMenu');
+      if (m && m.style.display === 'block' && !m.contains(e.target)) closeAlRowMenu();
+    });
 
     // Filtros / buscador. Cualquier cambio de filtro resetea el colapso a la 1ª tanda.
     document.getElementById('alSearch').addEventListener('input', (e) => {

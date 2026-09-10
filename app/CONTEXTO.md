@@ -2768,3 +2768,10 @@ Helper nuevo `addMonthsToDateStr` (clamp fin de mes). Verificación: esbuild OK 
 inline admin OK (2 bloques, 0 errores), IDs markup↔JS consistentes.
 
 **Pendiente del usuario:** (1) correr `supabase/payments.sql` en Supabase; (2) redeploy manual de `process-payment`.
+
+## 2026-09-10 (g) — Alumnos: acciones por fila en menú "⋮" (fila de una sola línea)
+Las 3 acciones (Ver / Pago / Dar de baja) se apilaban y agrandaban la fila. Se reemplazaron por un botón
+**"⋮"** (`.al-kebab`) que abre un popup compartido `#alRowMenu` (reusa `.day-ctx-menu`, `position:fixed` → no
+lo recorta el `overflow` de `.table-wrap`), posicionado bajo el botón y clampeado al viewport. Opciones: 👁️ Ver,
+💵 Registrar pago, 🚫 Dar de baja (esta solo si `subscription_status==='active'`). `openAlRowMenu(e,a)` guarda el
+atleta en `alMenuAthlete`; cierre por click afuera. Solo frontend, syntax-check OK (0 errores).

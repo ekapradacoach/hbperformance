@@ -56,6 +56,9 @@ tabla, y **panel lateral slide-in** con ver/editar/dar de baja/eliminar e "Ir a 
 La tabla usa **colapso "Ver más"** (`#alMore`, `renderAlumnos`, tanda `AL_BATCH=20` en `alShown`): muestra
 20 y suma de a 20; el colapso aplica sobre el resultado YA filtrado y se resetea a la 1ª tanda al cambiar
 tab/programa/búsqueda o recargar (2026-09-10). No hay scroll infinito ni paginación server-side (filtra en cliente).
+Las acciones por fila son un **menú "⋮"** (`.al-kebab` → popup compartido `#alRowMenu`, estilo `.day-ctx-menu`
+`position:fixed` para no recortarse en el scroll de la tabla) con Ver / Registrar pago / Dar de baja (esta última
+solo si el alumno está activo) — deja la fila en una sola línea (2026-09-10).
 Idem **Mensajes**: vista `#view-mensajes` (no existe `mensajes.html`). Chat en tiempo real (Supabase
 Realtime): columna izq de canales (Programas = chat grupal por slug; Asesorías = chat privado
 `dm_<athlete_id>`), columna der con la conversación. Los mensajes se guardan en `messages.channel`.
