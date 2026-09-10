@@ -2733,3 +2733,38 @@ Comunidad y Mensajes/canales quedaron **fuera de alcance** por decisión del usu
 buscador intactos); el botón dice "Ver más (quedan X)" y suma de a 20. Se resetea a la 1ª tanda (20) al cambiar
 tab/programa/búsqueda y en cada `loadAlumnos` (carga fresca colapsada). Sin scroll infinito ni paginación
 server-side. N=20 confirmado con el usuario. Syntax-check inline OK (2 bloques, 0 errores). Solo frontend.
+
+## 2026-09-10 (f) — Feature Pagos: tab nuevo + tabla `payments` + registro automático MP
+Cierre de la feature de Pagos (diseño confirmado con el usuario, incluidas las decisiones c y d).
+
+**DB — nueva tabla `payments`** (DDL en `supabase/payments.sql`, correr en Supabase):
+athlete_id, program, amount (bruto), net_amount (neto real, nullable), paid_at (DATE — fecha real del pago),
+type (alta_nueva|renovacion_manual|renovacion_automatica), method (manual|mp), manual_channel
+(transferencia|suscripcion_mp_vieja), created_by, mp_payment_id (UNIQUE → idempotencia), prev_subscription_end
+(snapshot para revertir), created_at. RLS: solo admin (`get_my_role()='admin'`); las Edge Functions usan
+service_role (bypassa RLS).
+
+**process-payment (aditivo)** — ⚠️ REQUIERE REDEPLOY MANUAL (git push NO actualiza Edge Functions):
+- `resolvePayerEmail` → `fetchPaymentFromAp` (devuelve el objeto payment completo). En alta nueva se reutiliza
+  esa única llamada a `/v1/payments/{id}` para email + bruto + neto (costo extra 0). En renovación automática
+  se agrega 1 fetch a `/v1/payments/{id}`.
+- `registerMpPayment(...)`: upsert en `payments` con `onConflict:'mp_payment_id', ignoreDuplicates:true`
+  (ON CONFLICT DO NOTHING → reintentos de MP no duplican). Neto = `transaction_details.net_received_amount`.
+  paid_at = `date_approved` convertido a hora AR (UTC-3 fijo) vía `arDateFromApproved` (no UTC → mes correcto).
+  Tipos MP: alta_nueva (1er pago) / renovacion_automatica (recurrente). TODO en try/catch: si MP falla, el pago
+  se guarda con net_amount=null y NO bloquea el alta/renovación.
+- Se sacó el `console.log('TEMP ap payload')`.
+- MP_ACCESS_TOKEN ya estaba disponible; riesgo de timeout BAJO (1 fetch extra solo en renovación).
+
+**admin/index.html — tab 💰 Pagos** (`#view-pagos`, `loadPagos`/`renderPagosSummary`/`renderPagosTable`):
+tabla de todos los pagos del mes por `paid_at`, selector de mes, cards de neto/bruto/count, subtotales por
+programa y por método (siempre visibles), filtros cruzables programa×método, botón "💵 Registrar pago".
+Modal `#modalPago` (cargar/editar): tipo inferido, extiende subscription_end (+1 mes desde max(pago, venc.
+vigente)), guarda prev_subscription_end, checkbox "Reactivar" (default ON si cancelled). Editar = corrige
+registro sin tocar venc. Anular (solo manuales) = borra + revierte venc. si nadie lo cambió (si cambió, avisa).
+Botón "💵 Pago" por fila en Alumnos (mismo modal, atleta precargado). La card de **Ingresos se sacó de
+Métricas** (ahora alimentada por SUM real de `payments` en Pagos); `renderIngresos` + su fetch de config eliminados.
+Helper nuevo `addMonthsToDateStr` (clamp fin de mes). Verificación: esbuild OK (process-payment), syntax-check
+inline admin OK (2 bloques, 0 errores), IDs markup↔JS consistentes.
+
+**Pendiente del usuario:** (1) correr `supabase/payments.sql` en Supabase; (2) redeploy manual de `process-payment`.

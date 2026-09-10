@@ -1349,6 +1349,22 @@
   .rank-controls select { background: #1A1A1A; border: 1px solid #333; border-radius: 8px; padding: 8px 10px; color: var(--text); font-family: var(--font-body); font-size: 0.9rem; color-scheme: dark; }
   .rank-toggle { display: block; width: 100%; margin-top: 12px; background: transparent; border: 1px dashed #3a3a3a; color: var(--text-secondary); border-radius: 8px; padding: 9px; font-family: var(--font-body); font-weight: 600; font-size: 0.85rem; cursor: pointer; }
   .rank-toggle:hover { border-color: var(--accent); color: var(--accent); }
+  /* Tab Pagos */
+  .pag-head-actions { margin-left: auto; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .pag-head-actions .met-month { margin-left: 0; }
+  .pag-subtotals { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 6px 0 4px; }
+  .pag-sub-block { background: #141414; border: 1px solid #262626; border-radius: 12px; padding: 14px 16px; }
+  .pag-sub-title { color: var(--text-secondary); font-weight: 700; font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 10px; }
+  .pag-check { display: flex; align-items: center; gap: 8px; color: var(--text); font-weight: 600; cursor: pointer; }
+  .pag-check input { width: 16px; height: 16px; accent-color: var(--accent); }
+  .pago-hint { color: var(--text-secondary); font-size: .82rem; margin: 2px 0 4px; min-height: 1em; }
+  .pay-method-badge { display:inline-block; padding:2px 8px; border-radius:999px; font-size:.72rem; font-weight:700; white-space:nowrap; }
+  .pm-mp { background:#152a1e; color:#4cae7f; border:1px solid #4cae7f; }
+  .pm-transferencia { background:#1c2733; color:#6bb2e8; border:1px solid #6bb2e8; }
+  .pm-vieja { background:#2b2436; color:#b58be8; border:1px solid #b58be8; }
+  .pay-type { color: var(--text-secondary); font-size: .8rem; }
+  .pag-actions { display:flex; gap:6px; flex-wrap:wrap; }
+  @media (max-width: 768px) { .pag-subtotals { grid-template-columns: 1fr; } .pag-head-actions { width:100%; } .pag-head-actions .met-month { width:auto; } }
   .met-month label { color: var(--text-secondary); font-size: 0.88rem; font-weight: 600; }
 
   .met-section-title {
@@ -1593,6 +1609,7 @@
         <a data-view="alumnos"><span class="ico">👥</span> Alumnos</a>
         <a data-view="mensajes"><span class="ico">💬</span> Mensajes<span class="nav-badge hidden" id="msgTabBadge"></span></a>
         <a data-view="metricas"><span class="ico">📈</span> Métricas</a>
+        <a data-view="pagos"><span class="ico">💰</span> Pagos</a>
         <a data-view="config"><span class="ico">⚙️</span> Configuración</a>
       </nav>
       <div class="sidebar-footer">
@@ -1859,21 +1876,7 @@
           </div>
         </div>
 
-        <!-- Sección 1: Ingresos -->
-        <div class="met-section-title">💰 Ingresos del mes</div>
-        <div class="met-cards">
-          <div class="card">
-            <div class="card-label"><span>💵</span> Ingresos ARS</div>
-            <div class="card-value" id="metArs">—</div>
-            <div class="card-sub">Programas grupales activos</div>
-          </div>
-          <div class="card">
-            <div class="card-label"><span>👥</span> Alumnos activos</div>
-            <div class="card-value" id="metActive">—</div>
-            <div class="card-sub">Con programa grupal activo</div>
-          </div>
-        </div>
-        <div class="met-note">Solo cuenta los 3 programas grupales (CrossFit, Hybrid, Corredores). Las asesorías de Erika y Gonza se gestionan aparte y no figuran acá.</div>
+        <!-- (La card de Ingresos se migró al tab 💰 Pagos, ahora alimentada por la suma real de `payments`.) -->
 
         <!-- Sección 2: Distribución por programa -->
         <div class="met-section-title">📊 Alumnos activos por programa</div>
@@ -1924,6 +1927,78 @@
         <!-- Sección 5: Actividad en chats -->
         <div class="met-section-title">💬 Actividad en chats (mes seleccionado)</div>
         <div class="met-bars" id="metChats"><div class="empty-row">Cargando…</div></div>
+      </section>
+
+      <!-- =============== VIEW: PAGOS =============== -->
+      <section id="view-pagos" class="view">
+        <div class="met-header">
+          <h2 class="section-title">Pagos</h2>
+          <div class="pag-head-actions">
+            <div class="met-month">
+              <label for="pagMonth">Mes</label>
+              <input type="month" id="pagMonth" class="date-input">
+            </div>
+            <button class="btn-primary" id="btnPagoNew">💵 Registrar pago</button>
+          </div>
+        </div>
+
+        <!-- Ingresos del mes (suma real de payments) -->
+        <div class="met-cards">
+          <div class="card">
+            <div class="card-label"><span>💵</span> Ingresos netos del mes</div>
+            <div class="card-value" id="pagNet">—</div>
+            <div class="card-sub">Neto real (tras comisión MP); manuales = monto cargado</div>
+          </div>
+          <div class="card">
+            <div class="card-label"><span>🧾</span> Bruto del mes</div>
+            <div class="card-value" id="pagGross">—</div>
+            <div class="card-sub"><span id="pagCount">0</span> pagos registrados</div>
+          </div>
+        </div>
+
+        <!-- Subtotales (siempre visibles, calculados sobre TODO el mes, no afectados por el filtro) -->
+        <div class="pag-subtotals">
+          <div class="pag-sub-block">
+            <div class="pag-sub-title">Por programa (neto)</div>
+            <div id="pagByProgram" class="met-bars"><div class="empty-row">—</div></div>
+          </div>
+          <div class="pag-sub-block">
+            <div class="pag-sub-title">Por método (neto)</div>
+            <div id="pagByMethod" class="met-bars"><div class="empty-row">—</div></div>
+          </div>
+        </div>
+
+        <!-- Filtros de la tabla (cruzables) -->
+        <div class="rank-controls">
+          <label>Programa
+            <select id="pagProgram">
+              <option value="all">Todos</option>
+              <option value="crossfit">CrossFit</option>
+              <option value="hybrid">Hybrid</option>
+              <option value="corredores">Corredores</option>
+              <option value="asesoria-erika">Asesoría Erika</option>
+              <option value="asesoria-gonza">Asesoría Gonza</option>
+            </select>
+          </label>
+          <label>Método
+            <select id="pagMethod">
+              <option value="all">Todos</option>
+              <option value="mp">MP automático</option>
+              <option value="transferencia">Transferencia</option>
+              <option value="suscripcion_mp_vieja">Suscripción MP vieja</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="table-wrap">
+          <table class="al-table met-table">
+            <thead>
+              <tr><th>Fecha</th><th>Atleta</th><th>Programa</th><th>Tipo</th><th>Método</th><th>Bruto</th><th>Neto</th><th>Acciones</th></tr>
+            </thead>
+            <tbody id="pagBody"><tr><td class="loading-row" colspan="8">Cargando…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="met-note">Los pagos de Mercado Pago se registran solos cuando entra el cobro. Los de transferencia o suscripciones MP antiguas se cargan a mano con “💵 Registrar pago”. La fecha es la del pago real (no la de carga). Editar/anular solo aplica a los pagos manuales.</div>
       </section>
 
       <!-- =============== VIEW: CONFIGURACIÓN =============== -->
@@ -2106,6 +2181,45 @@
       <div class="modal-actions">
         <button class="btn-ghost" data-close="modalAthlete">Cancelar</button>
         <button class="btn-primary" id="athleteAssign">Asignar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =============== Modal: Cargar / editar pago manual =============== -->
+  <div class="modal-backdrop" id="modalPago">
+    <div class="modal">
+      <div class="modal-head">
+        <h3 id="pagoModalTitle">Registrar pago</h3>
+        <button class="modal-close" data-close="modalPago">✕</button>
+      </div>
+      <div class="modal-error" id="pagoError"></div>
+      <input type="hidden" id="pagoId">
+      <div class="field">
+        <label for="pagoAthlete">Atleta</label>
+        <select id="pagoAthlete"><option value="">Elegí un atleta…</option></select>
+      </div>
+      <div class="field">
+        <label for="pagoAmount">Monto (ARS)</label>
+        <input type="number" id="pagoAmount" min="0" step="any" placeholder="Ej: 45000" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="pagoDate">Fecha del pago</label>
+        <input type="date" id="pagoDate" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="pagoChannel">Canal</label>
+        <select id="pagoChannel">
+          <option value="transferencia">Transferencia</option>
+          <option value="suscripcion_mp_vieja">Suscripción MP antigua</option>
+        </select>
+      </div>
+      <div class="field" id="pagoReactField" style="display:none;">
+        <label class="pag-check"><input type="checkbox" id="pagoReact"> <span>Reactivar la suscripción (el atleta está cancelado)</span></label>
+      </div>
+      <div class="pago-hint" id="pagoHint"></div>
+      <div class="modal-actions">
+        <button class="btn-ghost" data-close="modalPago">Cancelar</button>
+        <button class="btn-primary" id="pagoSave">Guardar pago</button>
       </div>
     </div>
   </div>
@@ -2459,7 +2573,7 @@
     // ============================================================
     // Navegación entre vistas (SPA)
     // ============================================================
-    const VIEW_TITLES = { dashboard: 'Dashboard', planificacion: 'Planificación', alumnos: 'Alumnos', mensajes: 'Mensajes', metricas: 'Métricas', config: 'Configuración' };
+    const VIEW_TITLES = { dashboard: 'Dashboard', planificacion: 'Planificación', alumnos: 'Alumnos', mensajes: 'Mensajes', metricas: 'Métricas', pagos: 'Pagos', config: 'Configuración' };
     function showView(name) {
       // Al salir de Mensajes, cerrar la suscripción realtime abierta
       if (name !== 'mensajes') unsubscribeRealtime();
@@ -2472,6 +2586,7 @@
       if (name === 'alumnos') loadAlumnos();
       if (name === 'mensajes') loadMensajes();
       if (name === 'metricas') loadMetricas();
+      if (name === 'pagos') loadPagos();
       if (name === 'config') loadConfig();
       closeSidebar();
     }
@@ -4204,6 +4319,7 @@
           <td>${fmtDayOnly(a.subscription_start)}</td>
           <td><div class="al-actions">
             <button class="btn-sm act-ver">👁️ Ver</button>
+            <button class="btn-sm act-pago">💵 Pago</button>
             ${bajaBtn}
           </div></td>
         </tr>`;
@@ -4212,6 +4328,8 @@
       body.querySelectorAll('tr[data-id]').forEach(tr => {
         const a = allAthletes.find(x => String(x.id) === String(tr.dataset.id));
         tr.querySelector('.act-ver').addEventListener('click', () => openPanel(a));
+        const pago = tr.querySelector('.act-pago');
+        if (pago) pago.addEventListener('click', () => openPagoNew(a));
         const baja = tr.querySelector('.act-baja');
         if (baja) baja.addEventListener('click', () => darDeBaja(a));
       });
@@ -4838,12 +4956,6 @@
       const athById = {};
       athletes.forEach(a => { athById[a.id] = a; });
 
-      // Precios desde site_config (mismo patrón que las landing): { key: value }
-      const { data: cfgRows } = await sb.from('site_config').select('key, value');
-      const config = {};
-      (cfgRows || []).forEach(r => { config[r.key] = r.value; });
-
-      renderIngresos(athletes, config);
       renderDistribucion(athletes);
       renderEvolucion(athletes, y, m);
       renderTopActivos(athById, y, m);
@@ -4851,20 +4963,7 @@
     }
     document.getElementById('metMonth').addEventListener('change', loadMetricas);
 
-    // ---- Sección 1: ingresos (SOLO programas grupales, en ARS) ----
-    function renderIngresos(athletes, config) {
-      const activeGroup = athletes.filter(a =>
-        a.subscription_status === 'active' && GROUP_PROGRAMS.includes(a.program));
-      let ars = 0;
-      activeGroup.forEach(a => {
-        const custom = Number(a.custom_price);
-        const hasCustom = a.custom_price != null && a.custom_price !== '' && !isNaN(custom);
-        const price = hasCustom ? custom : (Number(config[GROUP_PRICE_KEY[a.program]]) || 0);
-        ars += price;
-      });
-      document.getElementById('metArs').textContent = '$' + ars.toLocaleString('es-AR');
-      document.getElementById('metActive').textContent = activeGroup.length;
-    }
+    // (Sección 1 "Ingresos" migrada al tab 💰 Pagos → ver loadPagos/renderPagos, alimentada por `payments`.)
 
     // ---- Sección 2: distribución por programa ----
     function renderDistribucion(athletes) {
@@ -4997,6 +5096,285 @@
       box.innerHTML = entries.map(([ch, n]) =>
         barRow(chatChannelName(ch, athById), `${n} msj`, Math.round((n / max) * 100))
       ).join('');
+    }
+
+    // ============================================================
+    // PAGOS (tabla `payments`) — historial + carga/edición/anulación manual
+    // ============================================================
+    let pagRows = null;          // pagos del mes seleccionado
+    let pagAthById = {};         // id -> {full_name, program, subscription_status, subscription_end}
+    let pagProgram = 'all';
+    let pagMethod = 'all';
+
+    function pagCurrentMonth() {
+      const input = document.getElementById('pagMonth');
+      if (!input.value) input.value = currentMonthStr();
+      return input.value.split('-').map(Number); // [y, m]
+    }
+    function fmtMoney(n) { return '$' + (Number(n) || 0).toLocaleString('es-AR', { maximumFractionDigits: 2 }); }
+    function payNet(r) { return (r.net_amount != null) ? Number(r.net_amount) : (Number(r.amount) || 0); } // fallback a bruto
+    function payGross(r) { return Number(r.amount) || 0; }
+    function payMethodKey(r) { return r.method === 'mp' ? 'mp' : (r.manual_channel || 'transferencia'); }
+    const PAY_METHOD_LABEL = { mp: 'MP automático', transferencia: 'Transferencia', suscripcion_mp_vieja: 'Suscripción MP vieja' };
+    const PAY_TYPE_LABEL = { alta_nueva: 'Alta nueva', renovacion_manual: 'Renovación', renovacion_automatica: 'Renovación (auto)' };
+    function payMethodBadge(r) {
+      const k = payMethodKey(r);
+      const cls = k === 'mp' ? 'pm-mp' : (k === 'transferencia' ? 'pm-transferencia' : 'pm-vieja');
+      return `<span class="pay-method-badge ${cls}">${PAY_METHOD_LABEL[k] || esc(k)}</span>`;
+    }
+    // Suma n meses a 'YYYY-MM-DD', clamp al último día del mes destino (Jan 31 +1 → Feb 28/29)
+    function addMonthsToDateStr(ds, n) {
+      const p = String(ds).slice(0, 10).split('-').map(Number);
+      if (p.length !== 3 || p.some(isNaN)) return String(ds).slice(0, 10);
+      const [y, m, d] = p;
+      const idx = (m - 1) + n;
+      const ty = y + Math.floor(idx / 12);
+      const tm = ((idx % 12) + 12) % 12; // 0-based
+      const lastDay = new Date(Date.UTC(ty, tm + 1, 0)).getUTCDate();
+      return `${ty}-${pad2(tm + 1)}-${pad2(Math.min(d, lastDay))}`;
+    }
+
+    async function loadPagos() {
+      const [y, m] = pagCurrentMonth();
+      const { start, next } = monthBounds(y, m);
+      const body = document.getElementById('pagBody');
+      body.innerHTML = '<tr><td class="loading-row" colspan="8">Cargando…</td></tr>';
+
+      const { data: aths } = await sb.from('profiles')
+        .select('id, full_name, program, subscription_status, subscription_end').eq('role', 'athlete');
+      pagAthById = {};
+      (aths || []).forEach(a => { pagAthById[a.id] = a; });
+
+      const { data, error } = await sb.from('payments')
+        .select('*').gte('paid_at', start).lt('paid_at', next).order('paid_at', { ascending: false });
+      if (error) {
+        pagRows = null;
+        body.innerHTML = '<tr><td class="empty-row" colspan="8">No se pudieron cargar los pagos (¿existe la tabla payments?).</td></tr>';
+        ['pagNet', 'pagGross'].forEach(idv => { document.getElementById(idv).textContent = '—'; });
+        document.getElementById('pagCount').textContent = '0';
+        document.getElementById('pagByProgram').innerHTML = '<div class="empty-row">—</div>';
+        document.getElementById('pagByMethod').innerHTML = '<div class="empty-row">—</div>';
+        return;
+      }
+      pagRows = data || [];
+      populatePagoAthletes();
+      renderPagosSummary();
+      renderPagosTable();
+    }
+
+    // Subtotales: SIEMPRE sobre todo el mes (no dependen del filtro de la tabla)
+    function renderPagosSummary() {
+      const rows = pagRows || [];
+      let net = 0, gross = 0; const byProg = {}, byMethod = {};
+      rows.forEach(r => {
+        net += payNet(r); gross += payGross(r);
+        const pk = r.program || 'otro';
+        byProg[pk] = (byProg[pk] || 0) + payNet(r);
+        const mk = payMethodKey(r);
+        byMethod[mk] = (byMethod[mk] || 0) + payNet(r);
+      });
+      document.getElementById('pagNet').textContent = fmtMoney(net);
+      document.getElementById('pagGross').textContent = fmtMoney(gross);
+      document.getElementById('pagCount').textContent = String(rows.length);
+
+      const progEntries = Object.entries(byProg).sort((a, b) => b[1] - a[1]);
+      const maxP = Math.max(1, ...progEntries.map(e => e[1]));
+      document.getElementById('pagByProgram').innerHTML = progEntries.length
+        ? progEntries.map(([slug, v]) => barRow(programLabel(slug), fmtMoney(v), Math.round(v / maxP * 100))).join('')
+        : '<div class="empty-row">Sin pagos este mes.</div>';
+
+      const methodOrder = ['mp', 'transferencia', 'suscripcion_mp_vieja'];
+      const methEntries = methodOrder.filter(k => byMethod[k] != null).map(k => [k, byMethod[k]]);
+      const maxM = Math.max(1, ...methEntries.map(e => e[1]));
+      document.getElementById('pagByMethod').innerHTML = methEntries.length
+        ? methEntries.map(([k, v]) => barRow(PAY_METHOD_LABEL[k], fmtMoney(v), Math.round(v / maxM * 100))).join('')
+        : '<div class="empty-row">Sin pagos este mes.</div>';
+    }
+
+    function renderPagosTable() {
+      const body = document.getElementById('pagBody');
+      if (!pagRows) return;
+      let rows = pagRows.slice();
+      if (pagProgram !== 'all') rows = rows.filter(r => r.program === pagProgram);
+      if (pagMethod !== 'all') rows = rows.filter(r => payMethodKey(r) === pagMethod);
+      if (!rows.length) {
+        body.innerHTML = '<tr><td class="empty-row" colspan="8">No hay pagos que coincidan con el filtro.</td></tr>';
+        return;
+      }
+      body.innerHTML = rows.map(r => {
+        const a = pagAthById[r.athlete_id] || {};
+        const actions = (r.method === 'manual')
+          ? `<div class="pag-actions"><button class="btn-sm act-pay-edit">✏️ Editar</button><button class="btn-sm danger act-pay-del">🗑️ Anular</button></div>`
+          : '<span class="pay-type">—</span>';
+        return `<tr data-pid="${esc(r.id)}">
+          <td>${fmtDayOnly(r.paid_at)}</td>
+          <td>${esc(a.full_name || '—')}</td>
+          <td>${progBadge(r.program)}</td>
+          <td><span class="pay-type">${PAY_TYPE_LABEL[r.type] || esc(r.type)}</span></td>
+          <td>${payMethodBadge(r)}</td>
+          <td>${fmtMoney(payGross(r))}</td>
+          <td>${r.net_amount != null ? fmtMoney(r.net_amount) : '<span class="pay-type">s/d</span>'}</td>
+          <td>${actions}</td>
+        </tr>`;
+      }).join('');
+      body.querySelectorAll('tr[data-pid]').forEach(tr => {
+        const r = pagRows.find(x => String(x.id) === String(tr.dataset.pid));
+        if (!r) return;
+        const be = tr.querySelector('.act-pay-edit'); if (be) be.addEventListener('click', () => openPagoEdit(r));
+        const bd = tr.querySelector('.act-pay-del'); if (bd) bd.addEventListener('click', () => anularPago(r));
+      });
+    }
+
+    document.getElementById('pagMonth').addEventListener('change', loadPagos);
+    document.getElementById('pagProgram').addEventListener('change', (e) => { pagProgram = e.target.value; renderPagosTable(); });
+    document.getElementById('pagMethod').addEventListener('change', (e) => { pagMethod = e.target.value; renderPagosTable(); });
+    document.getElementById('btnPagoNew').addEventListener('click', () => openPagoNew(null));
+
+    // ---- Modal cargar/editar ----
+    function populatePagoAthletes() {
+      const sel = document.getElementById('pagoAthlete');
+      if (!sel) return;
+      const cur = sel.value;
+      const list = Object.values(pagAthById).sort((a, b) => String(a.full_name || '').localeCompare(String(b.full_name || '')));
+      sel.innerHTML = '<option value="">Elegí un atleta…</option>' +
+        list.map(a => `<option value="${esc(a.id)}">${esc(a.full_name || a.id)}</option>`).join('');
+      if (cur) sel.value = cur;
+    }
+    function pagoUpdateReactField() {
+      const a = pagAthById[document.getElementById('pagoAthlete').value];
+      const field = document.getElementById('pagoReactField');
+      const chk = document.getElementById('pagoReact');
+      const editing = !!document.getElementById('pagoId').value;
+      // La reactivación solo aplica al CARGAR un pago nuevo (no al editar un registro existente)
+      if (a && a.subscription_status === 'cancelled' && !editing) { field.style.display = ''; chk.checked = true; }
+      else { field.style.display = 'none'; chk.checked = false; }
+    }
+    document.getElementById('pagoAthlete').addEventListener('change', pagoUpdateReactField);
+
+    async function openPagoNew(athlete) {
+      if (!pagRows) await loadPagos();   // asegura pagAthById poblado (p.ej. si se abre desde Alumnos)
+      // Si viene un atleta desde Alumnos que todavía no está en el mapa (alta reciente), lo mergeo.
+      if (athlete && athlete.id && !pagAthById[athlete.id]) {
+        pagAthById[athlete.id] = {
+          id: athlete.id, full_name: athlete.full_name, program: athlete.program,
+          subscription_status: athlete.subscription_status, subscription_end: athlete.subscription_end
+        };
+      }
+      populatePagoAthletes();
+      document.getElementById('pagoModalTitle').textContent = 'Registrar pago';
+      document.getElementById('pagoId').value = '';
+      document.getElementById('pagoAthlete').value = athlete ? athlete.id : '';
+      document.getElementById('pagoAmount').value = '';
+      document.getElementById('pagoDate').value = todayStr();
+      document.getElementById('pagoChannel').value = 'transferencia';
+      document.getElementById('pagoHint').textContent = 'El tipo (alta/renovación) se infiere solo según si es el primer pago del atleta.';
+      pagoUpdateReactField();
+      openModal('modalPago');
+    }
+    function openPagoEdit(r) {
+      populatePagoAthletes();
+      document.getElementById('pagoModalTitle').textContent = 'Editar pago';
+      document.getElementById('pagoId').value = r.id;
+      document.getElementById('pagoAthlete').value = r.athlete_id;
+      document.getElementById('pagoAmount').value = (r.amount != null ? r.amount : '');
+      document.getElementById('pagoDate').value = String(r.paid_at).slice(0, 10);
+      document.getElementById('pagoChannel').value = r.manual_channel || 'transferencia';
+      document.getElementById('pagoHint').textContent = 'Editar corrige el registro (monto/fecha/atleta/canal). NO recalcula el vencimiento: si cambió, ajustalo a mano en Alumnos.';
+      pagoUpdateReactField();
+      openModal('modalPago');
+    }
+
+    async function savePago() {
+      const id = document.getElementById('pagoId').value;
+      const athleteId = document.getElementById('pagoAthlete').value;
+      const amount = Number(document.getElementById('pagoAmount').value);
+      const paidAt = document.getElementById('pagoDate').value;
+      const channel = document.getElementById('pagoChannel').value;
+      if (!athleteId) { modalError('pagoError', 'Elegí un atleta.'); return; }
+      if (!amount || amount <= 0 || isNaN(amount)) { modalError('pagoError', 'Poné un monto válido.'); return; }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(paidAt)) { modalError('pagoError', 'Elegí una fecha válida.'); return; }
+      const ath = pagAthById[athleteId];
+      if (!ath) { modalError('pagoError', 'No se encontró el atleta.'); return; }
+
+      const btn = document.getElementById('pagoSave');
+      btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Guardando…';
+      document.getElementById('pagoError').classList.remove('show');
+      try {
+        const { data: { session } } = await sb.auth.getSession();
+        const adminId = session && session.user ? session.user.id : null;
+
+        // Tipo inferido: 1er pago del atleta = alta_nueva; si no, renovacion_manual (excluyendo el propio en edición)
+        let q = sb.from('payments').select('id', { count: 'exact', head: true }).eq('athlete_id', athleteId);
+        if (id) q = q.neq('id', id);
+        const { count: priorCount } = await q;
+        const type = (priorCount && priorCount > 0) ? 'renovacion_manual' : 'alta_nueva';
+
+        if (id) {
+          // EDICIÓN: corrige el registro; no toca subscription_end
+          const { data: upd, error } = await sb.from('payments').update({
+            athlete_id: athleteId, program: ath.program, amount, net_amount: amount,
+            paid_at: paidAt, type, manual_channel: channel
+          }).eq('id', id).select();
+          if (error || !upd || !upd.length) { modalError('pagoError', error ? error.message : 'No se pudo editar (¿permiso?).'); return; }
+          flash('✏️ Pago actualizado.');
+        } else {
+          // ALTA: snapshot del vencimiento previo + extensión (+1 mes desde el más tarde entre pago y venc. vigente)
+          const prevEnd = ath.subscription_end ? String(ath.subscription_end).slice(0, 10) : null;
+          const base = (prevEnd && prevEnd > paidAt) ? prevEnd : paidAt;
+          const newEnd = addMonthsToDateStr(base, 1);
+          const { data: ins, error } = await sb.from('payments').insert({
+            athlete_id: athleteId, program: ath.program, amount, net_amount: amount,
+            paid_at: paidAt, type, method: 'manual', manual_channel: channel,
+            created_by: adminId, mp_payment_id: null, prev_subscription_end: prevEnd
+          }).select();
+          if (error || !ins || !ins.length) { modalError('pagoError', error ? error.message : 'No se pudo registrar (¿permiso?).'); return; }
+
+          const react = document.getElementById('pagoReactField').style.display !== 'none'
+            && document.getElementById('pagoReact').checked;
+          const profUpd = { subscription_end: newEnd };
+          if (react) profUpd.subscription_status = 'active';
+          await sb.from('profiles').update(profUpd).eq('id', athleteId);
+          flash(react ? '💵 Pago registrado + suscripción reactivada.' : '💵 Pago registrado.');
+        }
+
+        closeModal('modalPago');
+        await loadPagos();
+        if (typeof loadAlumnos === 'function' && document.getElementById('view-alumnos').classList.contains('active')) loadAlumnos();
+      } catch (err) {
+        modalError('pagoError', 'Error: ' + (err.message || err));
+      } finally {
+        btn.disabled = false; btn.textContent = 'Guardar pago';
+      }
+    }
+    document.getElementById('pagoSave').addEventListener('click', savePago);
+
+    async function anularPago(r) {
+      if (r.method !== 'manual') { alert('Solo se pueden anular pagos manuales.'); return; }
+      const a = pagAthById[r.athlete_id] || {};
+      if (!confirm(`¿Anular este pago de ${a.full_name || 'este atleta'} (${fmtMoney(payGross(r))}, ${fmtDayOnly(r.paid_at)})?\n\nSe elimina del historial.`)) return;
+
+      // (d) Revertir subscription_end SOLO si nadie lo cambió desde este pago
+      const prev = r.prev_subscription_end ? String(r.prev_subscription_end).slice(0, 10) : null;
+      const paidAt = String(r.paid_at).slice(0, 10);
+      const base = (prev && prev > paidAt) ? prev : paidAt;
+      const expectedEnd = addMonthsToDateStr(base, 1);
+      const { data: prof } = await sb.from('profiles').select('subscription_end').eq('id', r.athlete_id).maybeSingle();
+      const curEnd = prof && prof.subscription_end ? String(prof.subscription_end).slice(0, 10) : null;
+
+      const { error: delErr } = await sb.from('payments').delete().eq('id', r.id);
+      if (delErr) { alert('No se pudo anular: ' + delErr.message); return; }
+
+      let msg = '🗑️ Pago anulado.';
+      if (curEnd === expectedEnd) {
+        await sb.from('profiles').update({ subscription_end: prev }).eq('id', r.athlete_id);
+        msg += ' Vencimiento revertido a ' + (prev ? fmtDayOnly(prev) : 'sin fecha') + '.';
+      } else {
+        msg += ' El vencimiento se modificó después de este pago (actual: ' + (curEnd ? fmtDayOnly(curEnd) : 'sin fecha') +
+          '), así que no se tocó. Ajustalo a mano en Alumnos si hace falta.';
+      }
+      await loadPagos();
+      if (typeof loadAlumnos === 'function' && document.getElementById('view-alumnos').classList.contains('active')) loadAlumnos();
+      alert(msg);
     }
 
     // ============================================================

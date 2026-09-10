@@ -59,13 +59,27 @@ tab/programa/búsqueda o recargar (2026-09-10). No hay scroll infinito ni pagina
 Idem **Mensajes**: vista `#view-mensajes` (no existe `mensajes.html`). Chat en tiempo real (Supabase
 Realtime): columna izq de canales (Programas = chat grupal por slug; Asesorías = chat privado
 `dm_<athlete_id>`), columna der con la conversación. Los mensajes se guardan en `messages.channel`.
-Idem **Métricas**: vista `#view-metricas` (no existe `metricas.html`). Selector de mes + 5 secciones:
-ingresos (cards, precios hardcodeados en `PRICES`), distribución de alumnos por programa (barras CSS),
+Idem **Métricas**: vista `#view-metricas` (no existe `metricas.html`). Selector de mes + 4 secciones
+(la card de **Ingresos se migró al tab 💰 Pagos** — 2026-09-10): distribución de alumnos por programa (barras CSS),
 evolución 6 meses (altas/bajas/total; bajas = N/D), **ranking de actividad** (block_completions: conteo del
 **mes seleccionado**, "Última actividad" **global**; incluye a TODOS los alumnos —0 completions figuran con 0/"—";
 **selector de programa** + **selector de período** ("Mes seleccionado" / "Histórico (todo)", `#rankPeriod`;
 el encabezado de la columna cambia (mes)↔(histórico)) + toggle **"Ver ranking completo"** que expande del
 top-5 a todos — 2026-09-10), y actividad de chats del mes (top-3 canales, barras). Barras CSS puras, sin librerías.
+Idem **💰 Pagos**: vista `#view-pagos` (tab nuevo, 2026-09-10). Historial de TODOS los pagos (automáticos MP +
+manuales) de la tabla `payments`, ordenados por `paid_at` (fecha real del pago, no de carga). Selector de mes
+(mismo patrón que Métricas; `paid_at` es DATE → filtro por string 'YYYY-MM-DD', sin desfase UTC). Cards de
+**Ingresos netos del mes** (SUM `net_amount`, fallback `amount`) + **Bruto** + nº de pagos. **Subtotales por
+programa y por método** (siempre visibles, sobre todo el mes, no dependen del filtro). Filtros cruzables de la
+tabla: programa × método (MP automático / transferencia / suscripción MP vieja). Botón **"💵 Registrar pago"**
+(y uno **"💵 Pago"** por fila en Alumnos) abre `#modalPago` (cargar/editar): atleta, monto, fecha (default hoy),
+canal; **tipo inferido** (1er pago del atleta = alta_nueva, si no renovacion_manual). Al guardar un pago NUEVO:
+inserta en `payments` + extiende `profiles.subscription_end` (+1 mes desde el más tarde entre la fecha de pago y
+el venc. vigente) y guarda `prev_subscription_end` (snapshot). Si el atleta está `cancelled`, checkbox
+**"Reactivar suscripción"** tildado por default → `subscription_status='active'`. **Editar** solo corrige el
+registro (NO recalcula venc.). **Anular** (solo manuales): borra la fila y revierte `subscription_end` a
+`prev_subscription_end` SOLO si nadie lo cambió desde este pago (si cambió, avisa y no toca). Los pagos MP los
+registra `process-payment` solo (ver app/CONTEXTO). Solo admins (RLS `get_my_role()='admin'`).
 Idem **Configuración**: vista `#view-config` (⚙️ en el sidebar). Edita la tabla `site_config`
 (precios por programa, links MP/PayPal, WhatsApp Erika/Gonza). Guardar → `upsert(onConflict:'key')` con
 feedback "✓ Guardado". Las **3 landing de programa** (`crossfit/hybrid/fuerza-corredores.html`) leen

@@ -43,6 +43,16 @@
 //   y NO se rechaza nada (para no cortar altas reales). Cuando se confirme en logs que los pagos reales
 //   dan 'ok', se pasa a ENFORCE (rechazar 401 en fail). Si falta el secret, se loguea y NO se bloquea.
 //
+// Cambio 2026-09-10 (feature Pagos — registro aditivo en la tabla `payments`):
+//   Cada cobro aprobado de MP se registra en `payments` con bruto + neto real. El neto sale de
+//   GET /v1/payments/{id} → transaction_details.net_received_amount (mismo endpoint que ya se usaba
+//   para el email del pagador → se reutiliza esa llamada en el alta nueva, costo extra 0). En la
+//   renovación automática se agrega 1 fetch a /v1/payments. Todo en try/catch: si MP falla, el pago
+//   se guarda con net_amount=null y NO se bloquea el alta/renovación. Idempotencia: mp_payment_id
+//   UNIQUE + upsert ignoreDuplicates (ON CONFLICT DO NOTHING) → los reintentos de MP no duplican.
+//   paid_at = date_approved convertido a hora de Argentina (UTC-3 fijo), no UTC → un pago de fin de
+//   mes queda en el mes correcto. Tipos MP: alta_nueva (1er pago) / renovacion_automatica (recurrente).
+//
 // Secretos: MP_ACCESS_TOKEN, SUPABASE_URL, SERVICE_ROLE_KEY, RESEND_API_KEY, MP_WEBHOOK_SECRET.
 // ============================================================================
 
@@ -95,6 +105,9 @@ Deno.serve(async (req) => {
     // Email real del pagador (se resuelve desde el pago de MP en el 1er cobro de un alta nueva).
     // Es el criterio PRIMARIO para matchear el pending correcto; si queda null se usa el fallback por recencia.
     let payerEmail: string | null = null
+    // Objeto payment de MP del 1er cobro (alta nueva). Se trae UNA vez (para email + bruto + neto) y se
+    // reutiliza para registrar el pago en `payments` después de crear/reactivar el profile.
+    let altaPayment: any = null
 
     if (type.includes('preapproval')) {
       // subscription_preapproval / preapproval → data.id ES la preapproval
@@ -151,7 +164,7 @@ Deno.serve(async (req) => {
         // ¿Ya existe un profile con esta suscripción? → distingue RENOVACIÓN de ALTA NUEVA.
         const { data: prof } = await adminClient
           .from('profiles')
-          .select('id, email, payment_failed_at')
+          .select('id, email, program, payment_failed_at')
           .eq('mp_subscription_id', preapprovalId)
           .maybeSingle()
         if (prof) {
@@ -164,14 +177,18 @@ Deno.serve(async (req) => {
               .eq('id', prof.id)
             console.log('Cobro recuperado → payment_failed_at limpiado:', prof.email)
           }
+          // Registrar el cobro recurrente en `payments`. 1 fetch extra a /v1/payments (bruto+neto).
+          // try/catch adentro del helper → si MP falla, no rompe la renovación.
+          const renewalPayment = await fetchPaymentFromAp(ap, MP_TOKEN)
+          await registerMpPayment(adminClient, prof.id, prof.program ?? null, renewalPayment, 'renovacion_automatica')
           console.log('Renovación (cobro recurrente OK), sin alta:', prof.email)
           return json({ ok: true, status: 'renewal' })
         }
         // No hay profile con esta suscripción → es el PRIMER pago de un alta nueva.
-        // Capturar el email real del pagador para el matching por email de más abajo.
-        // ⚠️ TEMPORAL: log del authorized_payment para validar el field-path del email en el 1er pago real. SACAR después.
-        console.log('TEMP ap payload:', JSON.stringify(ap))
-        payerEmail = await resolvePayerEmail(ap, MP_TOKEN)
+        // Traer el payment de MP UNA sola vez: de ahí sale el email del pagador (para el matching por
+        // email de más abajo) y también el bruto+neto para registrar el pago tras crear el profile.
+        altaPayment = await fetchPaymentFromAp(ap, MP_TOKEN)
+        payerEmail = altaPayment?.payer?.email ? (String(altaPayment.payer.email).trim() || null) : null
         console.log('payerEmail resuelto:', payerEmail || '(no se pudo resolver → fallback por recencia)')
         // Sigo al flujo normal de abajo (alta inicial que llega como authorized_payment).
       }
@@ -292,6 +309,9 @@ Deno.serve(async (req) => {
         .eq('email', email)
         .maybeSingle()
 
+      // athlete_id del alta (para registrar el pago en `payments` más abajo). Se setea en cada rama.
+      let altaAthleteId: string | null = existingProfile ? existingProfile.id : null
+
       if (existingProfile) {
         await adminClient
           .from('profiles')
@@ -364,6 +384,12 @@ Deno.serve(async (req) => {
           mp_subscription_id: mpSubscriptionId,
           subscription_start: new Date().toISOString().split('T')[0]
         })
+        altaAthleteId = inviteData.user.id
+      }
+
+      // Registrar el pago del alta en `payments` (bruto+neto del payment ya traído). No bloquea el alta.
+      if (altaAthleteId) {
+        await registerMpPayment(adminClient, altaAthleteId, program, altaPayment, 'alta_nueva')
       }
 
       // Limpiar pending_subscriptions (también actúa de guard de idempotencia)
@@ -488,14 +514,16 @@ async function sendPaymentFailedEmail(email: string, full_name: string | null) {
   }
 }
 
-// Email real del pagador, encadenando authorized_payment → payment → payer.email.
-// El objeto `ap` (authorized_payment) trae payment.id; con ese id se consulta /v1/payments/{id},
-// que sí expone payer.email. Defensivo: cualquier fallo devuelve null y el matching cae al fallback por recencia.
-async function resolvePayerEmail(ap: any, mpToken: string | undefined): Promise<string | null> {
+// Trae el objeto `payment` de MP a partir del authorized_payment (`ap.payment.id` → GET /v1/payments/{id}).
+// Ese objeto expone payer.email, transaction_amount (bruto), transaction_details.net_received_amount (neto)
+// y date_approved. Se usa para el matching por email Y para registrar el pago con bruto+neto en una sola
+// llamada. Defensivo: cualquier fallo devuelve null (el matching cae al fallback por recencia; el pago se
+// registra con net_amount=null sin bloquear el alta).
+async function fetchPaymentFromAp(ap: any, mpToken: string | undefined): Promise<any | null> {
   try {
     const paymentId = ap?.payment?.id
     if (!paymentId) {
-      console.warn('authorized_payment sin payment.id → no se puede resolver el email del pagador')
+      console.warn('authorized_payment sin payment.id → no se puede traer el payment de MP')
       return null
     }
     const res = await fetch(`${MP_API}/v1/payments/${paymentId}`, {
@@ -505,12 +533,65 @@ async function resolvePayerEmail(ap: any, mpToken: string | undefined): Promise<
       console.warn('No se pudo GET /v1/payments/{id}:', res.status)
       return null
     }
-    const payment = await res.json()
-    const email = payment?.payer?.email ? String(payment.payer.email).trim() : ''
-    return email || null
+    return await res.json()
   } catch (err) {
-    console.warn('Error resolviendo el email del pagador:', err)
+    console.warn('Error trayendo el payment de MP:', err)
     return null
+  }
+}
+
+// Convierte date_approved (ISO con offset, o null) al día calendario de Argentina (UTC-3 fijo todo el año).
+// Devuelve 'YYYY-MM-DD'. Así un pago del 30/09 23:00 AR (= 01/10 02:00 UTC) queda en septiembre, no octubre.
+function arDateFromApproved(dateApproved: string | null | undefined): string {
+  const base = dateApproved ? new Date(dateApproved) : new Date()
+  const t = isNaN(base.getTime()) ? Date.now() : base.getTime()
+  return new Date(t - 3 * 3600 * 1000).toISOString().slice(0, 10)
+}
+
+// Registra un pago de MP en la tabla `payments`. Idempotente por mp_payment_id (ON CONFLICT DO NOTHING).
+// try/catch total: si algo falla, se loguea y NO se propaga (no bloquea el alta/renovación).
+async function registerMpPayment(
+  adminClient: any,
+  athleteId: string,
+  program: string | null,
+  payment: any,
+  type: string
+): Promise<void> {
+  try {
+    if (!payment || payment.id == null) {
+      console.warn('registerMpPayment: sin payment (o sin id) →', type, '— no se registra el pago')
+      return
+    }
+    const amount = payment.transaction_amount != null ? Number(payment.transaction_amount) : null
+    if (amount == null || isNaN(amount)) {
+      console.warn('registerMpPayment: payment sin transaction_amount → no se registra:', payment.id)
+      return
+    }
+    const netRaw = payment?.transaction_details?.net_received_amount
+    const netAmount = netRaw != null && !isNaN(Number(netRaw)) ? Number(netRaw) : null
+    const paidAt = arDateFromApproved(payment.date_approved)
+    const { error } = await adminClient
+      .from('payments')
+      .upsert({
+        athlete_id: athleteId,
+        program: program,
+        amount: amount,
+        net_amount: netAmount,
+        paid_at: paidAt,
+        type: type,
+        method: 'mp',
+        manual_channel: null,
+        created_by: null,
+        mp_payment_id: String(payment.id),
+        prev_subscription_end: null
+      }, { onConflict: 'mp_payment_id', ignoreDuplicates: true })
+    if (error) {
+      console.error('registerMpPayment: error insertando el pago (no bloquea el alta):', error.message)
+    } else {
+      console.log('Pago MP registrado:', type, '| payment_id:', payment.id, '| net:', netAmount, '| paid_at:', paidAt)
+    }
+  } catch (err) {
+    console.error('registerMpPayment: excepción (no bloquea el alta):', err)
   }
 }
 
