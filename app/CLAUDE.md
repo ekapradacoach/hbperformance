@@ -79,6 +79,12 @@ como en admin: grupal filtra por `program_slug`; asesoría además por `athlete_
   ⚠️ La card **Comunidad se OCULTA para atletas de asesoría** (`IS_ASESORIA` → `#cardComunidad`
   `display:none` en `loadInicio`, sin cargar `loadCommunity`): la comunidad es solo para programas grupales.
   La vista `comunidad` sigue existiendo en el código pero queda inaccesible para asesorías (sin card ni botón).
+  **Fechas clickeables (2026-09-10):** los círculos de **Tu semana**, los ítems de **Próximos días** (Inicio) y
+  el **Historial** + la **adherencia "📊 Tu semana"** (Estadísticas) son clickeables → helper `goToProgramaDay(ds)`
+  (`progDate=ds; progMode='day'; showView('programa')`, reusa el flujo de `enterPrograma`/`loadProgramaDay`, igual
+  que el botón HOY y el calendario) → abre **Mi programa** en ese día. Si el día no tiene sesión, `loadProgramaDay`
+  muestra "No hay sesión para este día 💤" (todas las fechas navegan igual). **Excluidos** a propósito: historial
+  de **RM** (`renderMisRm`, son fechas de medición, no sesiones) y la fecha del último post de **Comunidad**.
 - Vista **Mi programa** (✅ desarrollada): toggle **Vista día / Vista mes**. *Día*: barra con ← →
   fecha + botón "Hoy"; si no hay planificación "No hay sesión para este día 💤"; si hay, lista de
   bloques. Cada bloque = card borde-izq dorado con: título dorado + **checkbox custom "Completado"**

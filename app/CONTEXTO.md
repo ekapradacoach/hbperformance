@@ -2677,3 +2677,21 @@ toda referencia para que nadie escriba a un número muerto. **Nuevo número: 549
   sesión futura lo tome como válido). Total: **15 reemplazos en 7 archivos**.
 - Verificación: `git grep 5491136433379` y `git grep 1136433379` → **0 resultados**. Solo frontend/docs, sin Edge
   Functions → sin redeploy; sale por GitHub Pages.
+
+## 2026-09-10 (b) — Fechas clickeables en el dashboard del atleta → saltan a Mi programa (ese día)
+Feature de UX: cualquier fecha/indicador de día de entrenamiento lleva directo a **Mi programa** (vista día) en
+esa fecha. Solo frontend (`app/dashboard.html`), reusando la navegación existente.
+- **Helper nuevo `goToProgramaDay(ds)`**: `progDate = ds; progMode = 'day'; showView('programa')` → `enterPrograma()`
+  ya hace `setProgMode('day')` + `loadProgramaDay()` (mismo flujo que el botón "Ver planificación de hoy" y el
+  click del calendario). No se reinventó navegación.
+- **Clickeables** (cada uno con `data-date` + listener tras el render, clase `*-clickable` con cursor+hover sutil):
+  · Inicio → **Tu semana** (7 círculos, `loadWeek`) · **Próximos días** (`loadUpcoming`).
+  · Estadísticas → **Historial** (`renderHistorial`) · **adherencia "📊 Tu semana"** (`renderAdherence`).
+- **Día sin sesión:** navegan igual; `loadProgramaDay` ya muestra "No hay sesión para este día 💤" (comportamiento
+  uniforme, confirmado con el usuario). Los de Próximos/Historial siempre tienen sesión; Tu semana/adherencia pueden
+  no tener.
+- **Ya estaba:** el calendario del mes de Mi programa (no se tocó). El botón HOY de la card HOY ya navegaba.
+- **Excluidos** (no son días de entrenamiento, confirmado con el usuario): historial de **RM** (`renderMisRm`,
+  fechas de medición) y la fecha del último post de **Comunidad** (`loadCommunity`).
+- Verificación: syntax-check inline OK (0 errores); `goToProgramaDay` ×5 (1 def + 4 call sites); las 4 clases
+  clickeables presentes. Prueba interactiva es auth-gated. Sin backend/RLS, sin redeploy.

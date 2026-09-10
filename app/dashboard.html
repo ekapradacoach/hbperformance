@@ -246,6 +246,10 @@
   /* Semana */
   .week-row { display: flex; justify-content: space-between; gap: 4px; }
   .wk { display: flex; flex-direction: column; align-items: center; gap: 7px; flex: 1; }
+  /* Indicadores de día clickeables → saltan a Mi programa (vista día) */
+  .wk-clickable, .up-clickable, .hist-clickable, .adh-clickable { cursor: pointer; transition: opacity .15s ease, background .15s ease; }
+  .wk-clickable:hover, .adh-clickable:hover { opacity: 0.68; }
+  .up-clickable:hover, .hist-clickable:hover { background: rgba(245,168,0,0.07); border-radius: 8px; }
   .wk-circle {
     width: 36px; height: 36px; border-radius: 50%;
     border: 2px solid #333;
@@ -1625,11 +1629,14 @@
       document.getElementById('weekRow').innerHTML = weekDates.map((ds, i) => {
         const done = completed.has(ds);
         const isToday = ds === TODAY;
-        return `<div class="wk ${isToday ? 'is-today' : ''}">
+        return `<div class="wk wk-clickable ${isToday ? 'is-today' : ''}" data-date="${ds}" title="Ver este día">
           <div class="wk-circle ${done ? 'done' : ''} ${isToday ? 'today' : ''}">${done ? '✓' : ''}</div>
           <div class="wk-lbl">${labels[i]}</div>
         </div>`;
       }).join('');
+      document.querySelectorAll('#weekRow .wk[data-date]').forEach(el => {
+        el.addEventListener('click', () => goToProgramaDay(el.dataset.date));
+      });
     }
 
     async function loadUpcoming() {
@@ -1648,11 +1655,14 @@
 
       box.innerHTML = '<div class="up-list">' + days.map(d => {
         const n = counts[d.id] || 0;
-        return `<div class="up-item">
+        return `<div class="up-item up-clickable" data-date="${d.date}" title="Ver este día">
           <span class="up-date">${shortDayLabel(d.date)}</span>
           <span class="up-count"><b>${n}</b> bloque${n === 1 ? '' : 's'}</span>
         </div>`;
       }).join('') + '</div>';
+      box.querySelectorAll('.up-item[data-date]').forEach(el => {
+        el.addEventListener('click', () => goToProgramaDay(el.dataset.date));
+      });
     }
 
     async function loadCommunity() {
@@ -1722,6 +1732,15 @@
     document.getElementById('dayPrev').addEventListener('click', () => { progDate = addDaysStr(progDate, -1); loadProgramaDay(); });
     document.getElementById('dayNext').addEventListener('click', () => { progDate = addDaysStr(progDate, 1); loadProgramaDay(); });
     document.getElementById('dayHoy').addEventListener('click', () => { progDate = TODAY; loadProgramaDay(); });
+
+    // Navega a Mi programa (vista día) en una fecha puntual. Reusa el flujo de enterPrograma()
+    // (setProgMode('day') + loadProgramaDay), igual que el botón "Ver planificación de hoy" y el calendario.
+    // Si el día no tiene sesión, loadProgramaDay ya muestra "No hay sesión para este día 💤".
+    function goToProgramaDay(ds) {
+      if (!ds) return;
+      progDate = ds; progMode = 'day';
+      showView('programa');
+    }
 
     // Estado de RM del día: biblioteca (por nombre / por id) + RM del atleta (por ejercicio base)
     let rmLibByName = {};                 // 'back squat' -> { id, name, max_type, rm_source_id, rm_tracked }
@@ -2666,12 +2685,15 @@
         const p = statsPerDate[ds];
         const pct = (p && p.total > 0) ? Math.round(p.completed / p.total * 100) : null;
         const isToday = ds === TODAY;
-        return `<div class="adh-col ${isToday ? 'today' : ''}">
+        return `<div class="adh-col adh-clickable ${isToday ? 'today' : ''}" data-date="${ds}" title="Ver este día">
           <div class="adh-pct">${pct === null ? '–' : pct + '%'}</div>
           <div class="adh-track"><div class="adh-fill" data-h="${pct || 0}"></div></div>
           <div class="adh-lbl">${lbl}</div>
         </div>`;
       }).join('');
+      row.querySelectorAll('.adh-col[data-date]').forEach(el => {
+        el.addEventListener('click', () => goToProgramaDay(el.dataset.date));
+      });
       // Animar el llenado (de 0 a la altura objetivo). setTimeout (no rAF) para que
       // funcione también si la pestaña está en segundo plano al cargar.
       setTimeout(() => {
@@ -2695,7 +2717,7 @@
         const p = statsPerDate[ds];
         const pct = p.total > 0 ? Math.round(p.completed / p.total * 100) : 0;
         const icon = (p.total > 0 && p.completed >= p.total) ? '✅' : (p.completed > 0 ? '🟡' : '⭕');
-        return `<div class="hist-item">
+        return `<div class="hist-item hist-clickable" data-date="${ds}" title="Ver este día">
           <div class="hist-icon">${icon}</div>
           <div class="hist-main">
             <div class="hist-date">${histLabel(ds)}</div>
@@ -2711,6 +2733,9 @@
         html += `<button type="button" class="hist-more" id="histMore">Ver más (${all.length - HIST_COLLAPSE})</button>`;
       }
       box.innerHTML = html;
+      box.querySelectorAll('.hist-item[data-date]').forEach(el => {
+        el.addEventListener('click', () => goToProgramaDay(el.dataset.date));
+      });
       const more = document.getElementById('histMore');
       if (more) more.addEventListener('click', () => { histExpanded = true; renderHistorial(); });
     }
