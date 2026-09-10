@@ -2710,3 +2710,14 @@ Rediseño (`admin/index.html`, `renderTopActivos` + nuevo `renderRankTable`):
   filtro/toggle re-renderizan sin re-query; solo el cambio de mes re-consulta).
 - Orden: `count` desc, desempate por última actividad (más reciente) y luego nombre. Solo frontend, sin backend.
   Syntax-check OK.
+
+## 2026-09-10 (d) — Métricas ranking: fix carga + selector de período (mes / histórico)
+Dos cambios sobre la Sección 4 (`admin/index.html`):
+- **Fix carga** (`f7806ab`): el rediseño anterior pasó a `select('athlete_id, completed_at, created_at')`; si
+  `completed_at` no existe como columna, PostgREST rechaza toda la query → saltaba "¿existe block_completions?".
+  Vuelto a `select('*')` (el código lee `c.completed_at || c.created_at`; columna ausente = `undefined`, degrada bien).
+- **Selector "Período"** (`#rankPeriod`: "Mes seleccionado" default / "Histórico (todo)"): el conteo del mes seguía
+  siendo la única vista. Ahora `renderTopActivos` agrega `total` (todas las completions) además de `count` (mes);
+  `renderRankTable` usa `cnt = r => rankPeriod==='all' ? r.total : r.count` para mostrar/ordenar y actualiza el
+  encabezado (`#rankCountHead`: "Bloques completados (mes)" ↔ "(histórico)"). Sin consultas extra (mismos datos en
+  memoria). "Última actividad" sigue global. Filtro por programa + toggle Ver todos siguen aplicando. Solo frontend.

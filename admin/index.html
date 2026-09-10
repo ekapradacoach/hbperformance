@@ -1903,11 +1903,17 @@
               <option value="asesoria-gonza">Asesoría Gonza</option>
             </select>
           </label>
+          <label>Período
+            <select id="rankPeriod">
+              <option value="month">Mes seleccionado</option>
+              <option value="all">Histórico (todo)</option>
+            </select>
+          </label>
         </div>
         <div class="table-wrap">
           <table class="al-table met-table">
             <thead>
-              <tr><th>Nombre</th><th>Programa</th><th>Bloques completados (mes)</th><th>Última actividad</th></tr>
+              <tr><th>Nombre</th><th>Programa</th><th id="rankCountHead">Bloques completados (mes)</th><th>Última actividad</th></tr>
             </thead>
             <tbody id="metTop"><tr><td class="loading-row" colspan="4">Cargando…</td></tr></tbody>
           </table>
@@ -4876,8 +4882,9 @@
     // la "Última actividad" es GLOBAL (última completion de siempre → detecta inactivos aunque mires meses pasados).
     // Incluye a TODOS los alumnos (los que tienen 0 completions del mes figuran con 0 y "—").
     // Colapsado = top 5; el botón "Ver ranking completo" lo expande. Filtro por programa arriba de la tabla.
-    let rankRows = null;        // [{ id, name, program, count(mes), last(global) }] cacheado
+    let rankRows = null;        // [{ id, name, program, count(mes), total(histórico), last(global) }] cacheado
     let rankProgram = 'all';
+    let rankPeriod = 'month';   // 'month' = conteo del mes seleccionado · 'all' = histórico (todo)
     let rankExpanded = false;
     async function renderTopActivos(athById, y, m) {
       const body = document.getElementById('metTop');
@@ -4891,18 +4898,19 @@
         return;
       }
       const { start, next } = monthBounds(y, m);
-      const agg = {}; // id -> { monthCount, lastGlobal }
+      const agg = {}; // id -> { monthCount, totalCount, lastGlobal }
       (data || []).forEach(c => {
         const id = c.athlete_id; if (!id) return;
         const when = c.completed_at || c.created_at || null;
-        if (!agg[id]) agg[id] = { monthCount: 0, lastGlobal: null };
+        if (!agg[id]) agg[id] = { monthCount: 0, totalCount: 0, lastGlobal: null };
+        agg[id].totalCount++;                                             // conteo histórico (todo)
         const ds = when ? String(when).slice(0, 10) : null;
         if (ds && ds >= start && ds < next) agg[id].monthCount++;          // conteo del mes
         if (when && (!agg[id].lastGlobal || when > agg[id].lastGlobal)) agg[id].lastGlobal = when; // última global
       });
       rankRows = Object.keys(athById).map(id => {
         const a = athById[id], g = agg[id] || {};
-        return { id, name: a.full_name || '—', program: a.program, count: g.monthCount || 0, last: g.lastGlobal || null };
+        return { id, name: a.full_name || '—', program: a.program, count: g.monthCount || 0, total: g.totalCount || 0, last: g.lastGlobal || null };
       });
       renderRankTable();
     }
@@ -4910,9 +4918,12 @@
       const body = document.getElementById('metTop');
       const toggle = document.getElementById('rankToggle');
       if (!rankRows) { if (toggle) toggle.style.display = 'none'; return; }
+      const cnt = r => (rankPeriod === 'all' ? r.total : r.count);   // conteo según período elegido
+      const head = document.getElementById('rankCountHead');
+      if (head) head.textContent = (rankPeriod === 'all') ? 'Bloques completados (histórico)' : 'Bloques completados (mes)';
       let rows = (rankProgram === 'all') ? rankRows.slice() : rankRows.filter(r => r.program === rankProgram);
       rows.sort((a, b) =>
-        (b.count - a.count) ||
+        (cnt(b) - cnt(a)) ||
         String(b.last || '').localeCompare(String(a.last || '')) ||   // desempate: más reciente primero
         String(a.name).localeCompare(String(b.name)));
       const shown = rankExpanded ? rows : rows.slice(0, 5);
@@ -4924,7 +4935,7 @@
       body.innerHTML = shown.map(t => `<tr>
         <td>${esc(t.name)}</td>
         <td><span class="prog-badge prog-${progKey(t.program)}">${programLabel(t.program)}</span></td>
-        <td>${t.count}</td>
+        <td>${cnt(t)}</td>
         <td>${t.last ? fmtDate(t.last) : '—'}</td>
       </tr>`).join('');
       if (toggle) {
@@ -4937,6 +4948,7 @@
       }
     }
     document.getElementById('rankProgram').addEventListener('change', (e) => { rankProgram = e.target.value; renderRankTable(); });
+    document.getElementById('rankPeriod').addEventListener('change', (e) => { rankPeriod = e.target.value; renderRankTable(); });
     document.getElementById('rankToggle').addEventListener('click', () => { rankExpanded = !rankExpanded; renderRankTable(); });
 
     // ---- Sección 5: actividad en chats ----
