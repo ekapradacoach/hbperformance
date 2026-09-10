@@ -2721,3 +2721,15 @@ Dos cambios sobre la Sección 4 (`admin/index.html`):
   `renderRankTable` usa `cnt = r => rankPeriod==='all' ? r.total : r.count` para mostrar/ordenar y actualiza el
   encabezado (`#rankCountHead`: "Bloques completados (mes)" ↔ "(histórico)"). Sin consultas extra (mismos datos en
   memoria). "Última actividad" sigue global. Filtro por programa + toggle Ver todos siguen aplicando. Solo frontend.
+
+## 2026-09-10 (e) — Lista de Alumnos: colapso "Ver más" (tandas de 20)
+Auditoría de listas largas (acotada por el usuario a listas de TODOS los alumnos con datos de seguimiento).
+**Revisión específica:** las únicas listas per-alumno sin colapso eran el Ranking de actividad (ya resuelto,
+con toggle) y la Lista de Alumnos general. No hay otra vista de progreso/adherencia/racha por alumno en el
+admin (Distribución/Evolución/chats son agregados; el `block_completions` del editor es por-día de un alumno).
+Comunidad y Mensajes/canales quedaron **fuera de alcance** por decisión del usuario (poco movimiento real).
+**Implementación** (`admin/index.html`, `renderAlumnos`): botón `#alMore` (reusa estilo `.rank-toggle`),
+`AL_BATCH=20`, estado `alShown`. Muestra los primeros `alShown` del resultado YA filtrado (tabs + programa +
+buscador intactos); el botón dice "Ver más (quedan X)" y suma de a 20. Se resetea a la 1ª tanda (20) al cambiar
+tab/programa/búsqueda y en cada `loadAlumnos` (carga fresca colapsada). Sin scroll infinito ni paginación
+server-side. N=20 confirmado con el usuario. Syntax-check inline OK (2 bloques, 0 errores). Solo frontend.

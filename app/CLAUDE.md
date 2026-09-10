@@ -53,6 +53,9 @@ Nota: la "Planificación" NO es una página aparte — vive dentro de `admin/ind
 Lo mismo con **Alumnos**: es la vista `#view-alumnos` dentro de `admin/index.html` (no existe
 `alumnos.html`). Gestión de alumnos: tabs Activos/Inactivos/Todos + filtro por programa + buscador,
 tabla, y **panel lateral slide-in** con ver/editar/dar de baja/eliminar e "Ir a planificación".
+La tabla usa **colapso "Ver más"** (`#alMore`, `renderAlumnos`, tanda `AL_BATCH=20` en `alShown`): muestra
+20 y suma de a 20; el colapso aplica sobre el resultado YA filtrado y se resetea a la 1ª tanda al cambiar
+tab/programa/búsqueda o recargar (2026-09-10). No hay scroll infinito ni paginación server-side (filtra en cliente).
 Idem **Mensajes**: vista `#view-mensajes` (no existe `mensajes.html`). Chat en tiempo real (Supabase
 Realtime): columna izq de canales (Programas = chat grupal por slug; Asesorías = chat privado
 `dm_<athlete_id>`), columna der con la conversación. Los mensajes se guardan en `messages.channel`.
@@ -60,8 +63,9 @@ Idem **Métricas**: vista `#view-metricas` (no existe `metricas.html`). Selector
 ingresos (cards, precios hardcodeados en `PRICES`), distribución de alumnos por programa (barras CSS),
 evolución 6 meses (altas/bajas/total; bajas = N/D), **ranking de actividad** (block_completions: conteo del
 **mes seleccionado**, "Última actividad" **global**; incluye a TODOS los alumnos —0 completions figuran con 0/"—";
-**selector de programa** + toggle **"Ver ranking completo"** que expande del top-5 a todos — 2026-09-10), y actividad de
-chats del mes (top-3 canales, barras). Barras CSS puras, sin librerías.
+**selector de programa** + **selector de período** ("Mes seleccionado" / "Histórico (todo)", `#rankPeriod`;
+el encabezado de la columna cambia (mes)↔(histórico)) + toggle **"Ver ranking completo"** que expande del
+top-5 a todos — 2026-09-10), y actividad de chats del mes (top-3 canales, barras). Barras CSS puras, sin librerías.
 Idem **Configuración**: vista `#view-config` (⚙️ en el sidebar). Edita la tabla `site_config`
 (precios por programa, links MP/PayPal, WhatsApp Erika/Gonza). Guardar → `upsert(onConflict:'key')` con
 feedback "✓ Guardado". Las **3 landing de programa** (`crossfit/hybrid/fuerza-corredores.html`) leen

@@ -1814,6 +1814,7 @@
             </tbody>
           </table>
         </div>
+        <button type="button" class="rank-toggle" id="alMore" style="display:none;">Ver más</button>
       </section>
 
       <!-- =============== VIEW: MENSAJES =============== -->
@@ -4071,6 +4072,8 @@
     let alStatus = 'active';       // 'active' | 'inactive' | 'all'
     let alProgramFilter = 'all';
     let alSearchTerm = '';
+    const AL_BATCH = 20;           // "Ver más": tanda de alumnos por click
+    let alShown = AL_BATCH;        // cantidad visible actual (sobre el resultado ya filtrado)
     let currentPanelAthlete = null;
 
     const ESTADO_LABELS = { active: 'Activo', pending: 'Pendiente', cancelled: 'Cancelado' };
@@ -4147,6 +4150,7 @@
         return;
       }
       allAthletes = data || [];
+      alShown = AL_BATCH;
       renderAlumnos();
     }
 
@@ -4170,11 +4174,24 @@
       });
 
       const body = document.getElementById('alBody');
+      const moreBtn = document.getElementById('alMore');
       if (!rows.length) {
         body.innerHTML = '<tr><td class="empty-row" colspan="8">No hay alumnos que coincidan con el filtro.</td></tr>';
+        if (moreBtn) moreBtn.style.display = 'none';
         return;
       }
-      body.innerHTML = rows.map(a => {
+      // Colapso "Ver más": mostrar solo los primeros alShown del resultado ya filtrado.
+      if (alShown > rows.length) alShown = rows.length;
+      const shown = rows.slice(0, alShown);
+      if (moreBtn) {
+        if (rows.length > alShown) {
+          moreBtn.style.display = 'block';
+          moreBtn.textContent = 'Ver más (quedan ' + (rows.length - alShown) + ')';
+        } else {
+          moreBtn.style.display = 'none';
+        }
+      }
+      body.innerHTML = shown.map(a => {
         const bajaBtn = (a.subscription_status === 'active')
           ? '<button class="btn-sm danger act-baja">🚫 Dar de baja</button>' : '';
         return `<tr data-id="${esc(a.id)}">
@@ -4200,20 +4217,27 @@
       });
     }
 
-    // Filtros / buscador
+    // Filtros / buscador. Cualquier cambio de filtro resetea el colapso a la 1ª tanda.
     document.getElementById('alSearch').addEventListener('input', (e) => {
       alSearchTerm = e.target.value;
+      alShown = AL_BATCH;
       renderAlumnos();
     });
     document.getElementById('alTabs').querySelectorAll('.al-tab').forEach(tab => {
       tab.addEventListener('click', () => {
         alStatus = tab.dataset.status;
+        alShown = AL_BATCH;
         document.querySelectorAll('#alTabs .al-tab').forEach(t => t.classList.toggle('active', t === tab));
         renderAlumnos();
       });
     });
     document.getElementById('alProgram').addEventListener('change', (e) => {
       alProgramFilter = e.target.value;
+      alShown = AL_BATCH;
+      renderAlumnos();
+    });
+    document.getElementById('alMore').addEventListener('click', () => {
+      alShown += AL_BATCH;
       renderAlumnos();
     });
 
