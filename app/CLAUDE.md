@@ -604,6 +604,12 @@ despliegan a mano en Supabase):
   redundantes de MP entran a la rama authorized con el pending ya borrado y antes tiraban falso positivo).
   **Mail de reactivación (Resend):** ahora incluye una línea de aviso de **spam** (el mail de un alta NUEVA es el
   **invite de Supabase Auth**, cuyo texto/aviso de spam se edita en el dashboard → Auth → Email Templates → Invite).
+  **Registro de pagos (2026-09-10):** cada cobro aprobado se inserta en `payments` (bruto + neto real de
+  `/v1/payments/{id}`, `paid_at` en hora AR, `mp_payment_id` UNIQUE idempotente, try/catch no bloqueante).
+  **Anti-suscripciones-duplicadas (2026-09-11):** en la rama `existingProfile`, si el perfil ya tenía OTRA
+  `mp_subscription_id` guardada (distinta a la nueva), se cancela la vieja en MP (`PUT /preapproval/{viejo}
+  status:cancelled`) antes de pisarla — try/catch, no bloquea el alta. NO busca por email; solo cubre subs
+  viejas ya vinculadas en `profiles` (una huérfana con `mp_subscription_id=NULL` se cancela a mano en MP).
 ⚠️ Secretos en Supabase (nunca hardcodeados): `MP_ACCESS_TOKEN` (lo usan `create-plans` y `process-payment`,
 NO `create-subscription`), `SUPABASE_URL`, `SERVICE_ROLE_KEY`.
 ⚠️ Las claves `mp_link_<prog>` de `site_config` quedaron **legacy/sin uso** (ya no se redirige a ellas).

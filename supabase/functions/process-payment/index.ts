@@ -53,6 +53,12 @@
 //   paid_at = date_approved convertido a hora de Argentina (UTC-3 fijo), no UTC → un pago de fin de
 //   mes queda en el mes correcto. Tipos MP: alta_nueva (1er pago) / renovacion_automatica (recurrente).
 //
+// Cambio 2026-09-11 (anti-suscripciones-duplicadas): en la rama existingProfile, antes de sobrescribir
+//   mp_subscription_id con la suscripción nueva, si el perfil YA tenía otra sub de MP guardada (distinta),
+//   se cancela esa vieja en MP (PUT /preapproval/{viejo} status:cancelled) → evita 2 subs del mismo atleta
+//   cobrando en paralelo. try/catch, no bloquea el alta. NO busca por email (evita falsos positivos). Solo
+//   cubre subs viejas YA vinculadas en profiles (una huérfana nunca guardada no se detecta acá).
+//
 // Secretos: MP_ACCESS_TOKEN, SUPABASE_URL, SERVICE_ROLE_KEY, RESEND_API_KEY, MP_WEBHOOK_SECRET.
 // ============================================================================
 
@@ -305,7 +311,7 @@ Deno.serve(async (req) => {
       // ¿El usuario ya existe?
       const { data: existingProfile } = await adminClient
         .from('profiles')
-        .select('id, subscription_status')
+        .select('id, subscription_status, mp_subscription_id')
         .eq('email', email)
         .maybeSingle()
 
@@ -313,6 +319,30 @@ Deno.serve(async (req) => {
       let altaAthleteId: string | null = existingProfile ? existingProfile.id : null
 
       if (existingProfile) {
+        // SEGURIDAD anti-duplicados: si el perfil YA tenía OTRA suscripción de MP guardada, cancelarla en MP
+        // ANTES de pisarla con la nueva → evita que queden 2 suscripciones del mismo atleta cobrando en paralelo.
+        // Mismo patrón que cancel-subscription (PUT /preapproval/{id} status:cancelled). try/catch: si falla,
+        // se loguea y NO bloquea el alta (el dato correcto en la DB es lo prioritario). NO busca por email
+        // (evita falsos positivos si el mail se comparte). Solo cubre subs viejas YA vinculadas en profiles.
+        const oldSubId = existingProfile.mp_subscription_id
+        if (oldSubId && String(oldSubId) !== String(mpSubscriptionId)) {
+          try {
+            const cancelRes = await fetch(`${MP_API}/preapproval/${oldSubId}`, {
+              method: 'PUT',
+              headers: { 'Authorization': `Bearer ${MP_TOKEN}`, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ status: 'cancelled' })
+            })
+            if (cancelRes.ok) {
+              console.log('Suscripción vieja cancelada en MP (anti-duplicado):', oldSubId, '→ nueva:', mpSubscriptionId)
+            } else {
+              const errTxt = await cancelRes.text().catch(() => '')
+              console.warn('No se pudo cancelar la suscripción vieja en MP (no bloquea el alta):', oldSubId, cancelRes.status, errTxt)
+            }
+          } catch (cancelErr) {
+            console.warn('Error cancelando la suscripción vieja en MP (no bloquea el alta):', oldSubId, cancelErr)
+          }
+        }
+
         await adminClient
           .from('profiles')
           .update({

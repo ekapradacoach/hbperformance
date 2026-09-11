@@ -2789,3 +2789,13 @@ que sirva a CUALQUIER baja manual sin mencionar motivos (atraso, corte por decis
 el link de tu programa. La suscripción se toma al valor vigente hoy en esa página." — deja explícito que el
 precio es el ACTUAL de la landing (no uno viejo/especial). Título ("Tu suscripción venció"), botón "Volver a
 suscribirme" (→ PROGRAM_LANDING[program]) y "Cerrar sesión" sin cambios. Solo copy.
+
+## 2026-09-11 (a) — process-payment: fix anti-suscripciones-duplicadas (targeted)
+Gap confirmado: al re-suscribirse un atleta existente, la rama `existingProfile` sobrescribía
+`mp_subscription_id` con la nueva sin cancelar la vieja → podían quedar 2 suscripciones de MP del mismo
+atleta cobrando en paralelo. Fix: el `select` de `existingProfile` ahora también trae `mp_subscription_id`;
+antes del `update`, si el viejo existe y es distinto al nuevo → `PUT /preapproval/{viejo}` con
+`{status:'cancelled'}` (mismo patrón que `cancel-subscription`), en try/catch, sin bloquear el alta si falla.
+NO busca por email (evita falsos positivos si se comparte el mail). Limitación conocida: solo cubre subs
+viejas YA vinculadas en `profiles`; una huérfana nunca guardada (ej. perfil manual con mp_subscription_id=NULL)
+no se detecta acá y se cancela a mano en MP. esbuild OK. ⚠️ REQUIERE REDEPLOY MANUAL de process-payment.
