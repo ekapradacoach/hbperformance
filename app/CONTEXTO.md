@@ -2799,3 +2799,24 @@ antes del `update`, si el viejo existe y es distinto al nuevo → `PUT /preappro
 NO busca por email (evita falsos positivos si se comparte el mail). Limitación conocida: solo cubre subs
 viejas YA vinculadas en `profiles`; una huérfana nunca guardada (ej. perfil manual con mp_subscription_id=NULL)
 no se detecta acá y se cancela a mano en MP. esbuild OK. ⚠️ REQUIERE REDEPLOY MANUAL de process-payment.
+
+## 2026-09-27 (a) — Corte por cobro fallido: basado en intentos, no en plazo fijo de 3 días
+Problema (caso Mariano): el plazo fijo de 3 días (`PAYMENT_GRACE_MS` en dashboard) corría en paralelo e
+independiente de los reintentos reales de MP → cortaba al alumno mientras MP todavía no había reintentado.
+Rediseño (Opción B: corte por 2do fallo real + backstop 15 días):
+- **DB** (`supabase/payment_grace.sql`, correr en Supabase): 2 columnas nuevas en `profiles` →
+  `payment_grace_until` (timestamptz, deadline que decide el server) y `payment_failed_attempt` (int, retry_attempt
+  del 1er fallo, para deduplicar reenvíos).
+- **process-payment** (rama `chargeFailed`): 1er fallo → `payment_grace_until = now + 15d` (backstop) +
+  `payment_failed_attempt = ap.retry_attempt` + mail. Fallo posterior → cuenta como "2do real" SOLO si
+  `ap.retry_attempt > payment_failed_attempt` (dedup de reenvíos del mismo intento) → `payment_grace_until = now`
+  (corte inmediato). Si MP no manda `retry_attempt`, no corta por 2do fallo y actúa el backstop. Éxito
+  (renovación/alta) → limpia los 3 flags (payment_failed_at/grace_until/failed_attempt). `retry_attempt` confirmado
+  como campo real del authorized_payment en la doc de MP.
+- **dashboard.html**: guard de `init()` ahora corta cuando `hoy > payment_grace_until` (antes: `payment_failed_at`
+  + 3 días). Se eliminó `PAYMENT_GRACE_MS`. `showPaymentGraceBanner()` sin plazo en días: "Tu último pago no se
+  pudo procesar. Mercado Pago va a reintentar el cobro automáticamente; si el próximo intento también falla, tu
+  acceso se corta."
+- Late-success self-heal: si MP cobra bien en un reintento posterior al corte, el webhook de éxito limpia
+  grace_until → acceso vuelve solo. esbuild OK, syntax-check dashboard OK.
+- ⚠️ Pendiente usuario: correr `supabase/payment_grace.sql` + REDEPLOY manual de process-payment.

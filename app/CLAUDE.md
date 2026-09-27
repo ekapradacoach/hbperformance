@@ -190,7 +190,12 @@ como en admin: grupal filtra por `program_slug`; asesoría además por `athlete_
   al atleta por su JWT (`getUser`), toma `mp_subscription_id`, hace GET+PUT `status:cancelled` a MP, y setea
   `subscription_status='cancelled'` + `subscription_end` = `next_payment_date` (fallback: `subscription_start`
   + ciclos mensuales). ✅ El **corte de acceso al vencer `subscription_end` YA está hecho** (guard en
-  `init()`: cancelada + `subscription_end < hoy` → pantalla `#expiredScreen` "Tu suscripción venció"). **Seguridad**
+  `init()`: cancelada + `subscription_end < hoy` → pantalla `#expiredScreen` "Tu suscripción venció"). **Corte por
+  cobro fallido (2026-09-27, basado en INTENTOS no en días):** el server escribe `profiles.payment_grace_until` y
+  `init()` corta cuando `hoy > payment_grace_until` (`showPaymentFailedScreen`), o muestra banner de gracia si aún
+  no venció. Antes era plazo fijo de 3 días (`PAYMENT_GRACE_MS`, eliminado) que cortaba antes de que MP reintentara.
+  Ahora: 1er fallo → grace_until = +15 días (backstop) + banner; 2do fallo REAL de MP → grace_until = ahora (corte
+  ya). El banner ya NO promete un nº de días (el próximo intento de cobro define el acceso). **Seguridad**
   ("Cambiar contraseña" → `resetPasswordForEmail` + toast; "Cerrar sesión" → `signOut` → `login.html`,
   botón outline rojo al hover).
 - Vista **Comunidad** (✅ desarrollada): NO es un tab — se entra desde el botón "Ver comunidad →" de la

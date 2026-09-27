@@ -3913,9 +3913,7 @@
     }
 
     // Cobro fallido: días de gracia antes de cortar el acceso.
-    const PAYMENT_GRACE_MS = 3 * 24 * 60 * 60 * 1000; // 3 días desde el primer cobro fallido
-
-    // Pantalla de corte por cobro fallido sin regularizar (pasados los 3 días).
+    // Pantalla de corte por cobro fallido sin regularizar (cuando hoy > payment_grace_until).
     function showPaymentFailedScreen() {
       const rb = document.getElementById('payFailedResubBtn');
       if (rb) rb.href = PROGRAM_LANDING[ATHLETE.program] || 'index.html';
@@ -3927,13 +3925,13 @@
       document.getElementById('paymentFailedScreen').classList.add('show');
     }
 
-    // Banner de aviso durante los 3 días de gracia (no bloquea, el dashboard sigue funcionando).
-    function showPaymentGraceBanner(deadlineMs) {
+    // Banner de aviso mientras se espera el próximo intento de cobro (no bloquea; el dashboard sigue funcionando).
+    // Sin plazo fijo en días: el que define si sigue el acceso es el PRÓXIMO intento de cobro de MP.
+    function showPaymentGraceBanner() {
       const b = document.getElementById('paymentGraceBanner');
       if (!b) return;
-      const fecha = new Date(deadlineMs).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' });
       const landing = PROGRAM_LANDING[ATHLETE.program] || 'index.html';
-      b.innerHTML = `⚠️ Tu último cobro no se pudo procesar. Mercado Pago va a reintentar; regularizá tu pago antes del <b>${fecha}</b> para no perder el acceso. <a href="${landing}">Volver a suscribirme →</a>`;
+      b.innerHTML = `⚠️ Tu último pago no se pudo procesar. Mercado Pago va a reintentar el cobro automáticamente; si el próximo intento también falla, tu acceso se corta. <a href="${landing}">Volver a suscribirme →</a>`;
       b.style.display = 'block';
     }
 
@@ -3995,18 +3993,18 @@
         return;
       }
 
-      // Corte por cobro fallido: si pasaron > 3 días desde el primer cobro rechazado y todavía
-      // no llegó un pago exitoso (payment_failed_at seguiría seteado) → pantalla de corte.
-      // Dentro de los 3 días → banner de aviso y acceso normal. La recuperación (pago OK) limpia
-      // payment_failed_at en process-payment, así que el acceso vuelve solo.
-      if (ATHLETE.payment_failed_at) {
-        const failedMs = new Date(ATHLETE.payment_failed_at).getTime();
-        if (!isNaN(failedMs)) {
-          if (Date.now() - failedMs > PAYMENT_GRACE_MS) {
+      // Corte por cobro fallido: el deadline lo decide el server en `payment_grace_until` (process-payment).
+      //  · 1er fallo → grace_until = +15 días (backstop) → mientras tanto, banner de aviso y acceso normal.
+      //  · 2do fallo real de MP → grace_until = ahora → corte inmediato en la próxima entrada.
+      //  · un cobro exitoso limpia grace_until → el acceso vuelve solo.
+      if (ATHLETE.payment_grace_until) {
+        const cutMs = new Date(ATHLETE.payment_grace_until).getTime();
+        if (!isNaN(cutMs)) {
+          if (Date.now() > cutMs) {
             showPaymentFailedScreen();
             return;
           }
-          showPaymentGraceBanner(failedMs + PAYMENT_GRACE_MS);
+          showPaymentGraceBanner();
         }
       }
 

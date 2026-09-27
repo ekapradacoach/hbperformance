@@ -53,6 +53,15 @@
 //   paid_at = date_approved convertido a hora de Argentina (UTC-3 fijo), no UTC → un pago de fin de
 //   mes queda en el mes correcto. Tipos MP: alta_nueva (1er pago) / renovacion_automatica (recurrente).
 //
+// Cambio 2026-09-27 (corte por cobro fallido basado en INTENTOS, no en plazo fijo): antes el corte era a
+//   los 3 días fijos (guard del dashboard) y podía cortar ANTES de que MP reintentara (caso Mariano). Ahora el
+//   server escribe `profiles.payment_grace_until` y el dashboard corta cuando hoy > grace_until:
+//     · 1er fallo → grace_until = +15 días (backstop por si el 2do webhook nunca llega) + banner + mail.
+//     · 2do fallo REAL → grace_until = ahora (corte inmediato). "Real" = retry_attempt de la invoice MAYOR al
+//       guardado en el 1er fallo (`payment_failed_attempt`), para no cortar por un REENVÍO del mismo intento.
+//     · cobro exitoso → limpia payment_failed_at / payment_grace_until / payment_failed_attempt (recuperación).
+//   Requiere columnas nuevas en profiles: payment_grace_until (timestamptz), payment_failed_attempt (int).
+//
 // Cambio 2026-09-11 (anti-suscripciones-duplicadas): en la rama existingProfile, antes de sobrescribir
 //   mp_subscription_id con la suscripción nueva, si el perfil YA tenía otra sub de MP guardada (distinta),
 //   se cancela esa vieja en MP (PUT /preapproval/{viejo} status:cancelled) → evita 2 subs del mismo atleta
@@ -140,48 +149,82 @@ Deno.serve(async (req) => {
       const chargeApproved = chargeStatus === 'approved'
 
       if (chargeFailed) {
-        // Buscar al atleta por su suscripción
+        // Política de corte (2026-09-27): el deadline lo decide el server en `payment_grace_until`; el
+        // dashboard corta cuando hoy > grace_until. 1er fallo → gracia con backstop de 15 días. 2do fallo
+        // REAL → corte inmediato (grace_until = ahora). Un cobro exitoso limpia todo (recuperación automática).
+        //
+        // Dedup: MP puede REENVIAR el webhook del MISMO intento fallido. Para no cortar por un reenvío,
+        // usamos `ap.retry_attempt` (nº de reintento de la invoice, provisto por MP): un fallo cuenta como
+        // "2do real" solo si su retry_attempt es MAYOR al que guardamos en el 1er fallo. Si MP no manda
+        // retry_attempt, NO cortamos por 2do fallo y dejamos que actúe el backstop de 15 días.
+        const retryAttempt = (ap?.retry_attempt != null && !isNaN(Number(ap.retry_attempt))) ? Number(ap.retry_attempt) : null
+
         const { data: prof } = await adminClient
           .from('profiles')
-          .select('id, email, full_name, payment_failed_at')
+          .select('id, email, full_name, payment_failed_at, payment_failed_attempt, payment_grace_until')
           .eq('mp_subscription_id', preapprovalId)
           .maybeSingle()
         if (!prof) {
           console.log('Cobro fallido pero no hay profile para la suscripción → skip:', preapprovalId)
           return json({ ok: true, skipped: 'payment-failed-no-profile' })
         }
-        if (prof.payment_failed_at) {
-          // Ya estaba marcado → idempotente: no reenvío mail ni reinicio el contador de 3 días
-          console.log('Cobro fallido ya registrado (sin cambios):', prof.email)
-          return json({ ok: true, status: 'payment_failed_already_flagged' })
+
+        const GRACE_BACKSTOP_MS = 15 * 24 * 60 * 60 * 1000 // red de seguridad si el 2do webhook de fallo nunca llega
+
+        if (!prof.payment_failed_at) {
+          // PRIMER fallo del episodio: gracia (banner) + backstop 15 días + mail. NO corta todavía.
+          // NO toca subscription_status (sigue 'active'); el corte lo decide el guard del dashboard vía grace_until.
+          await adminClient
+            .from('profiles')
+            .update({
+              payment_failed_at: new Date().toISOString(),
+              payment_grace_until: new Date(Date.now() + GRACE_BACKSTOP_MS).toISOString(),
+              payment_failed_attempt: retryAttempt
+            })
+            .eq('id', prof.id)
+          await sendPaymentFailedEmail(prof.email, prof.full_name)
+          console.log('1er cobro fallido → gracia + backstop 15d. retry_attempt:', retryAttempt, '·', prof.email)
+          return json({ ok: true, status: 'payment_failed_flagged' })
         }
-        // Primer cobro fallido del episodio: marcar el timestamp + avisar por mail.
-        // NO se toca subscription_status (sigue 'active'); el corte a los 3 días lo hace el guard del dashboard.
-        await adminClient
-          .from('profiles')
-          .update({ payment_failed_at: new Date().toISOString() })
-          .eq('id', prof.id)
-        await sendPaymentFailedEmail(prof.email, prof.full_name)
-        console.log('Cobro fallido registrado + mail enviado:', prof.email)
-        return json({ ok: true, status: 'payment_failed_flagged' })
+
+        // Episodio YA abierto. ¿Es un SEGUNDO intento REAL (retry_attempt mayor al del 1er fallo) o un reenvío?
+        const firstAttempt = (prof.payment_failed_attempt != null) ? Number(prof.payment_failed_attempt) : null
+        const isDistinctLaterAttempt = retryAttempt != null && firstAttempt != null && retryAttempt > firstAttempt
+
+        if (isDistinctLaterAttempt) {
+          // SEGUNDO fallo real → corte INMEDIATO: grace_until = ahora (el dashboard corta en la próxima entrada).
+          await adminClient
+            .from('profiles')
+            .update({
+              payment_grace_until: new Date().toISOString(),
+              payment_failed_attempt: retryAttempt
+            })
+            .eq('id', prof.id)
+          console.log('2do cobro fallido REAL (retry_attempt', firstAttempt, '→', retryAttempt, ') → corte inmediato:', prof.email)
+          return json({ ok: true, status: 'payment_failed_cut' })
+        }
+
+        // Reenvío del mismo intento (o MP no mandó retry_attempt) → idempotente, no corta; sigue vigente el backstop.
+        console.log('Cobro fallido repetido/sin retry_attempt nuevo → sin cambios (backstop 15d vigente). retry_attempt:', retryAttempt, '| first:', firstAttempt, '·', prof.email)
+        return json({ ok: true, status: 'payment_failed_already_flagged' })
       }
 
       if (chargeApproved) {
         // ¿Ya existe un profile con esta suscripción? → distingue RENOVACIÓN de ALTA NUEVA.
         const { data: prof } = await adminClient
           .from('profiles')
-          .select('id, email, program, payment_failed_at')
+          .select('id, email, program, payment_failed_at, payment_grace_until')
           .eq('mp_subscription_id', preapprovalId)
           .maybeSingle()
         if (prof) {
           // RENOVACIÓN: cobro mensual de un socio que ya tiene cuenta con esta suscripción.
-          // No hay nada que dar de alta. Si venía de una falla, se limpia el flag (recuperación).
-          if (prof.payment_failed_at) {
+          // No hay nada que dar de alta. Si venía de una falla, se limpian TODOS los flags (recuperación).
+          if (prof.payment_failed_at || prof.payment_grace_until) {
             await adminClient
               .from('profiles')
-              .update({ payment_failed_at: null })
+              .update({ payment_failed_at: null, payment_grace_until: null, payment_failed_attempt: null })
               .eq('id', prof.id)
-            console.log('Cobro recuperado → payment_failed_at limpiado:', prof.email)
+            console.log('Cobro recuperado → flags de fallo limpiados:', prof.email)
           }
           // Registrar el cobro recurrente en `payments`. 1 fetch extra a /v1/payments (bruto+neto).
           // try/catch adentro del helper → si MP falla, no rompe la renovación.
@@ -350,7 +393,9 @@ Deno.serve(async (req) => {
             mp_subscription_id: mpSubscriptionId,
             subscription_start: new Date().toISOString().split('T')[0],
             subscription_end: null, // limpiar el vencimiento de una cancelación previa (mismo criterio que un alta nueva)
-            payment_failed_at: null // reactivación arranca con la ficha de pago limpia
+            payment_failed_at: null, // reactivación arranca con la ficha de pago limpia
+            payment_grace_until: null,
+            payment_failed_attempt: null
           })
           .eq('email', email)
 
