@@ -50,6 +50,12 @@ HB Performance/
 
 Nota: la "Planificación" NO es una página aparte — vive dentro de `admin/index.html` como vista SPA
 (links del sidebar con `data-view` cambian de vista sin recargar). No existe `planificacion.html`.
+**Comentarios de atletas en el editor** (`attachAthleteComments`, solo lectura, bajo cada bloque): trae
+`block_completions.comment` + fotos (`block_images`). En **asesorías** → un comentario por bloque
+(`b.athleteComment`, `athleteCommentHtml`). En **grupales** (2026-09-29) → varios atletas por bloque compartido
+(`b.athleteComments` array, `athleteCommentsListHtml`): dedup por atleta (completación más reciente), orden
+reciente→viejo, **colapso 3 + "Ver más"** (estilo `rank-toggle`). Fotos → clic abre `#modalBlockImg`. Se ven
+navegando al programa + la fecha exacta del bloque; comentarios de bloques borrados/recreados quedan huérfanos.
 Lo mismo con **Alumnos**: es la vista `#view-alumnos` dentro de `admin/index.html` (no existe
 `alumnos.html`). Gestión de alumnos: tabs Activos/Inactivos/Todos + filtro por programa + buscador,
 tabla, y **panel lateral slide-in** con ver/editar/dar de baja/eliminar e "Ir a planificación".

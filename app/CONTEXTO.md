@@ -2820,3 +2820,16 @@ Rediseño (Opción B: corte por 2do fallo real + backstop 15 días):
 - Late-success self-heal: si MP cobra bien en un reintento posterior al corte, el webhook de éxito limpia
   grace_until → acceso vuelve solo. esbuild OK, syntax-check dashboard OK.
 - ⚠️ Pendiente usuario: correr `supabase/payment_grace.sql` + REDEPLOY manual de process-payment.
+
+## 2026-09-29 (a) — Admin: comentarios de atletas visibles en Planificación grupal
+Los comentarios de bloque (`block_completions.comment`) solo se veían en asesorías; en grupales
+`attachAthleteComments` cortaba (`if (!editorCtx.athleteId) return`) → invisibles para el admin.
+Cambios (`admin/index.html`, solo frontend):
+- `attachAthleteComments`: ahora corre también en grupales. Asesoría = igual que antes (`b.athleteComment`,
+  un comentarista). Grupal = trae TODAS las completions de los bloques del día (sin filtrar por atleta),
+  dedup por atleta (completación más reciente), orden reciente→viejo → `b.athleteComments` (array).
+- `athleteCommentsListHtml` (nueva): encabezado "💬 Comentarios de los atletas (N)" + lista; si N>3 muestra
+  3 + botón "Ver más (N-3)"/"Ver menos" (reusa estilo `.rank-toggle`; toggle wireado en `wireBlock`).
+  Se extrajo `acImgsHtml` (reusa miniaturas entre asesoría y grupal; fotos → `#modalBlockImg`).
+- CSS `.acg-item`/`.acg-list`/`.acg-toggle`. Sin backend/RLS (admin ya lee block_completions de todos, como el
+  ranking). Confirmado con el usuario: orden reciente primero, colapso 3+Ver más, dedup por atleta. syntax-check OK.

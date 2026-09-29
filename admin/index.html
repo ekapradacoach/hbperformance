@@ -635,6 +635,10 @@
   }
   .athlete-comment .ac-img img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .2s ease; }
   .athlete-comment .ac-img:hover img { transform: scale(1.06); }
+  /* Lista de comentarios grupales (varios atletas en un mismo bloque compartido) */
+  .athlete-comment.acg .acg-item { padding: 10px 0; border-top: 1px solid #232323; }
+  .athlete-comment.acg .acg-list .acg-item:first-child { padding-top: 4px; border-top: none; }
+  .athlete-comment.acg .acg-toggle { margin-top: 10px; }
   /* Cuerpo del modal de imagen del atleta */
   .bi-modal-body { text-align: center; }
   .bi-modal-body img { max-width: 100%; max-height: 76vh; border-radius: 10px; display: block; margin: 0 auto; }
@@ -3013,17 +3017,24 @@
     // Base pública del bucket de imágenes de bloque (Supabase Storage)
     const BLOCK_IMG_BASE = 'https://frjlafrgdcbomdnentbe.supabase.co/storage/v1/object/public/block-images/';
 
+    // Trae los comentarios que dejaron los atletas en cada bloque (block_completions.comment). Solo lectura.
+    //  · ASESORÍA (editorCtx.athleteId): un comentario por bloque (el del atleta) → b.athleteComment (objeto).
+    //  · GRUPAL (sin athleteId): varios atletas en el mismo bloque compartido → b.athleteComments (array),
+    //    dedup por atleta (completación más reciente) y ordenado de más reciente a más viejo.
+    // Degrada si no hay datos. Requiere editorCtx (el editor siempre lo setea).
     async function attachAthleteComments(blockList) {
-      blockList.forEach(b => { b.athleteComment = null; });
-      if (!editorCtx || !editorCtx.athleteId) return;
+      blockList.forEach(b => { b.athleteComment = null; b.athleteComments = null; });
+      if (!editorCtx) return;
       const ids = blockList.map(b => b.id);
       if (!ids.length) return;
-      const { data, error } = await sb.from('block_completions')
-        .select('id, block_id, comment, completed_at, athlete:profiles!athlete_id(full_name)')
-        .in('block_id', ids).eq('athlete_id', editorCtx.athleteId);
+      const isAsesoria = !!editorCtx.athleteId;
+
+      let q = sb.from('block_completions')
+        .select('id, block_id, athlete_id, comment, completed_at, athlete:profiles!athlete_id(full_name)')
+        .in('block_id', ids);
+      if (isAsesoria) q = q.eq('athlete_id', editorCtx.athleteId);
+      const { data, error } = await q;
       if (error) { console.warn('block_completions no disponible:', error.message); return; }
-      const byBlock = {};
-      (data || []).forEach(c => { byBlock[c.block_id] = c; });
 
       // Imágenes que subió el atleta, indexadas por completion_id (degrada si falta tabla/bucket)
       const imgByComp = {};
@@ -3038,20 +3049,40 @@
         });
       }
 
-      blockList.forEach(b => {
-        const c = byBlock[b.id];
-        if (!c) return;
+      // Fila de completion → objeto de comentario mostrable (null si no tiene ni texto ni fotos)
+      const toComment = (c) => {
         const images = imgByComp[c.id] || [];
         const hasComment = c.comment && c.comment.trim();
-        if (hasComment || images.length) {
-          b.athleteComment = {
-            comment: hasComment ? c.comment : '',
-            completed_at: c.completed_at,
-            name: (c.athlete && c.athlete.full_name) || (editorCtx.athleteName || 'El atleta'),
-            images
-          };
-        }
-      });
+        if (!hasComment && !images.length) return null;
+        return {
+          comment: hasComment ? c.comment : '',
+          completed_at: c.completed_at,
+          name: (c.athlete && c.athlete.full_name) || (editorCtx.athleteName || 'El atleta'),
+          images
+        };
+      };
+
+      if (isAsesoria) {
+        // Un comentario por bloque (el del atleta individual). Sin colapso.
+        const byBlock = {};
+        (data || []).forEach(c => { byBlock[c.block_id] = c; });
+        blockList.forEach(b => { if (byBlock[b.id]) b.athleteComment = toComment(byBlock[b.id]); });
+      } else {
+        // Grupal: dedup por atleta (completación más reciente) + orden reciente→viejo.
+        const byBlock = {}; // block_id -> { athlete_id -> completion más reciente }
+        (data || []).forEach(c => {
+          const map = byBlock[c.block_id] = byBlock[c.block_id] || {};
+          const prev = map[c.athlete_id];
+          if (!prev || String(c.completed_at || '') > String(prev.completed_at || '')) map[c.athlete_id] = c;
+        });
+        blockList.forEach(b => {
+          const map = byBlock[b.id];
+          if (!map) return;
+          const list = Object.values(map).map(toComment).filter(Boolean)
+            .sort((x, y) => String(y.completed_at || '').localeCompare(String(x.completed_at || '')));
+          if (list.length) b.athleteComments = list;
+        });
+      }
     }
 
     // Carga los exercise_links de una lista de bloques y los adjunta como b.exercises.
@@ -3144,25 +3175,53 @@
             </div>
             <button class="btn-add-ex ex-add-btn">+ Agregar ejercicio</button>
           </div>
-          ${athleteCommentHtml(b)}
+          ${athleteCommentHtml(b)}${athleteCommentsListHtml(b)}
         </div>
       </div>`;
     }
 
-    // Sección de solo lectura con el comentario + las fotos que dejó el atleta (asesorías)
+    // Miniaturas de fotos de un comentario (reusable entre asesoría y grupal)
+    function acImgsHtml(ac) {
+      if (!ac.images || !ac.images.length) return '';
+      return `<div class="ac-imgs">${ac.images.map(im =>
+        `<div class="ac-img" data-url="${esc(im.url)}"><img src="${esc(im.url)}" alt="Foto del atleta"></div>`).join('')}</div>`;
+    }
+
+    // Sección de solo lectura con el comentario + las fotos que dejó el atleta (ASESORÍAS: un comentarista)
     function athleteCommentHtml(b) {
       if (!b.athleteComment) return '';
       const ac = b.athleteComment;
       const fecha = ac.completed_at ? fmtDate(ac.completed_at) : '';
-      const imgsHtml = (ac.images && ac.images.length)
-        ? `<div class="ac-imgs">${ac.images.map(im =>
-            `<div class="ac-img" data-url="${esc(im.url)}"><img src="${esc(im.url)}" alt="Foto del atleta"></div>`).join('')}</div>`
-        : '';
       return `<div class="athlete-comment">
         <div class="ac-label">💬 Comentario del atleta:</div>
         ${ac.comment ? `<div class="ac-text">${esc(ac.comment)}</div>` : ''}
-        ${imgsHtml}
+        ${acImgsHtml(ac)}
         <div class="ac-meta">— ${esc(ac.name)}${fecha ? ' · ' + esc(fecha) : ''}</div>
+      </div>`;
+    }
+
+    // Lista de comentarios de un bloque GRUPAL (varios atletas). Colapso 3 + "Ver más" (estilo rank-toggle).
+    function athleteCommentsListHtml(b) {
+      const list = b.athleteComments;
+      if (!list || !list.length) return '';
+      const itemHtml = (ac) => {
+        const fecha = ac.completed_at ? fmtDate(ac.completed_at) : '';
+        return `<div class="acg-item">
+          ${ac.comment ? `<div class="ac-text">${esc(ac.comment)}</div>` : ''}
+          ${acImgsHtml(ac)}
+          <div class="ac-meta">— ${esc(ac.name)}${fecha ? ' · ' + esc(fecha) : ''}</div>
+        </div>`;
+      };
+      const first = list.slice(0, 3).map(itemHtml).join('');
+      const rest = list.slice(3).map(itemHtml).join('');
+      const moreBtn = (list.length > 3)
+        ? `<button type="button" class="rank-toggle acg-toggle" data-expanded="0">Ver más (${list.length - 3})</button>`
+        : '';
+      return `<div class="athlete-comment acg">
+        <div class="ac-label">💬 Comentarios de los atletas (${list.length}):</div>
+        <div class="acg-list">${first}</div>
+        ${rest ? `<div class="acg-rest" style="display:none;">${rest}</div>` : ''}
+        ${moreBtn}
       </div>`;
     }
 
@@ -3209,6 +3268,18 @@
       // Fotos del atleta (miniaturas → modal de imagen)
       card.querySelectorAll('.ac-img').forEach(el =>
         el.addEventListener('click', () => openBlockImageModal(el.dataset.url)));
+
+      // "Ver más / Ver menos" de los comentarios grupales (colapso 3 + resto)
+      const acgToggle = card.querySelector('.acg-toggle');
+      if (acgToggle) acgToggle.addEventListener('click', () => {
+        const rest = card.querySelector('.acg-rest');
+        if (!rest) return;
+        const expanded = acgToggle.dataset.expanded === '1';
+        rest.style.display = expanded ? 'none' : 'block';
+        acgToggle.dataset.expanded = expanded ? '0' : '1';
+        const hiddenCount = rest.querySelectorAll('.acg-item').length;
+        acgToggle.textContent = expanded ? ('Ver más (' + hiddenCount + ')') : 'Ver menos';
+      });
 
       // Reordenar / eliminar
       card.querySelector('.act-up').addEventListener('click', () => moveBlock(b, -1));
