@@ -236,6 +236,15 @@ hybrid_variant, redirectTo }`) que crea el user en Auth (invite **siempre**) + e
 El código de la function **ya está versionado en el repo** (`supabase/functions/create-athlete/index.ts`);
 ⚠️ **falta (re)deployarla en Supabase** tras cambios (ver CONTEXTO.md 2026-07-27).
 
+**Fijar contraseña temporal (sin mail)** — panel del alumno, botón **"🔑 Fijar contraseña temporal"** (`spSetPw`
+→ modal `#modalSetPw`): genera una contraseña aleatoria (editable), llama a la Edge Function **`set-athlete-password`**
+(`POST /functions/v1/set-athlete-password`, `verify_jwt` ON, Bearer = access_token del admin, body
+`{ athlete_email, new_password }`) que valida `role='admin'` (patrón create-athlete) y hace
+`admin.auth.admin.updateUserById(id, { password })` resolviendo el id por email desde `profiles`. Si OK, muestra la
+contraseña en pantalla con botón "Copiar" para pasarla por WhatsApp. Sirve para destrabar alumnos cuando el invite/
+recovery de Supabase falla por prescan de Gmail/Outlook (el link se consume antes de abrirlo). Usa `SERVICE_ROLE_KEY`
+(ya existe a nivel proyecto). ⚠️ deploy manual: `supabase functions deploy set-athlete-password` (2026-10-02).
+
 **Dominio de producción:** el sitio vive en **`https://hbperformance.fit`**. Todos los `redirectTo` de
 `resetPasswordForEmail` (login "¿Olvidaste tu contraseña?" y Perfil "Cambiar contraseña") apuntan
 **hardcodeados** a `https://hbperformance.fit/app/set-password.html` (antes usaban `window.location.origin`).

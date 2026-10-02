@@ -1212,6 +1212,13 @@
   .sp-muted { color: var(--text-secondary); font-size: 0.9rem; }
   .sp-actions { display: flex; flex-direction: column; gap: 10px; }
   .sp-actions button { width: 100%; justify-content: center; }
+  /* Modal fijar contraseña */
+  .pw-sub { color: var(--text-secondary); font-size: .9rem; margin: 0 0 12px; }
+  .pw-note { color: var(--text-secondary); font-size: .8rem; line-height: 1.45; margin: 10px 0 4px; }
+  .pw-ok { color: #4cae7f; font-weight: 700; margin-bottom: 12px; }
+  .pw-box { display: flex; align-items: center; gap: 10px; background: #0D0D0D; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
+  .pw-box code { flex: 1; font-size: 1.1rem; letter-spacing: .5px; color: var(--accent); word-break: break-all; font-family: ui-monospace, Menlo, Consolas, monospace; }
+  #setPwValue { font-family: ui-monospace, Menlo, Consolas, monospace; letter-spacing: .5px; }
 
   /* ================= Mensajes (chat) ================= */
   .msg-layout {
@@ -2232,6 +2239,38 @@
     </div>
   </div>
 
+  <!-- =============== Modal: Fijar contraseña temporal (admin) =============== -->
+  <div class="modal-backdrop" id="modalSetPw">
+    <div class="modal">
+      <div class="modal-head">
+        <h3>🔑 Fijar contraseña temporal</h3>
+        <button class="modal-close" data-close="modalSetPw">✕</button>
+      </div>
+      <div class="modal-error" id="setPwError"></div>
+      <div id="setPwForm">
+        <p class="pw-sub">Alumno: <b id="setPwWho"></b></p>
+        <div class="field">
+          <label for="setPwValue">Nueva contraseña</label>
+          <input type="text" id="setPwValue" autocomplete="off" spellcheck="false">
+        </div>
+        <button type="button" class="btn-sm" id="setPwGen">🎲 Generar otra</button>
+        <div class="pw-note">Fija la contraseña directamente (sin mail). Después se la pasás a la persona por WhatsApp; puede cambiarla desde su perfil cuando entre.</div>
+        <div class="modal-actions">
+          <button class="btn-ghost" data-close="modalSetPw">Cancelar</button>
+          <button class="btn-primary" id="setPwSave">Fijar contraseña</button>
+        </div>
+      </div>
+      <div id="setPwResult" style="display:none;">
+        <div class="pw-ok">✅ Contraseña fijada para <b id="setPwOkWho"></b>.</div>
+        <div class="pw-box"><code id="setPwOkValue"></code><button type="button" class="btn-sm" id="setPwCopy">📋 Copiar</button></div>
+        <div class="pw-note">Pasale por WhatsApp: <b>su email</b> + esta contraseña. Entra en <b>hbperformance.fit/app/login.html</b>.</div>
+        <div class="modal-actions">
+          <button class="btn-primary" data-close="modalSetPw">Listo</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- =============== Modal: Elegir plan de Hybrid (3 / 4 días) =============== -->
   <div class="modal-backdrop" id="modalHybridPlan">
     <div class="modal">
@@ -2809,6 +2848,7 @@
     if (btnAssignAthleteAlumnos) btnAssignAthleteAlumnos.addEventListener('click', () => openAssignAthleteModal('alumnos'));
 
     const CREATE_ATHLETE_URL = 'https://frjlafrgdcbomdnentbe.supabase.co/functions/v1/create-athlete';
+    const SET_PASSWORD_URL = 'https://frjlafrgdcbomdnentbe.supabase.co/functions/v1/set-athlete-password';
 
     // Mostrar/ocultar el selector de plan de Hybrid según el programa elegido
     document.getElementById('athleteProgram').addEventListener('change', (e) => {
@@ -4570,6 +4610,7 @@
         <div class="sp-actions">
           <button class="btn-primary" id="spGoPlan">📅 Ir a planificación</button>
           <button class="btn-ghost" id="spEdit">✏️ Editar</button>
+          <button class="btn-ghost" id="spSetPw">🔑 Fijar contraseña temporal</button>
           ${bajaBtn}
           ${delBtn}
           <button class="btn-ghost" id="spClose">❌ Cerrar</button>
@@ -4579,11 +4620,70 @@
       document.getElementById('spClose').addEventListener('click', closePanel);
       document.getElementById('spGoPlan').addEventListener('click', () => goToAthletePlanning(a));
       document.getElementById('spEdit').addEventListener('click', () => renderPanelEdit(a));
+      document.getElementById('spSetPw').addEventListener('click', () => openSetPwModal(a));
       const b = document.getElementById('spBaja');
       if (b) b.addEventListener('click', () => darDeBaja(a));
       const d = document.getElementById('spDelete');
       if (d) d.addEventListener('click', () => deleteAthleteProfile(a));
     }
+
+    // ---- Fijar contraseña temporal (admin, sin depender de links de mail) ----
+    let setPwAthlete = null;
+    // Contraseña legible y fuerte: sin caracteres ambiguos (O/0/I/l/1). crypto para aleatoriedad real.
+    function genPassword(len = 12) {
+      const abc = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789';
+      const arr = new Uint32Array(len);
+      crypto.getRandomValues(arr);
+      let s = '';
+      for (let i = 0; i < len; i++) s += abc[arr[i] % abc.length];
+      return s;
+    }
+    function openSetPwModal(a) {
+      setPwAthlete = a;
+      document.getElementById('setPwWho').textContent = (a.full_name || a.email || '');
+      document.getElementById('setPwValue').value = genPassword();
+      document.getElementById('setPwForm').style.display = '';
+      document.getElementById('setPwResult').style.display = 'none';
+      document.getElementById('setPwError').classList.remove('show');
+      openModal('modalSetPw');
+    }
+    async function setPwDo() {
+      const a = setPwAthlete;
+      if (!a) return;
+      const pw = document.getElementById('setPwValue').value.trim();
+      if (pw.length < 8) { modalError('setPwError', 'La contraseña debe tener al menos 8 caracteres.'); return; }
+      const btn = document.getElementById('setPwSave');
+      btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Fijando…';
+      document.getElementById('setPwError').classList.remove('show');
+      try {
+        const { data: { session } } = await sb.auth.getSession();
+        if (!session) { modalError('setPwError', 'Tu sesión expiró. Volvé a iniciar sesión.'); return; }
+        const res = await fetch(SET_PASSWORD_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+          body: JSON.stringify({ athlete_email: a.email, new_password: pw })
+        });
+        const result = await res.json();
+        if (!result.ok) { modalError('setPwError', result.error || 'No se pudo fijar la contraseña.'); return; }
+        // Éxito → mostrar la contraseña para copiar y pasar por WhatsApp
+        document.getElementById('setPwOkWho').textContent = (a.full_name || a.email || '');
+        document.getElementById('setPwOkValue').textContent = pw;
+        document.getElementById('setPwForm').style.display = 'none';
+        document.getElementById('setPwResult').style.display = '';
+      } catch (err) {
+        modalError('setPwError', 'Error: ' + (err.message || err));
+      } finally {
+        btn.disabled = false; btn.textContent = 'Fijar contraseña';
+      }
+    }
+    document.getElementById('setPwGen').addEventListener('click', () => {
+      document.getElementById('setPwValue').value = genPassword();
+    });
+    document.getElementById('setPwSave').addEventListener('click', setPwDo);
+    document.getElementById('setPwCopy').addEventListener('click', () => {
+      const v = document.getElementById('setPwOkValue').textContent;
+      if (navigator.clipboard) navigator.clipboard.writeText(v).then(() => flash('📋 Contraseña copiada.')).catch(() => {});
+    });
 
     function renderPanelEdit(a) {
       const spInner = document.getElementById('spInner');

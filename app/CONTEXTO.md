@@ -2833,3 +2833,18 @@ Cambios (`admin/index.html`, solo frontend):
   Se extrajo `acImgsHtml` (reusa miniaturas entre asesoría y grupal; fotos → `#modalBlockImg`).
 - CSS `.acg-item`/`.acg-list`/`.acg-toggle`. Sin backend/RLS (admin ya lee block_completions de todos, como el
   ranking). Confirmado con el usuario: orden reciente primero, colapso 3+Ver más, dedup por atleta. syntax-check OK.
+
+## 2026-10-02 (a) — Fijar contraseña temporal del alumno (sin link de mail)
+Problema recurrente: el invite/recovery de Supabase falla porque Gmail/Outlook "prescanean" (consumen) el link
+antes de que la persona lo abra → no puede crear contraseña. Solución: vía admin que no depende de ningún mail.
+- **Edge Function nueva `set-athlete-password`** (`supabase/functions/set-athlete-password/index.ts`, verify_jwt ON):
+  body `{ athlete_email, new_password }`. Valida que QUIEN LLAMA es `role='admin'` (patrón create-athlete:
+  userClient con el JWT del admin). Resuelve el userId por email desde `profiles` (`.eq`, exacto; profiles.id =
+  auth.users.id) y hace `admin.auth.admin.updateUserById(id, { password })`. Min 8 chars. Devuelve `{ ok }` /
+  `{ ok:false, error }`. esbuild OK. Secrets ya existían a nivel proyecto (SERVICE_ROLE_KEY/SUPABASE_URL/ANON_KEY)
+  → NO hubo que agregar nada.
+- **UI admin** (`admin/index.html`): botón "🔑 Fijar contraseña temporal" en el panel del alumno (`spSetPw`) →
+  modal `#modalSetPw`: input con contraseña random (genPassword, crypto, sin caracteres ambiguos) + "🎲 Generar
+  otra"; al fijar OK muestra la contraseña con botón "📋 Copiar" para pasarla por WhatsApp. `SET_PASSWORD_URL`
+  constante. syntax-check OK.
+- ⚠️ Pendiente usuario: **deploy** `supabase functions deploy set-athlete-password` (verify_jwt ON por default).
