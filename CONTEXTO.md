@@ -433,3 +433,44 @@ Registro cronológico de lo que se va haciendo. Entrada nueva arriba o abajo seg
 - Verificado en desktop y mobile: caras visibles, cards parejas. ✅
 - Nota: `coach-erika.png` es de baja resolución (433px ancho) → en desktop se agranda un poco;
   si se consigue una más grande, mejora la nitidez.
+
+### 2026-10-11 — Seguimiento de conversión: eventos del Pixel + UTMs en las landings de programas
+- **Objetivo:** poder medir el embudo (visita → abre checkout → completa el formulario → paga) antes de
+  correr Meta Ads, y saber quién entró/prerellenó el formulario sin depender de DMs.
+- **Pixel (ID `1008115118926012`)**: ya estaban PageView (todas las páginas) y Purchase (`pago-exitoso.html`,
+  desde `localStorage.hb_purchase`, deduplicado con `sessionStorage.hb_purchase_fired`). Se agregaron en
+  `hybrid.html`, `fuerza-corredores.html` y `crossfit.html`:
+  - `ViewContent` al cargar la página (`content_name`, `content_ids:[PAY_PROGRAM]`).
+  - `InitiateCheckout` al abrir el modal de pago (`openPayModal`), con `value` = precio leído de `#precio-ars`
+    y `currency: 'ARS'`.
+  - `Lead` en `submitPay()` cuando el insert en `pending_subscriptions` salió bien (antes de ir a Mercado Pago).
+  - Helpers `hbTrack()` (envuelve `fbq` en try/catch, nunca rompe el pago) y `hbPrice()`.
+  - `SubscribedButtonClick` que se ve en Pixel Helper es automático de Meta, no lo agregamos nosotros.
+- **UTMs:** `HB_UTM` captura `utm_source/medium/campaign/content` de la URL (máx. 100 car.) y los guarda en
+  `sessionStorage.hb_utm` para que sobrevivan a la navegación interna. Se insertan junto con el pending en
+  `pending_subscriptions`. **Fallback:** si el insert con UTMs falla (columnas inexistentes), reintenta sin ellas
+  para no bloquear nunca un pago.
+- **SQL (ya ejecutado por Erika en Supabase):** columnas `utm_source`, `utm_medium`, `utm_campaign`, `utm_content`
+  (text, nullable) en `pending_subscriptions`.
+- **Convención de links:** DMs automáticos `?utm_source=instagram&utm_medium=dm&utm_campaign=corro` (y `=hibrido`);
+  anuncios (cuando se corran) `utm_source=instagram&utm_medium=paid&utm_campaign=<nombre>&utm_content=<creativo>`.
+  Los parámetros de URL solo hacen falta para links de anuncios; todavía no se corren ads.
+- **Tests (Playwright, Supabase stubbeado):** en los 3 landings salen exactamente PageView → ViewContent →
+  InitiateCheckout → Lead; insert con UTMs OK; sin UTMs el insert es el original; con columnas inexistentes
+  reintenta sin UTMs y sigue al pago. Sin errores JS.
+- ✅ **Deploy:** commiteado y pusheado a `main` el 2026-10-11 (GitHub Pages). Antes del push, Pixel Helper en
+  hbperformance.fit mostraba solo PageView + SubscribedButtonClick (`sw.js` es push-only, no cachea).
+  **Pendiente:** re-verificar con Pixel Helper que aparezcan ViewContent / InitiateCheckout / Lead en vivo.
+- 📝 CLAUDE.md (sección "Tracking — Meta Pixel") actualizado con estos eventos y la captura de UTMs.
+- 🔎 **Hallazgo abierto (pending_subscriptions):** `process-payment` borra el pending al terminar el alta
+  (~línea 470, también como guard de idempotencia) y lo matchea por email del pagador (case-insensitive; fallback
+  por recencia solo si hay un único pending en 15 min). Aun así, **una alumna compró y su fila seguía en pending**.
+  Posibles causas a revisar en logs de la Edge Function: el pago se procesó por otra vía/rama (renovación o
+  "webhook redundante" que no borra), el alta quedó en manual (`ALTA MANUAL REQUERIDA`), o falló el delete.
+  Hasta confirmarlo, **no asumir que "pending = no pagó"**: cruzar con `profiles`/`payments`.
+- Estado de los leads actuales (oct-2026, ver `pending_subscriptions` en Supabase): 1 compró; 1 lead de
+  Fuerza para Corredores y 1 de CrossFit no completaron el pago. Siguiente paso sugerido: seguimiento breve a ambos.
+  (Sin nombres acá: el repo es público.)
+- **Pendientes de marketing:** confirmar cuenta publicitaria correcta (HB Performance vs "PAYPAL"), recrear la
+  audiencia de retargeting en esa cuenta, filmar videos de CTA para retargeting, lanzar campaña de Tráfico
+  (~USD 130 tráfico / ~70 retargeting), y cerrar el copy de la slide 5 del carrusel Hybrid.

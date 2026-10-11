@@ -133,6 +133,18 @@ en el muro para revelar las 4 restantes (`.testi-more`), cambiando a "Ver menos"
   `localStorage` + flag `sessionStorage.hb_purchase_fired` (dedupe: no duplica en refresh). **Fallback:** si no
   hay stash (otro dispositivo / limpiado), dispara `Purchase` **sin value** (cuenta la conversión igual).
   `localStorage` sobrevive el ida/vuelta a MP (es por-origen `hbperformance.fit`).
+- **Eventos de embudo** (2026-10-11, solo en las 3 landings grupales `crossfit`/`hybrid`/`fuerza-corredores`):
+  helpers `hbTrack(ev, params)` (envuelve `fbq` en try/catch, nunca rompe el pago) y `hbPrice()` (lee `#precio-ars`).
+  - `ViewContent` al cargar (`content_name`, `content_ids:[PAY_PROGRAM]`, `content_type:'product'`).
+  - `InitiateCheckout` en `openPayModal()` (con `value` ARS + `currency`).
+  - `Lead` en `submitPay()` cuando el insert en `pending_subscriptions` salió OK (antes de ir a MP).
+  - `SubscribedButtonClick` lo genera Meta automáticamente (no es nuestro).
+- **UTMs** (2026-10-11): `HB_UTM` toma `utm_source/medium/campaign/content` de la URL (máx. 100 car.), los guarda en
+  `sessionStorage.hb_utm` y los manda en el INSERT de `pending_subscriptions` (columnas text nullable, ya creadas en
+  Supabase). Si el insert con UTMs falla → **reintenta sin UTMs** (nunca bloquea un pago).
+  Convención: DMs `?utm_source=instagram&utm_medium=dm&utm_campaign=<programa>`; ads
+  `utm_source=instagram&utm_medium=paid&utm_campaign=<nombre>&utm_content=<creativo>`.
+- ⚠️ **Repo público**: no escribir nombres/datos de alumnos o leads en CLAUDE.md / CONTEXTO.md.
 - ⚠️ Limitación conocida: el pixel del navegador **pierde compras** con ad-blockers / Safari ITP. Mejora futura:
   **Conversions API server-side** desde `process-payment` (no implementado). Por ahora, versión estándar.
 

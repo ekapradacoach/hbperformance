@@ -357,11 +357,36 @@ src="https://www.facebook.com/tr?id=1008115118926012&ev=PageView&noscript=1"
   // Programa de esta página (para el INSERT en pending_subscriptions + la suscripción por API)
   const PAY_PROGRAM = 'corredores';
 
+  // ---- Seguimiento (Meta Pixel + UTMs). Todo en try/catch: si falla, no toca el flujo de pago. ----
+  function hbTrack(ev, params) { try { if (typeof fbq === 'function') fbq('track', ev, params || {}); } catch (e) {} }
+  function hbPrice() {
+    try {
+      var el = document.getElementById('precio-ars');
+      var v = el ? Number(String(el.textContent).replace(/[^\d]/g, '')) : NaN;
+      return (!isNaN(v) && v > 0) ? { value: v, currency: 'ARS' } : { currency: 'ARS' };
+    } catch (e) { return { currency: 'ARS' }; }
+  }
+  // UTMs: se leen del link con el que llegó la persona y se recuerdan durante la visita
+  var HB_UTM = (function () {
+    var out = {};
+    try {
+      var q = new URLSearchParams(location.search);
+      ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content'].forEach(function (k) {
+        var v = q.get(k); if (v) out[k] = v.slice(0, 100);
+      });
+      if (Object.keys(out).length) sessionStorage.setItem('hb_utm', JSON.stringify(out));
+      else { var s = sessionStorage.getItem('hb_utm'); if (s) out = JSON.parse(s) || {}; }
+    } catch (e) {}
+    return out;
+  })();
+  hbTrack('ViewContent', { content_name: 'Fuerza para Corredores', content_ids: [PAY_PROGRAM], content_type: 'product' });
+
   // ---- Modal de datos previo al pago ----
   var payModal = document.getElementById('payModal');
   function openPayModal() {
     document.getElementById('payError').classList.remove('show');
     payModal.classList.add('show');
+    hbTrack('InitiateCheckout', Object.assign({ content_name: 'Fuerza para Corredores', content_ids: [PAY_PROGRAM] }, hbPrice()));
     setTimeout(function () { document.getElementById('payName').focus(); }, 50);
   }
   function closePayModal() { payModal.classList.remove('show'); }
@@ -382,8 +407,17 @@ src="https://www.facebook.com/tr?id=1008115118926012&ev=PageView&noscript=1"
     var btn = document.getElementById('payContinue');
     btn.disabled = true; btn.textContent = 'Procesando…';
     try {
-      var res = await sb.from('pending_subscriptions').insert({ full_name: name, email: email, phone: phone || null, program: PAY_PROGRAM });
+      var row = { full_name: name, email: email, phone: phone || null, program: PAY_PROGRAM };
+      var res;
+      if (Object.keys(HB_UTM).length) {
+        // Intenta guardar también el origen (UTMs). Si esas columnas todavía no existen en Supabase, reintenta sin ellas.
+        res = await sb.from('pending_subscriptions').insert(Object.assign({}, row, HB_UTM));
+        if (res.error) res = await sb.from('pending_subscriptions').insert(row);
+      } else {
+        res = await sb.from('pending_subscriptions').insert(row);
+      }
       if (res.error) { btn.disabled = false; btn.textContent = 'Continuar al pago →'; payErr('No se pudo continuar: ' + res.error.message); return; }
+      hbTrack('Lead', { content_name: 'Fuerza para Corredores', content_ids: [PAY_PROGRAM] });
 
       // Crear la suscripción POR API (queda asociada a la app → MP dispara el webhook)
       // y redirigir al checkout (init_point) que devuelve la Edge Function create-subscription.
