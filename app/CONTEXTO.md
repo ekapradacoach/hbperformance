@@ -166,7 +166,7 @@ manualmente en Supabase → Edge Functions**, no está en este repo. El código 
     ('price_asesoria_usd', '150'),
     ('mp_link_crossfit', '#'), ('mp_link_hybrid', '#'), ('mp_link_corredores', '#'),
     ('paypal_link_crossfit', '#'), ('paypal_link_hybrid', '#'), ('paypal_link_corredores', '#'),
-    ('whatsapp_erika', '5491169377543'), ('whatsapp_gonza', '5491122895924');
+    ('whatsapp_erika', '5491159574043'), ('whatsapp_gonza', '5491122895924');
   ```
   El front degrada con elegancia si la tabla no existe (admin avisa; landing mantiene sus defaults).
 - **`planning_days.athlete_id` uuid (FK profiles.id, nullable)** — necesario para el editor de
@@ -569,14 +569,14 @@ pago/checkout** (`create-subscription`/`process-payment`/`cancel-subscription` i
   `ATHLETE.subscription_status='cancelled'` y **re-renderiza** la card (`renderSubscription`): badge →
   **Cancelado**, se oculta el botón "Cancelar", aparece "Volver a suscribirme" (al landing del programa).
   Si error / `ok:false` → nuevo `showCancelError`: título "No se pudo cancelar" + `result.error` en rojo
-  (clase `.cm-error` nueva) + botón **WhatsApp** `wa.me/5491169377543` (target _blank) + "Cerrar", **sin**
+  (clase `.cm-error` nueva) + botón **WhatsApp** `wa.me/5491159574043` (target _blank) + "Cerrar", **sin**
   cambiar el estado. Se eliminó el `setTimeout`/TODO del mock.
   - **Verificado** con harness temporal (fake de Supabase + `fetch` stubeado configurable, ya borrado;
     **sin errores de consola**): con atleta **activo** (crossfit) → badge "Activo", botón "Cancelar"
     presente; abrir modal → "Sí, cancelar" → **fetch correcto** (URL de la function, `POST`, `Bearer
     tok-123`); con `{ok:true}` → modal "Tu suscripción fue cancelada.", badge → **Cancelado**, botón
     "Cancelar" desaparece, aparece "Volver a suscribirme" (`../crossfit.html`); con `{ok:false, error:'…'}`
-    → "No se pudo cancelar" + el error en rojo + WhatsApp `https://wa.me/5491169377543` (_blank) + "Cerrar",
+    → "No se pudo cancelar" + el error en rojo + WhatsApp `https://wa.me/5491159574043` (_blank) + "Cerrar",
     y el estado queda **Activo** (no se toca). `app/dashboard.html` pasa `new Function` (syntax OK).
   - ⚠️ Requiere la Edge Function **`cancel-subscription`** deployada en Supabase (cancela en MP + pone
     `subscription_status='cancelled'` server-side). El front solo la invoca.
@@ -616,7 +616,7 @@ pago/checkout** (`create-subscription`/`process-payment`/`cancel-subscription` i
   $225.000 ARS… Pago vía PayPal o Mercado Pago" y el "El tipo de cambio se actualiza mensualmente", más el
   eyebrow "Precio"). En su lugar quedó un texto simple `.asesoria-nota`: **"Las asesorías son
   personalizadas. El valor se coordina directamente con tu coach."**. Se **mantuvo el botón de WhatsApp**
-  (`.coach-cta` → `btn-filled`, Erika `wa.me/5491169377543`, Gonza `wa.me/5491122895924`, mensaje
+  (`.coach-cta` → `btn-filled`, Erika `wa.me/5491159574043`, Gonza `wa.me/5491122895924`, mensaje
   pre-cargado intacto). Nota: estos archivos no tenían botones MP/PayPal como tal; el pago solo se
   mencionaba en el texto del `.price-box`, que ya no está. Las reglas CSS `.price-box` quedaron sin uso
   (inofensivas). Verificado: 0 refs a "USD 150"/"PayPal"/"Mercado" en el HTML, 1 nota nueva y 1 CTA de
@@ -817,7 +817,7 @@ pago/checkout** (`create-subscription`/`process-payment`/`cancel-subscription` i
     campos "Nueva contraseña" con hint "Mínimo 8 caracteres" + "Repetir contraseña", botón dorado
     "ACTIVAR CUENTA", bloques de error rojo / éxito verde); (3) **link inválido/expirado** (⚠️ +
     "Este link ya fue usado o expiró. Contactá a tu coach." + botón WhatsApp outline dorado a
-    `wa.me/5491169377543`, target _blank); (4) **éxito** (✅ "¡Bienvenido/a!" + "Tu cuenta está activa.
+    `wa.me/5491159574043`, target _blank); (4) **éxito** (✅ "¡Bienvenido/a!" + "Tu cuenta está activa.
     Redirigiendo…").
   - **Detección del token** (`detectInvite`): `getSession()` (Supabase parsea el hash solo via
     `detectSessionInUrl`) → si hay sesión, muestra el form; si no, **parseo manual del hash**
@@ -834,7 +834,7 @@ pago/checkout** (`create-subscription`/`process-payment`/`cancel-subscription` i
     "Cambiar contraseña" (Perfil) y "¿Olvidaste tu contraseña?" (login).
   - **Verificado en el navegador** (file://, sin token; sin errores de consola): CDN + `supabase.js`
     cargan (`sb` disponible); sin token en la URL el page arranca en "cargando" y cae a **inválido** a
-    los 4 s (heading "Link no válido", WhatsApp `https://wa.me/5491169377543` target _blank);
+    los 4 s (heading "Link no válido", WhatsApp `https://wa.me/5491159574043` target _blank);
     **formulario** → validación de longitud ("La contraseña debe tener al menos 8 caracteres.") y de
     coincidencia ("Las contraseñas no coinciden."); **éxito** (stub de `updateUser` OK) → mensaje verde
     inline + estado ✅ + redirect a `dashboard.html` programado a 2 s. (Los screenshots del pane
@@ -1254,13 +1254,13 @@ pago/checkout** (`create-subscription`/`process-payment`/`cancel-subscription` i
     cancelar" en rojo). Cierra por "Volver" o clickeando el fondo.
   - Al confirmar (`confirmCancel`): muestra "Procesando cancelación…" (spinner) y a los ~1.2s cambia a un
     mensaje amigable ("Cancelación no disponible aún… escribinos a WhatsApp") con botón **WhatsApp**
-    (`wa.me/5491169377543`, target=_blank) + "Cerrar". **NO cambia `subscription_status`** (no hay baja
+    (`wa.me/5491159574043`, target=_blank) + "Cerrar". **NO cambia `subscription_status`** (no hay baja
     real todavía). Hay un comentario `// TODO:` con los 3 pasos para integrar MP (Edge Function
     `cancel-subscription` con `mp_subscription_id` → MP API → webhook actualiza el estado).
   - **Verificado** con harness temporal (fake de Supabase, ya borrado; sin errores de consola): con
     estado **active** el botón aparece; abre el modal (título/texto/botones correctos); "Volver" y click
     en el fondo cierran; "Sí, cancelar" → "Procesando cancelación…" con spinner → mensaje final + botón
-    WhatsApp a `https://wa.me/5491169377543` (target _blank) + "Cerrar"; el estado en la DB queda `active`.
+    WhatsApp a `https://wa.me/5491159574043` (target _blank) + "Cerrar"; el estado en la DB queda `active`.
     Con estado **cancelled/pending** el botón NO aparece (y en cancelled sigue estando "Volver a
     suscribirme"). El `dashboard.html` real redirige a login sin sesión y no arroja errores de parseo.
   - ⚠️ Pendiente: **Edge Function `cancel-subscription`** (recibe `mp_subscription_id`, cancela en MP; el

@@ -275,7 +275,7 @@ Registro cronológico de lo que se va haciendo. Entrada nueva arriba o abajo seg
   aclaración tipo de cambio) → **CTA WhatsApp** (`btn-filled` ancho).
 - **Acordeón:** `.acc-item`/`.acc-header`/`.acc-body`; abre/cierra con `max-height` (JS setea
   `scrollHeight`), **uno abierto a la vez**, ícono "+" que rota a "×". Verificado.
-- Links CTA (WhatsApp con mensaje pre-cargado): Erika `wa.me/5491169377543`, Gonza `wa.me/5491122895924`.
+- Links CTA (WhatsApp con mensaje pre-cargado): Erika `wa.me/5491159574043`, Gonza `wa.me/5491122895924`.
 - Los botones "Quiero esta asesoría" del index **ya linkeaban** a estas páginas (no hubo que tocar el index).
 - ⚠️ Las fotos de coach son recortes verticales con fondo transparente; como hero a pantalla completa
   (cover) se ven a lo ancho con overlay. Erika queda bien con `cover` (`center 18%`).
@@ -474,3 +474,13 @@ Registro cronológico de lo que se va haciendo. Entrada nueva arriba o abajo seg
 - **Pendientes de marketing:** confirmar cuenta publicitaria correcta (HB Performance vs "PAYPAL"), recrear la
   audiencia de retargeting en esa cuenta, filmar videos de CTA para retargeting, lanzar campaña de Tráfico
   (~USD 130 tráfico / ~70 retargeting), y cerrar el copy de la slide 5 del carrusel Hybrid.
+
+### 2026-10-14 — Nuevo número de WhatsApp oficial
+- Número de Erika `5491169377543` → **`5491159574043`** (+54 9 11 5957-4043) en los links hardcodeados:
+  `asesoria-erika.html` (CTA, se conservó el `?text=` precargado), `app/set-password.html` (link inválido),
+  `app/dashboard.html` (error al cancelar). Docs actualizadas (CLAUDE.md, app/CLAUDE.md, app/CONTEXTO.md;
+  la entrada histórica del cambio anterior quedó como estaba).
+- El resto de las páginas (crossfit/hybrid/corredores, pago-exitoso, Guía del dashboard) toma el número de
+  `site_config.whatsapp_erika` → **se cambia desde admin → Configuración → Contacto (WhatsApp)**.
+- Número de Gonza sin cambios. Placeholder del input en admin (`9 11 3643 3379`) sin tocar.
+- ⏳ **Pendiente (Erika):** guardar `91159574043` en admin → Configuración → WhatsApp Erika (hasta entonces las landings usan el número anterior).
