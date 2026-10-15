@@ -288,18 +288,18 @@ Deno.serve(async (req) => {
       // --- Encontrar el pending correcto ---
       // PRIMARIO: por el email real del pagador (payerEmail). Comparación case-insensitive exacta en JS
       // (evita los comodines %/_ de ilike; los emails pueden llevar '_').
-      // FALLBACK: el pending más reciente del programa, SOLO si se creó hace <= 30 min.
+      // FALLBACK: por recencia (ventana de 15 min), ver abajo.
       let pending: any = null
 
       if (payerEmail) {
-        const target = payerEmail.toLowerCase().trim()
+        const target = normEmail(payerEmail)
         const { data: candidates } = await adminClient
           .from('pending_subscriptions')
           .select('*')
           .eq('program', program)
           .order('created_at', { ascending: false })
           .limit(50)
-        pending = (candidates ?? []).find((p: any) => (p.email || '').toLowerCase().trim() === target) ?? null
+        pending = (candidates ?? []).find((p: any) => normEmail(p.email) === target) ?? null
         if (pending) console.log('Pending matcheado por email del pagador:', payerEmail, program)
       }
 
@@ -315,13 +315,17 @@ Deno.serve(async (req) => {
           .eq('program', program)
           .gte('created_at', sinceIso)
           .order('created_at', { ascending: false })
-        if (recents && recents.length === 1) {
+        // Varios pendings recientes del MISMO email = una sola persona que reintentó el pago y llenó el modal
+        // otra vez (caso real 2026-10-15) → no es ambiguo: se toma el más reciente (recents viene DESC).
+        const recentEmails = new Set((recents ?? []).map((p: any) => normEmail(p.email)))
+        if (recents && recents.length >= 1 && recentEmails.size === 1) {
           pending = recents[0]
-          console.warn('Pending por recencia (email no matcheó exacto; ÚNICO pending reciente). payer:',
-            payerEmail || '(desconocido)', '| pending.email:', pending.email, '| program:', program)
+          console.warn('Pending por recencia (email no matcheó exacto; ' +
+            (recents.length === 1 ? 'ÚNICO pending reciente' : recents.length + ' pendings recientes del MISMO email') +
+            '). payer:', payerEmail || '(desconocido)', '| pending.email:', pending.email, '| program:', program)
         } else if (recents && recents.length > 1) {
           console.warn('Recencia AMBIGUA: ' + recents.length + ' pendings recientes de "' + program +
-            '" y el email del pagador no matcheó → no se adivina (queda para manual).')
+            '" con ' + recentEmails.size + ' emails distintos y el email del pagador no matcheó → no se adivina (queda para manual).')
         }
       }
 
@@ -467,11 +471,21 @@ Deno.serve(async (req) => {
         await registerMpPayment(adminClient, altaAthleteId, program, altaPayment, 'alta_nueva')
       }
 
-      // Limpiar pending_subscriptions (también actúa de guard de idempotencia)
+      // Limpiar pending_subscriptions (también actúa de guard de idempotencia). Se borran TODOS los pendings de
+      // ese email+programa, no solo el matcheado: si quedaba un duplicado de un reintento, un webhook redundante
+      // posterior lo agarraría por recencia. Se filtra en JS (comparación exacta, sin comodines de ilike).
+      const { data: samePendings } = await adminClient
+        .from('pending_subscriptions')
+        .select('id, email')
+        .eq('program', program)
+      const pendingIds = (samePendings ?? [])
+        .filter((p: any) => normEmail(p.email) === normEmail(email))
+        .map((p: any) => p.id)
+      if (!pendingIds.includes(pending.id)) pendingIds.push(pending.id)
       await adminClient
         .from('pending_subscriptions')
         .delete()
-        .eq('id', pending.id)
+        .in('id', pendingIds)
 
       console.log('User created/activated:', email)
     }
@@ -613,6 +627,11 @@ async function fetchPaymentFromAp(ap: any, mpToken: string | undefined): Promise
     console.warn('Error trayendo el payment de MP:', err)
     return null
   }
+}
+
+// Normaliza un email para comparar (case-insensitive, sin espacios). null/undefined → ''.
+function normEmail(e: unknown): string {
+  return String(e ?? '').toLowerCase().trim()
 }
 
 // Convierte date_approved (ISO con offset, o null) al día calendario de Argentina (UTC-3 fijo todo el año).

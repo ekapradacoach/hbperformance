@@ -617,8 +617,11 @@ despliegan a mano en Supabase):
   `resolveProgram`); `external_reference` es respaldo/validación. Si no puede determinar el programa → 422
   (no crea nada; antes caía a un fallback peligroso a 'crossfit', eliminado 2026-07-26).
   **Matching del pending (2026-08-13 (n)):** primario por **email del pagador** (payerEmail, del pago de MP);
-  fallback **por recencia SOLO si hay UN único pending del programa creado en los últimos 15 min** (si hay 2+ →
-  ambiguo → no adivina, cae a manual, para no cruzar datos entre compradores casi simultáneos). **Anti-falso-positivo
+  fallback **por recencia SOLO si los pendings del programa creados en los últimos 15 min son de UN único email**
+  (1 pending, o varios del **mismo** email = alguien que reintentó el pago y llenó el modal 2 veces → usa el más
+  reciente; desde 2026-10-15). Si hay **emails distintos** → ambiguo → no adivina, cae a manual (no cruzar datos
+  entre compradores casi simultáneos). Al terminar el alta **borra TODOS los pendings de ese email+programa**
+  (no solo el matcheado), para que un duplicado no quede colgado. **Anti-falso-positivo
   de webhook duplicado:** si no hay pending pero **YA existe un profile con ese `mp_subscription_id` (o el email del
   pagador)** → **skip silencioso** (`already_provisioned`), NO "ALTA MANUAL REQUERIDA" (los `preapproval updated`
   redundantes de MP entran a la rama authorized con el pending ya borrado y antes tiraban falso positivo).

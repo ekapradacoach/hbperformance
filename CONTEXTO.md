@@ -495,6 +495,11 @@ Registro cronológico de lo que se va haciendo. Entrada nueva arriba o abajo seg
   con el `mp_subscription_id` (preapproval id sacado del log `MP Preapproval:`), `INSERT` en `payments`
   (`alta_nueva`, bruto 40.000 / neto real de MP, `mp_payment_id` = n° de operación) y `DELETE` de los 2 pendings.
   Verificado: perfil activo, sub vinculada, pago registrado, 0 pendings.
-- ⚠️ **Pendiente (arreglo de fondo):** en el fallback por recencia, si todos los pendings recientes son del MISMO
-  email, tratarlos como una sola persona (usar el más reciente y borrar todos) en vez de "ambiguo". Además, el
-  comentario de `index.ts:291` dice 30 min pero la ventana real es 15.
+- ✅ **Arreglo de fondo (mismo día) en `process-payment`:** en el fallback por recencia, si todos los pendings
+  recientes (15 min) son del MISMO email → se toma el más reciente (ya no es "ambiguo"); solo con emails distintos
+  sigue cayendo a manual. Tras el alta se borran **todos** los pendings de ese email+programa (no solo el
+  matcheado). Helper `normEmail()` (lower+trim) para todas las comparaciones. Corregido el comentario "30 min" → 15.
+- **Probado:** handler real corrido en Node con Supabase y MP stubbeados: 1 pending, 2 del mismo email, 2 de emails
+  distintos (manual), match por payerEmail con duplicado viejo, reenvío del webhook tras el alta (skip silencioso) y
+  mismo email en otro programa (no se borra). Todo OK; con el código anterior falla el caso del reintento.
+- ⏳ **Pendiente (Erika):** desplegar `process-payment` en Supabase (no se auto-deploya).
