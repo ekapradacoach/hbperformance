@@ -484,3 +484,17 @@ Registro cronológico de lo que se va haciendo. Entrada nueva arriba o abajo seg
   `site_config.whatsapp_erika` → **se cambia desde admin → Configuración → Contacto (WhatsApp)**.
 - Número de Gonza sin cambios. Placeholder del input en admin (`9 11 3643 3379`) sin tocar.
 - ⏳ **Pendiente (Erika):** guardar `91159574043` en admin → Configuración → WhatsApp Erika (hasta entonces las landings usan el número anterior).
+
+### 2026-10-15 — Alta manual: pago de Fuerza para Corredores sin cuenta (reintento de pago)
+- **Síntoma:** un alumno pagó Corredores (2do intento; el 1ro fue rechazado) y no tenía cuenta ni le llegó mail.
+- **Causa (confirmada en logs de `process-payment`, 11:22 AR):** llenó el modal de pago **dos veces** (una por
+  intento, con 7 min de diferencia) → 2 pendings con el mismo email. El webhook `preapproval updated` llega con
+  `payer_email:""` → solo queda el fallback por recencia → `Recencia AMBIGUA: 2 pendings` → `ALTA MANUAL REQUERIDA`.
+  El email distinto entre MP y el modal NO fue la causa (con el webhook de preapproval hubiera fallado igual).
+- **Corrección manual:** alta desde admin ("+ Asignar atleta", programa corredores → invite) + SQL: `UPDATE profiles`
+  con el `mp_subscription_id` (preapproval id sacado del log `MP Preapproval:`), `INSERT` en `payments`
+  (`alta_nueva`, bruto 40.000 / neto real de MP, `mp_payment_id` = n° de operación) y `DELETE` de los 2 pendings.
+  Verificado: perfil activo, sub vinculada, pago registrado, 0 pendings.
+- ⚠️ **Pendiente (arreglo de fondo):** en el fallback por recencia, si todos los pendings recientes son del MISMO
+  email, tratarlos como una sola persona (usar el más reciente y borrar todos) en vez de "ambiguo". Además, el
+  comentario de `index.ts:291` dice 30 min pero la ventana real es 15.
