@@ -1381,6 +1381,16 @@
   .pag-actions { display:flex; gap:6px; flex-wrap:wrap; }
   @media (max-width: 768px) { .pag-subtotals { grid-template-columns: 1fr; } .pag-head-actions { width:100%; } .pag-head-actions .met-month { width:auto; } }
   .met-month label { color: var(--text-secondary); font-size: 0.88rem; font-weight: 600; }
+  /* Tab Leads */
+  .leads-controls { flex-wrap: wrap; gap: 14px; }
+  .leads-alumno-toggle { font-size: 0.88rem; }
+  .leads-warn { background: rgba(245,168,0,0.08); border: 1px solid rgba(245,168,0,0.35); color: var(--accent); border-radius: 10px; padding: 10px 14px; font-size: 0.85rem; margin: 6px 0 12px; line-height: 1.5; }
+  .leads-alumno { display: inline-block; margin-left: 6px; font-size: 0.7rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: rgba(59,190,94,0.15); color: #66d98a; white-space: nowrap; }
+  .leads-sub { color: var(--text-secondary); font-size: 0.78rem; }
+  .leads-wa { padding: 6px 12px; font-size: 0.82rem; text-decoration: none; white-space: nowrap; }
+  .leads-note { width: 100%; min-width: 160px; background: #141414; border: 1px solid #333; border-radius: 8px; padding: 7px 9px; color: var(--text); font-family: var(--font-body); font-size: 0.85rem; }
+  .leads-note:focus { outline: none; border-color: var(--accent); }
+  tr.leads-done td { opacity: 0.6; }
 
   .met-section-title {
     font-family: var(--font-display);
@@ -1625,6 +1635,7 @@
         <a data-view="mensajes"><span class="ico">💬</span> Mensajes<span class="nav-badge hidden" id="msgTabBadge"></span></a>
         <a data-view="metricas"><span class="ico">📈</span> Métricas</a>
         <a data-view="pagos"><span class="ico">💰</span> Pagos</a>
+        <a data-view="leads"><span class="ico">🎯</span> Leads<span class="nav-badge hidden" id="leadsTabBadge"></span></a>
         <a data-view="config"><span class="ico">⚙️</span> Configuración</a>
       </nav>
       <div class="sidebar-footer">
@@ -2014,6 +2025,45 @@
           </table>
         </div>
         <div class="met-note">Los pagos de Mercado Pago se registran solos cuando entra el cobro. Los de transferencia o suscripciones MP antiguas se cargan a mano con “💵 Registrar pago”. La fecha es la del pago real (no la de carga). Editar/anular solo aplica a los pagos manuales.</div>
+      </section>
+
+      <!-- =============== VIEW: LEADS (pending_subscriptions sin pago) =============== -->
+      <section id="view-leads" class="view">
+        <div class="met-header">
+          <h2 class="section-title">Leads</h2>
+        </div>
+        <div class="leads-warn" id="leadsWarn" style="display:none;"></div>
+
+        <div class="rank-controls leads-controls">
+          <label>Programa
+            <select id="leadsProgram">
+              <option value="all">Todos</option>
+              <option value="crossfit">CrossFit</option>
+              <option value="hybrid">Hybrid</option>
+              <option value="corredores">Corredores</option>
+            </select>
+          </label>
+          <label>Estado
+            <select id="leadsStatus">
+              <option value="all">Todos</option>
+              <option value="pending">Sin contactar</option>
+              <option value="contacted">Contactados</option>
+            </select>
+          </label>
+          <label class="pag-check leads-alumno-toggle">
+            <input type="checkbox" id="leadsShowAlumnos"> Mostrar los que ya son alumnos (<span id="leadsAlumnoCount">0</span>)
+          </label>
+        </div>
+
+        <div class="table-wrap">
+          <table class="al-table met-table">
+            <thead>
+              <tr><th>Nombre</th><th>Programa</th><th>Días</th><th>Origen</th><th>Contacto</th><th>Contactado</th><th>Nota</th></tr>
+            </thead>
+            <tbody id="leadsBody"><tr><td class="loading-row" colspan="7">Cargando…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="met-note">Personas que completaron el formulario de pago y todavía no terminaron de pagar (cuando el pago sale bien, la fila se borra sola). Los que ya figuran como alumnos se ocultan por defecto.</div>
       </section>
 
       <!-- =============== VIEW: CONFIGURACIÓN =============== -->
@@ -2633,7 +2683,7 @@
     // ============================================================
     // Navegación entre vistas (SPA)
     // ============================================================
-    const VIEW_TITLES = { dashboard: 'Dashboard', planificacion: 'Planificación', alumnos: 'Alumnos', mensajes: 'Mensajes', metricas: 'Métricas', pagos: 'Pagos', config: 'Configuración' };
+    const VIEW_TITLES = { dashboard: 'Dashboard', planificacion: 'Planificación', alumnos: 'Alumnos', mensajes: 'Mensajes', metricas: 'Métricas', pagos: 'Pagos', leads: 'Leads', config: 'Configuración' };
     function showView(name) {
       // Al salir de Mensajes, cerrar la suscripción realtime abierta
       if (name !== 'mensajes') unsubscribeRealtime();
@@ -2647,6 +2697,7 @@
       if (name === 'mensajes') loadMensajes();
       if (name === 'metricas') loadMetricas();
       if (name === 'pagos') loadPagos();
+      if (name === 'leads') loadLeads();
       if (name === 'config') loadConfig();
       closeSidebar();
     }
@@ -5454,6 +5505,151 @@
     document.getElementById('pagMethod').addEventListener('change', (e) => { pagMethod = e.target.value; renderPagosTable(); });
     document.getElementById('btnPagoNew').addEventListener('click', () => openPagoNew(null));
 
+    // ============================================================
+    // LEADS — pending_subscriptions (dejaron datos en el modal de pago y no pagaron)
+    // RLS: SELECT/UPDATE solo admin (supabase/leads.sql). process-payment borra la fila al pagar.
+    // ============================================================
+    let leadsRows = null;          // filas de pending_subscriptions (null = error de carga)
+    let leadsAlumnoEmails = new Set();
+    let leadsHasContact = true;    // false si todavía no existen contacted_at / contact_note
+    let leadsProgram = 'all';
+    let leadsStatus = 'all';
+    let leadsShowAlumnos = false;
+
+    // Teléfono → número para wa.me: solo dígitos; sin ceros iniciales; si ya empieza con 54 se deja;
+    // si quedan 10 dígitos (área + número AR sin 0 ni 15) → 549 + número; cualquier otro caso, tal cual.
+    function leadWaNumber(phone) {
+      let d = String(phone || '').replace(/\D/g, '').replace(/^0+/, '');
+      if (!d) return '';
+      if (d.startsWith('54')) return d;
+      if (d.length === 10) return '549' + d;
+      return d;
+    }
+    function leadIsAlumno(r) { return leadsAlumnoEmails.has(String(r.email || '').trim().toLowerCase()); }
+    function leadDays(ts) {
+      const t = new Date(ts).getTime();
+      if (isNaN(t)) return '—';
+      const d = Math.max(0, Math.floor((Date.now() - t) / 86400000));
+      return d === 0 ? 'hoy' : (d === 1 ? '1 día' : `${d} días`);
+    }
+    function leadOrigin(r) {
+      const parts = [r.utm_medium, r.utm_campaign].filter(v => v && String(v).trim());
+      return parts.length ? esc(parts.join(' / ')) : '<span class="leads-sub">directo</span>';
+    }
+
+    async function loadLeads() {
+      const body = document.getElementById('leadsBody');
+      const warn = document.getElementById('leadsWarn');
+      const { data, error } = await sb.from('pending_subscriptions').select('*').order('created_at', { ascending: false });
+      if (error) {
+        leadsRows = null;
+        body.innerHTML = '<tr><td class="empty-row" colspan="7">No se pudieron cargar los leads.</td></tr>';
+        updateLeadsTabBadge();
+        return;
+      }
+      leadsRows = data || [];
+      // Sin filas no se puede saber si existen las columnas → se asume que sí (no hay nada que marcar igual)
+      leadsHasContact = !leadsRows.length || leadsRows.some(r => 'contacted_at' in r);
+      if (leadsHasContact) { warn.style.display = 'none'; }
+      else {
+        warn.textContent = 'Falta correr supabase/leads.sql en Supabase: la lista se ve igual, pero sin el check de "Contactado" ni la nota.';
+        warn.style.display = 'block';
+      }
+      document.getElementById('leadsStatus').disabled = !leadsHasContact;
+
+      // Emails que ya están en profiles → "Ya es alumno"
+      leadsAlumnoEmails = new Set();
+      const emails = [...new Set(leadsRows.map(r => String(r.email || '').trim().toLowerCase()).filter(Boolean))];
+      if (emails.length) {
+        const { data: profs, error: pErr } = await sb.from('profiles').select('email');
+        if (pErr) console.warn('leads: no se pudieron cruzar emails con profiles:', pErr.message);
+        (profs || []).forEach(p => { if (p.email) leadsAlumnoEmails.add(String(p.email).trim().toLowerCase()); });
+      }
+      renderLeads();
+      updateLeadsTabBadge();
+    }
+
+    // Badge del sidebar: leads sin contactar (sin contar los que ya son alumnos)
+    function updateLeadsTabBadge() {
+      const b = document.getElementById('leadsTabBadge');
+      if (!b) return;
+      const count = (leadsRows || []).filter(r => !r.contacted_at && !leadIsAlumno(r)).length;
+      if (count > 0) { b.textContent = count > 99 ? '99+' : count; b.classList.remove('hidden'); }
+      else b.classList.add('hidden');
+    }
+
+    function renderLeads() {
+      const body = document.getElementById('leadsBody');
+      if (!leadsRows) return;
+      document.getElementById('leadsAlumnoCount').textContent = String(leadsRows.filter(leadIsAlumno).length);
+      let rows = leadsRows.slice();
+      if (!leadsShowAlumnos) rows = rows.filter(r => !leadIsAlumno(r));
+      if (leadsProgram !== 'all') rows = rows.filter(r => r.program === leadsProgram);
+      if (leadsHasContact && leadsStatus === 'pending') rows = rows.filter(r => !r.contacted_at);
+      if (leadsHasContact && leadsStatus === 'contacted') rows = rows.filter(r => !!r.contacted_at);
+      // Orden: sin contactar primero; dentro de cada grupo, más recientes arriba
+      rows.sort((a, b) => (!!a.contacted_at - !!b.contacted_at)
+        || (new Date(b.created_at) - new Date(a.created_at)));
+      if (!rows.length) {
+        body.innerHTML = `<tr><td class="empty-row" colspan="7">${leadsRows.length ? 'No hay leads que coincidan con el filtro.' : 'No hay leads pendientes.'}</td></tr>`;
+        return;
+      }
+      body.innerHTML = rows.map(r => {
+        const num = leadWaNumber(r.phone);
+        const contacto = num
+          ? `<a class="btn-ghost leads-wa" href="https://wa.me/${num}" target="_blank" rel="noopener">💬 WhatsApp</a>`
+          : `<span class="leads-sub">sin teléfono</span><br>${esc(r.email || '—')}`;
+        const check = leadsHasContact
+          ? `<label class="pag-check"><input type="checkbox" class="leads-check" ${r.contacted_at ? 'checked' : ''}>
+               <span class="leads-sub">${r.contacted_at ? fmtDate(r.contacted_at) : ''}</span></label>`
+          : '<span class="leads-sub">—</span>';
+        const note = leadsHasContact
+          ? `<input type="text" class="leads-note" maxlength="500" value="${esc(r.contact_note || '')}" placeholder="Nota…">`
+          : '<span class="leads-sub">—</span>';
+        return `<tr data-lid="${esc(r.id)}" class="${r.contacted_at ? 'leads-done' : ''}">
+          <td>${esc(r.full_name || '—')}${leadIsAlumno(r) ? '<span class="leads-alumno">Ya es alumno</span>' : ''}</td>
+          <td>${progBadge(r.program)}</td>
+          <td>${leadDays(r.created_at)}</td>
+          <td>${leadOrigin(r)}</td>
+          <td>${contacto}</td>
+          <td>${check}</td>
+          <td>${note}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    // UPDATE verificando filas afectadas (RLS sin policy → 0 filas sin error: no mostrar éxito falso)
+    async function updateLead(id, patch) {
+      const { data, error } = await sb.from('pending_subscriptions').update(patch).eq('id', id).select('id');
+      if (error || !data || !data.length) {
+        flash('No se pudo guardar' + (error ? ': ' + error.message : ' (¿corriste supabase/leads.sql?)'));
+        return false;
+      }
+      const row = (leadsRows || []).find(r => r.id === id);
+      if (row) Object.assign(row, patch);
+      return true;
+    }
+
+    document.getElementById('leadsBody').addEventListener('change', async (e) => {
+      const tr = e.target.closest('tr[data-lid]');
+      if (!tr) return;
+      const id = tr.dataset.lid;
+      if (e.target.classList.contains('leads-check')) {
+        const ok = await updateLead(id, { contacted_at: e.target.checked ? new Date().toISOString() : null });
+        if (ok) flash(e.target.checked ? 'Marcado como contactado' : 'Marcado como sin contactar');
+        renderLeads();
+        updateLeadsTabBadge();
+      } else if (e.target.classList.contains('leads-note')) {
+        const v = e.target.value.trim();
+        const ok = await updateLead(id, { contact_note: v || null });
+        if (ok) flash('Nota guardada');
+        else { const row = (leadsRows || []).find(r => r.id === id); e.target.value = (row && row.contact_note) || ''; }
+      }
+    });
+    document.getElementById('leadsProgram').addEventListener('change', (e) => { leadsProgram = e.target.value; renderLeads(); });
+    document.getElementById('leadsStatus').addEventListener('change', (e) => { leadsStatus = e.target.value; renderLeads(); });
+    document.getElementById('leadsShowAlumnos').addEventListener('change', (e) => { leadsShowAlumnos = e.target.checked; renderLeads(); });
+
     // ---- Modal cargar/editar ----
     function populatePagoAthletes() {
       const sel = document.getElementById('pagoAthlete');
@@ -6092,6 +6288,7 @@
 
       loadStats(session.user.id);
       loadLatest();
+      loadLeads();   // carga silenciosa → contador de leads sin contactar en el sidebar
     }
 
     init();

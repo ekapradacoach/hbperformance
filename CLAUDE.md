@@ -146,6 +146,9 @@ en el muro para revelar las 4 restantes (`.testi-more`), cambiando a "Ver menos"
   Supabase). Si el insert con UTMs falla → **reintenta sin UTMs** (nunca bloquea un pago).
   Convención: DMs `?utm_source=instagram&utm_medium=dm&utm_campaign=<programa>`; ads
   `utm_source=instagram&utm_medium=paid&utm_campaign=<nombre>&utm_content=<creativo>`.
+- **Seguimiento de leads** (2026-10-15): admin → **🎯 Leads** lista `pending_subscriptions` (quienes completaron el
+  modal y no pagaron) con días, origen UTM, botón WhatsApp, check "Contactado" (`contacted_at`) y nota
+  (`contact_note`). Columnas + policies admin en `supabase/leads.sql`. Detalle en `app/CLAUDE.md`.
 - ⚠️ **Repo público**: no escribir nombres/datos de alumnos o leads en CLAUDE.md / CONTEXTO.md.
 - ⚠️ Limitación conocida: el pixel del navegador **pierde compras** con ad-blockers / Safari ITP. Mejora futura:
   **Conversions API server-side** desde `process-payment` (no implementado). Por ahora, versión estándar.

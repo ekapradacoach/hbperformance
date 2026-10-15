@@ -503,3 +503,29 @@ Registro cronológico de lo que se va haciendo. Entrada nueva arriba o abajo seg
   distintos (manual), match por payerEmail con duplicado viejo, reenvío del webhook tras el alta (skip silencioso) y
   mismo email en otro programa (no se borra). Todo OK; con el código anterior falla el caso del reintento.
 - ⏳ **Pendiente (Erika):** desplegar `process-payment` en Supabase (no se auto-deploya).
+
+### 2026-10-15 (b) — Admin: vista 🎯 Leads (seguimiento de `pending_subscriptions`)
+- **Para qué:** ver a quienes completaron el formulario de pago y no terminaron de pagar, y hacerles seguimiento.
+- **admin/index.html** — item nuevo **🎯 Leads** en el sidebar (entre Pagos y Configuración) con badge de
+  **sin contactar** (`#leadsTabBadge`, se calcula al cargar el admin; no cuenta a los que ya son alumnos).
+  Vista `#view-leads` (`loadLeads` / `renderLeads` / `updateLead`), mismos patrones que Pagos (`.rank-controls`,
+  `.al-table`, `progBadge`, `flash`):
+  - Columnas: nombre, programa, días desde `created_at`, origen (`utm_medium / utm_campaign` o "directo"),
+    contacto (botón WhatsApp o "sin teléfono" + email), check **Contactado** (guarda `contacted_at`, muestra la
+    fecha) y **nota** editable (`contact_note`, se guarda al salir del campo).
+  - Orden: sin contactar primero, después más recientes arriba. Filtros: programa y contactado / sin contactar.
+  - Si el email (lower+trim) ya existe en `profiles` → etiqueta **"Ya es alumno"**, oculto por defecto
+    (toggle "Mostrar los que ya son alumnos (N)").
+  - **Normalización del teléfono para wa.me** (`leadWaNumber`): solo dígitos → saca ceros iniciales → si empieza
+    con `54` queda igual → si quedan 10 dígitos antepone `549` → si no, se usa tal cual.
+  - UPDATE con `.select('id')`: si RLS devuelve 0 filas muestra error (no un éxito falso).
+  - **Degradación:** si todavía no existen `contacted_at`/`contact_note`, la lista se ve igual con un aviso, sin
+    check ni nota, y el filtro de estado deshabilitado.
+- **SQL nuevo `supabase/leads.sql`** (idempotente): `contacted_at timestamptz` + `contact_note text`, policy
+  **SELECT** ("Admin ve pending", recreada igual) y **UPDATE** ("Admin actualiza pending") solo para
+  `get_my_role()='admin'`. La policy de INSERT anónimo no se toca. Incluye query opcional para listar las policies.
+- **Verificación:** syntax-check de los 2 scripts inline (`new Function`) → 0 errores; todos los IDs del JS existen
+  en el markup. Prueba en navegador con Supabase falso y datos ficticios: badge, orden, filtros, toggle de alumnos,
+  check/nota (payload correcto), modo sin columnas y las 8 secciones del admin abren sin errores JS.
+- ✅ **SQL ejecutado por Erika** en Supabase (2026-10-15) y vista probada en real (check + nota guardan OK).
+  Commiteado y pusheado a `main`.

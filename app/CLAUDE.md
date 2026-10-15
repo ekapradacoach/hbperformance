@@ -494,8 +494,11 @@ email text (not null)
 phone text
 program text (not null)   — 'crossfit' | 'hybrid' | 'corredores' (= external_reference en MP)
 created_at timestamptz (default now())
-RLS: **INSERT público** (WITH CHECK true → la landing es sin login) + SELECT admin. El `service_role`
-de la Edge Function `process-payment` la lee/borra (bypassa RLS). ⚠️ Crear tabla + policy (SQL en CONTEXTO.md).
+utm_source / utm_medium / utm_campaign / utm_content text (nullable, 2026-10-11)
+contacted_at timestamptz (null = sin contactar) · contact_note text   ← 2026-10-15, `supabase/leads.sql`
+RLS: **INSERT público** (WITH CHECK true → la landing es sin login) + SELECT y UPDATE **solo admin**
+(`get_my_role()='admin'`). El `service_role` de la Edge Function `process-payment` la lee/borra (bypassa RLS).
+La vista **🎯 Leads** del admin (`#view-leads`) la lista para hacer seguimiento.
 
 ### push_subscriptions   ← ✅ (2026-08-13) suscripciones Web Push por dispositivo/navegador (notificaciones al celular)
 id uuid (default gen_random_uuid())
