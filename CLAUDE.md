@@ -52,6 +52,12 @@ banda CTA "¿Tenés dudas? Escribinos" (`#whatsapp`).
   **"La plataforma — Tu portal de entrenamiento"** (2026-07-27) y ya no menciona WodUp/iOS/Android ni "la app".
 - **Aviso de demora del mail** (2026-07-27): línea `.pay-note` en el `#payModal` ("el mail tarda hasta 5 min,
   revisar spam"); mismo aviso + botón WhatsApp en `pago-exitoso.html`.
+- **Detección de typos en el email del modal** (2026-10-26): al salir del campo y al tocar "Continuar al pago",
+  `emailTypoSuggestion()` corrige dominios (`gmial/gmai/hotmial/yahooo/outlok…` → gmail/hotmail/yahoo/outlook) y
+  terminaciones (`.con/.coom/.cmo/.comm…` → `.com`, también `.con.ar`) y muestra `#paySuggest` "¿Quisiste decir …?"
+  con "Sí, corregir" (reemplaza el valor) / "No, está bien" (sigue sin bloquear). Mientras haya sugerencia sin
+  responder NO se avanza al pago. Mismo bloque en las 3 landings. Los emails mal cargados se corrigen desde admin →
+  "✏️ Editar email" (ver `app/CLAUDE.md`).
 - **Precio con DOS botones**: MP `btn-filled` "Suscribirme — $XX.000 ARS" (`#btn-mp`) +
   PayPal `btn-outline` "Subscribe — USD XX" (`#btn-paypal`). Lado a lado; apilados en ≤600px.
   ⚠️ Desde **2026-07-24** el botón de MP **ya NO va directo a MP**: abre un **modal** (`#payModal`,

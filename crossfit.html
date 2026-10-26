@@ -234,6 +234,13 @@ src="https://www.facebook.com/tr?id=1008115118926012&ev=PageView&noscript=1"
   .pay-error.show { display: block; }
   .pay-actions { display: flex; gap: 10px; margin-top: 20px; }
   .pay-actions .btn { flex: 1; text-align: center; font-size: 0.98rem; padding: 13px 20px; }
+  .pay-suggest { display: none; margin-top: 8px; background: rgba(245,168,0,0.08); border: 1px solid rgba(245,168,0,0.35); border-radius: 8px; padding: 10px 12px; font-size: 0.88rem; color: var(--text); }
+  .pay-suggest.show { display: block; }
+  .pay-suggest b { color: var(--accent); word-break: break-all; }
+  .pay-suggest-actions { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+  .pay-suggest-actions button { flex: 1; min-width: 120px; font-family: var(--font-body); font-size: 0.85rem; font-weight: 600; padding: 8px 10px; border-radius: 6px; cursor: pointer; }
+  .pay-suggest-yes { background: var(--accent); color: #0A0A0A; border: 1px solid var(--accent); }
+  .pay-suggest-no { background: transparent; color: var(--text-secondary); border: 1px solid #444; }
   .pay-note { font-size: 0.82rem; color: var(--text-secondary); line-height: 1.45; margin-top: 16px; text-align: center; background: rgba(245,168,0,0.06); border: 1px solid rgba(245,168,0,0.2); border-radius: 8px; padding: 10px 12px; }
 
   /* ===== Botón flotante de WhatsApp (dudas antes de suscribirse) ===== */
@@ -456,6 +463,13 @@ src="https://www.facebook.com/tr?id=1008115118926012&ev=PageView&noscript=1"
     <div class="pay-field">
       <label for="payEmail">Email</label>
       <input type="email" id="payEmail" autocomplete="email" required>
+      <div class="pay-suggest" id="paySuggest" role="alert">
+        ¿Quisiste decir <b id="paySuggestEmail"></b>?
+        <div class="pay-suggest-actions">
+          <button type="button" class="pay-suggest-yes" id="paySuggestYes">Sí, corregir</button>
+          <button type="button" class="pay-suggest-no" id="paySuggestNo">No, está bien</button>
+        </div>
+      </div>
     </div>
     <div class="pay-field">
       <label for="payPhone">Teléfono <span class="pay-opt">(opcional)</span></label>
@@ -517,12 +531,56 @@ src="https://www.facebook.com/tr?id=1008115118926012&ev=PageView&noscript=1"
   document.getElementById('payCancel').addEventListener('click', closePayModal);
   payModal.addEventListener('click', function (e) { if (e.target === payModal) closePayModal(); });
 
+  // ---- Detección suave de typos en el dominio del email (ej. "gmail.con") ----
+  // Sugiere la corrección ANTES de ir al pago; si la persona dice "No, está bien", sigue sin bloquear.
+  var EMAIL_DOMAIN_FIX = { gmial: 'gmail', gmai: 'gmail', gmal: 'gmail', gmali: 'gmail', gamil: 'gmail', gnail: 'gmail', gmaill: 'gmail',
+    hotmial: 'hotmail', hotmal: 'hotmail', hotmai: 'hotmail', hotmil: 'hotmail', homail: 'hotmail', hotmaill: 'hotmail',
+    yahooo: 'yahoo', yaho: 'yahoo', yhaoo: 'yahoo', outlok: 'outlook', outllok: 'outlook', otulook: 'outlook' };
+  var EMAIL_TLD_FIX = { con: 'com', coom: 'com', cmo: 'com', comm: 'com', ocm: 'com', vom: 'com', xom: 'com' };
+  function emailTypoSuggestion(email) {
+    var at = email.lastIndexOf('@');
+    if (at < 1) return null;
+    var parts = email.slice(at + 1).toLowerCase().split('.');
+    if (parts.length < 2) return null;
+    if (EMAIL_DOMAIN_FIX[parts[0]]) parts[0] = EMAIL_DOMAIN_FIX[parts[0]];
+    for (var i = 1; i < parts.length; i++) if (EMAIL_TLD_FIX[parts[i]]) parts[i] = EMAIL_TLD_FIX[parts[i]];
+    var fixed = email.slice(0, at + 1) + parts.join('.');
+    return fixed.toLowerCase() !== email.toLowerCase() ? fixed : null;
+  }
+  var emailTypoOk = null; // email que la persona confirmó como correcto pese a la sugerencia
+  var paySuggest = document.getElementById('paySuggest');
+  function hideEmailSuggest() { paySuggest.classList.remove('show'); }
+  // true = hay sugerencia pendiente (se muestra y NO se sigue al pago)
+  function checkEmailTypo(email) {
+    var s = emailTypoSuggestion(email);
+    if (!s || email === emailTypoOk) { hideEmailSuggest(); return false; }
+    document.getElementById('paySuggestEmail').textContent = s;
+    paySuggest.classList.add('show');
+    return true;
+  }
+  document.getElementById('payEmail').addEventListener('blur', function () {
+    var v = this.value.trim();
+    if (v) checkEmailTypo(v);
+  });
+  document.getElementById('payEmail').addEventListener('input', hideEmailSuggest);
+  document.getElementById('paySuggestYes').addEventListener('click', function () {
+    var inp = document.getElementById('payEmail');
+    inp.value = document.getElementById('paySuggestEmail').textContent;
+    hideEmailSuggest();
+    inp.focus();
+  });
+  document.getElementById('paySuggestNo').addEventListener('click', function () {
+    emailTypoOk = document.getElementById('payEmail').value.trim();
+    hideEmailSuggest();
+  });
+
   async function submitPay() {
     var name = document.getElementById('payName').value.trim();
     var email = document.getElementById('payEmail').value.trim();
     var phone = document.getElementById('payPhone').value.trim();
     if (!name) { payErr('Ingresá tu nombre completo.'); return; }
     if (!email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { payErr('Ingresá un email válido.'); return; }
+    if (checkEmailTypo(email)) return; // sugerencia de typo pendiente: corregir o confirmar antes de pagar
     var btn = document.getElementById('payContinue');
     btn.disabled = true; btn.textContent = 'Procesando…';
     try {

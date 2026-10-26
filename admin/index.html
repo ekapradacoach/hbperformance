@@ -1216,6 +1216,8 @@
   .pw-sub { color: var(--text-secondary); font-size: .9rem; margin: 0 0 12px; }
   .pw-note { color: var(--text-secondary); font-size: .8rem; line-height: 1.45; margin: 10px 0 4px; }
   .pw-ok { color: #4cae7f; font-weight: 700; margin-bottom: 12px; }
+  /* Modales que se abren DESDE el panel lateral del alumno (z 260) → tienen que quedar por encima */
+  #modalSetPw, #modalEmail { z-index: 300; }
   .pw-box { display: flex; align-items: center; gap: 10px; background: #0D0D0D; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; }
   .pw-box code { flex: 1; font-size: 1.1rem; letter-spacing: .5px; color: var(--accent); word-break: break-all; font-family: ui-monospace, Menlo, Consolas, monospace; }
   #setPwValue { font-family: ui-monospace, Menlo, Consolas, monospace; letter-spacing: .5px; }
@@ -2321,6 +2323,41 @@
     </div>
   </div>
 
+  <!-- =============== Modal: Editar email del alumno (admin) =============== -->
+  <div class="modal-backdrop" id="modalEmail">
+    <div class="modal">
+      <div class="modal-head">
+        <h3>✏️ Editar email</h3>
+        <button class="modal-close" data-close="modalEmail">✕</button>
+      </div>
+      <div class="modal-error" id="emailError"></div>
+      <div id="emailForm">
+        <p class="pw-sub">Alumno: <b id="emailWho"></b></p>
+        <div class="field">
+          <label>Email actual</label>
+          <input type="text" id="emailOld" readonly>
+        </div>
+        <div class="field">
+          <label for="emailNew">Email nuevo</label>
+          <input type="email" id="emailNew" autocomplete="off" spellcheck="false" placeholder="nombre@gmail.com">
+        </div>
+        <label class="pag-check"><input type="checkbox" id="emailResend" checked> <span>Reenviar mail de ingreso</span></label>
+        <div class="pw-note">Cambia el email en el login y en el perfil. El mail de ingreso le llega al email nuevo con un link para crear su contraseña.</div>
+        <div class="modal-actions">
+          <button class="btn-ghost" data-close="modalEmail">Cancelar</button>
+          <button class="btn-primary" id="emailSave">Guardar email</button>
+        </div>
+      </div>
+      <div id="emailResult" style="display:none;">
+        <div class="pw-ok">✅ Email actualizado: <b id="emailOkValue"></b></div>
+        <div class="pw-note" id="emailOkMail"></div>
+        <div class="modal-actions">
+          <button class="btn-primary" data-close="modalEmail">Listo</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- =============== Modal: Elegir plan de Hybrid (3 / 4 días) =============== -->
   <div class="modal-backdrop" id="modalHybridPlan">
     <div class="modal">
@@ -2900,6 +2937,7 @@
 
     const CREATE_ATHLETE_URL = 'https://frjlafrgdcbomdnentbe.supabase.co/functions/v1/create-athlete';
     const SET_PASSWORD_URL = 'https://frjlafrgdcbomdnentbe.supabase.co/functions/v1/set-athlete-password';
+    const UPDATE_EMAIL_URL = 'https://frjlafrgdcbomdnentbe.supabase.co/functions/v1/update-athlete-email';
 
     // Mostrar/ocultar el selector de plan de Hybrid según el programa elegido
     document.getElementById('athleteProgram').addEventListener('change', (e) => {
@@ -4662,6 +4700,7 @@
           <button class="btn-primary" id="spGoPlan">📅 Ir a planificación</button>
           <button class="btn-ghost" id="spEdit">✏️ Editar</button>
           <button class="btn-ghost" id="spSetPw">🔑 Fijar contraseña temporal</button>
+          <button class="btn-ghost" id="spEmail">✏️ Editar email</button>
           ${bajaBtn}
           ${delBtn}
           <button class="btn-ghost" id="spClose">❌ Cerrar</button>
@@ -4672,6 +4711,7 @@
       document.getElementById('spGoPlan').addEventListener('click', () => goToAthletePlanning(a));
       document.getElementById('spEdit').addEventListener('click', () => renderPanelEdit(a));
       document.getElementById('spSetPw').addEventListener('click', () => openSetPwModal(a));
+      document.getElementById('spEmail').addEventListener('click', () => openEmailModal(a));
       const b = document.getElementById('spBaja');
       if (b) b.addEventListener('click', () => darDeBaja(a));
       const d = document.getElementById('spDelete');
@@ -4735,6 +4775,61 @@
       const v = document.getElementById('setPwOkValue').textContent;
       if (navigator.clipboard) navigator.clipboard.writeText(v).then(() => flash('📋 Contraseña copiada.')).catch(() => {});
     });
+
+    // ---- Editar email del alumno (Auth + profiles, vía Edge Function update-athlete-email) ----
+    let emailAthlete = null;
+    function openEmailModal(a) {
+      emailAthlete = a;
+      document.getElementById('emailWho').textContent = (a.full_name || a.email || '');
+      document.getElementById('emailOld').value = a.email || '';
+      document.getElementById('emailNew').value = '';
+      document.getElementById('emailResend').checked = true;
+      document.getElementById('emailForm').style.display = '';
+      document.getElementById('emailResult').style.display = 'none';
+      document.getElementById('emailError').classList.remove('show');
+      openModal('modalEmail');
+      setTimeout(() => document.getElementById('emailNew').focus(), 50);
+    }
+    async function emailDo() {
+      const a = emailAthlete;
+      if (!a) return;
+      const newEmail = document.getElementById('emailNew').value.trim().toLowerCase();
+      const resend = document.getElementById('emailResend').checked;
+      if (!/^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(newEmail)) { modalError('emailError', 'El email nuevo no tiene un formato válido.'); return; }
+      if (newEmail === (a.email || '').toLowerCase()) { modalError('emailError', 'El email nuevo es igual al actual.'); return; }
+      const btn = document.getElementById('emailSave');
+      btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Guardando…';
+      document.getElementById('emailError').classList.remove('show');
+      try {
+        const { data: { session } } = await sb.auth.getSession();
+        if (!session) { modalError('emailError', 'Tu sesión expiró. Volvé a iniciar sesión.'); return; }
+        const res = await fetch(UPDATE_EMAIL_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+          body: JSON.stringify({ old_email: a.email, new_email: newEmail, resend_invite: resend })
+        });
+        const result = await res.json().catch(() => ({ ok: false, error: 'Respuesta inválida (' + res.status + ')' }));
+        if (!result.ok) { modalError('emailError', result.error || 'No se pudo cambiar el email.'); return; }
+        document.getElementById('emailOkValue').textContent = newEmail;
+        document.getElementById('emailOkMail').textContent =
+          !resend ? 'No se reenvió el mail de ingreso.'
+          : (result.mail === 'resend' || result.mail === 'supabase')
+            ? '📧 Mail de ingreso enviado al email nuevo (puede caer en spam). Si no le llega, usá "🔑 Fijar contraseña temporal".'
+            : '⚠️ El email se cambió, pero el mail de ingreso NO se pudo enviar' + (result.mail_error ? ' (' + result.mail_error + ')' : '') + '. Usá "🔑 Fijar contraseña temporal".';
+        document.getElementById('emailForm').style.display = 'none';
+        document.getElementById('emailResult').style.display = '';
+        // Refrescar la lista y el panel con el email nuevo
+        await loadAlumnos();
+        const fresh = allAthletes.find(x => x.id === a.id) || Object.assign({}, a, { email: newEmail });
+        if (currentPanelAthlete && currentPanelAthlete.id === a.id) { currentPanelAthlete = fresh; renderPanelView(fresh); }
+      } catch (err) {
+        modalError('emailError', 'Error: ' + (err.message || err));
+      } finally {
+        btn.disabled = false; btn.textContent = 'Guardar email';
+      }
+    }
+    document.getElementById('emailSave').addEventListener('click', emailDo);
+    document.getElementById('emailNew').addEventListener('keydown', (e) => { if (e.key === 'Enter') emailDo(); });
 
     function renderPanelEdit(a) {
       const spInner = document.getElementById('spInner');

@@ -245,6 +245,21 @@ contraseña en pantalla con botón "Copiar" para pasarla por WhatsApp. Sirve par
 recovery de Supabase falla por prescan de Gmail/Outlook (el link se consume antes de abrirlo). Usa `SERVICE_ROLE_KEY`
 (ya existe a nivel proyecto). ⚠️ deploy manual: `supabase functions deploy set-athlete-password` (2026-10-02).
 
+**Editar email del alumno (admin)** (2026-10-26): botón **"✏️ Editar email"** en el panel del alumno (`spEmail`, al lado de
+"Fijar contraseña") → modal `#modalEmail` (email actual readonly, email nuevo, checkbox **"Reenviar mail de ingreso"**
+tildado por default) → Edge Function **`update-athlete-email`** (`verify_jwt` ON, mismo chequeo de `role='admin'` por
+JWT). Body `{ old_email, new_email, resend_invite }` → `{ ok, mail: 'resend'|'supabase'|'none', mail_error? }` |
+`{ ok:false, error }`. Valida formato, que el nuevo no exista en `profiles` ni en `auth.users` (listUsers paginado,
+case-insensitive) y lo guarda en minúsculas. Orden: `updateUserById(id, { email, email_confirm: true })` → `profiles.email`;
+si falla profiles, **revierte el email en Auth**. **Mail de ingreso = RECOVERY link, no invite**: `inviteUserByEmail`
+falla con usuarios que ya existen (y acá queda confirmado); el recovery link entra igual a `set-password.html` (lee el
+`access_token` del hash sea invite o recovery). Vía principal: `admin.generateLink({type:'recovery'})` + mail propio por
+**Resend** ("Activá tu cuenta", mismo remitente que process-payment); fallback `resetPasswordForEmail` (mail estándar de
+Supabase) si Resend falla o no hay `RESEND_API_KEY`. Si el mail falla, el email igual queda cambiado (ok:true + aviso en
+el modal → usar "Fijar contraseña temporal"). `#modalSetPw` y `#modalEmail` tienen `z-index: 300` para quedar por encima
+del panel lateral (z 260; antes "Fijar contraseña" se abría detrás). ⚠️ deploy manual: `supabase functions deploy
+update-athlete-email`.
+
 **Dominio de producción:** el sitio vive en **`https://hbperformance.fit`**. Todos los `redirectTo` de
 `resetPasswordForEmail` (login "¿Olvidaste tu contraseña?" y Perfil "Cambiar contraseña") apuntan
 **hardcodeados** a `https://hbperformance.fit/app/set-password.html` (antes usaban `window.location.origin`).

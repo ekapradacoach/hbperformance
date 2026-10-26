@@ -529,3 +529,22 @@ Registro cronológico de lo que se va haciendo. Entrada nueva arriba o abajo seg
   check/nota (payload correcto), modo sin columnas y las 8 secciones del admin abren sin errores JS.
 - ✅ **SQL ejecutado por Erika** en Supabase (2026-10-15) y vista probada en real (check + nota guardan OK).
   Commiteado y pusheado a `main`.
+
+### 2026-10-26 — Editar email del alumno desde admin + detección de typos en el modal de pago
+- **Disparador:** una alumna pagó y el mail de ingreso no le llegó porque su email quedó guardado con typo
+  (`@gmail.con`). No había forma de corregir el email de un alumno (vive en Auth y en `profiles`).
+- **Edge Function nueva `update-athlete-email`** (verify_jwt ON, admin-only por JWT como set-athlete-password):
+  `{ old_email, new_email, resend_invite }`. Valida formato + que el nuevo no exista en profiles ni auth.users; cambia
+  Auth (`email_confirm: true`) y después profiles; si profiles falla, revierte Auth. Reenvío del mail de ingreso con
+  **recovery link** (`generateLink` + Resend, fallback `resetPasswordForEmail`): el invite falla con usuarios existentes
+  y `set-password.html` acepta el token de recovery igual que el de invite.
+- **Admin:** botón "✏️ Editar email" en el panel del alumno → modal `#modalEmail` (checkbox "Reenviar mail de ingreso"
+  tildado). Fix de paso: `#modalSetPw`/`#modalEmail` con z-index 300 (se abrían detrás del panel lateral, z 260).
+- **Landings (crossfit/hybrid/fuerza-corredores):** sugerencia "¿Quisiste decir …@gmail.com?" para typos de dominio
+  (`.con`, `.coom`, `.cmo`, `gmial`, `gmai`, `hotmial`, `yahooo`, etc.). No bloquea: "No, está bien" sigue al pago.
+- **Probado:** function con handler real en Node + stubs (13 casos: feliz, sin reenvío, 401/403, formato, duplicado en
+  profiles y solo en auth, old_email inexistente, revert de Auth si falla profiles, fallbacks de mail). Landings en el
+  navegador (sugiere, corrige, confirma y sigue; emails válidos sin aviso). Modal del admin con harness (sb falso).
+- `.claude/launch.json`: config `static-node` (puerto 5501) porque en esta PC no hay python.
+- ⏳ **Pendiente (Erika):** deploy `supabase functions deploy update-athlete-email` y corregir el email de la alumna
+  desde admin (+ verificar su perfil/pago con el SQL que se pasó por chat).
