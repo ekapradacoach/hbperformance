@@ -601,7 +601,8 @@ Registro cronológico de lo que se va haciendo. Entrada nueva arriba o abajo seg
   RESTRICTIVE/SELECT presentes, 0 perfiles con access_from, un alumno sigue viendo su historial.
 - ✅ `process-payment` deployada por Erika (confirmado por ella; sin verificación independiente del código en Supabase).
 - ✅ `app/dashboard.html` publicado con este commit.
-- ⏳ **Pendiente de probar:** cuenta de prueba con access_from (UI + consulta directa a la API), renovación, y la primera
+- ✅ **Cuenta de prueba restringida (2026-10-30):** UI OK (navegación y calendario limitados). RLS OK simulando la sesión de esa cuenta en el SQL Editor (rol authenticated + JWT): de 18 días, 88 bloques y 191 exercise_links anteriores a access_from, 0 visibles en los tres.
+- ⏳ **Pendiente de probar:** renovación de una cuenta con access_from, y la primera
   alta nueva / reactivación reales (revisar que quede el lunes correcto). El webhook completo no se probó de punta a punta.
 - Nota de operación: al copiar SQL o código desde el editor usar Ctrl+C; el 30/10 la migración local quedó vacía (se
   restauró antes de commitear) y su texto se pegó primero por error en el editor de la Edge Function (deploy falló, sin efecto).
