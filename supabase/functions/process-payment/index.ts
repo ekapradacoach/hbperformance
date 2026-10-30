@@ -68,6 +68,11 @@
 //   cobrando en paralelo. try/catch, no bloquea el alta. NO busca por email (evita falsos positivos). Solo
 //   cubre subs viejas YA vinculadas en profiles (una huérfana nunca guardada no se detecta acá).
 //
+// Cambio 2026-10-30 (ventana de acceso `access_from`): alta nueva → access_from = lunes de la semana (hora AR).
+//   Reactivación (existingProfile) → se mueve al lunes SOLO si la persona vuelve después de haberse ido
+//   (isReturningAthlete); si nunca perdió el acceso, conserva el suyo. La renovación no lo toca.
+//   ⚠️ Requiere la columna profiles.access_from (supabase/migrations/20261019_access_from.sql): correr el SQL ANTES de deployar.
+//
 // Secretos: MP_ACCESS_TOKEN, SUPABASE_URL, SERVICE_ROLE_KEY, RESEND_API_KEY, MP_WEBHOOK_SECRET.
 // ============================================================================
 
@@ -358,7 +363,7 @@ Deno.serve(async (req) => {
       // ¿El usuario ya existe?
       const { data: existingProfile } = await adminClient
         .from('profiles')
-        .select('id, subscription_status, mp_subscription_id')
+        .select('id, subscription_status, subscription_end, payment_grace_until, mp_subscription_id')
         .eq('email', email)
         .maybeSingle()
 
@@ -390,9 +395,15 @@ Deno.serve(async (req) => {
           }
         }
 
+        // ¿VUELVE después de haberse ido? Se calcula ANTES del update (que limpia payment_grace_until).
+        // Solo en ese caso se mueve access_from; un alumno que nunca perdió el acceso y se re-suscribe
+        // (cambio de tarjeta / programa / duplicado) conserva el suyo.
+        const returning = isReturningAthlete(existingProfile)
+
         await adminClient
           .from('profiles')
           .update({
+            ...(returning ? { access_from: arMondayStr() } : {}),
             subscription_status: 'active',
             mp_subscription_id: mpSubscriptionId,
             subscription_start: new Date().toISOString().split('T')[0],
@@ -461,7 +472,8 @@ Deno.serve(async (req) => {
           program,
           subscription_status: 'active',
           mp_subscription_id: mpSubscriptionId,
-          subscription_start: new Date().toISOString().split('T')[0]
+          subscription_start: new Date().toISOString().split('T')[0],
+          access_from: arMondayStr()   // create-athlete (alta manual) NO lo setea
         })
         altaAthleteId = inviteData.user.id
       }
@@ -640,6 +652,23 @@ function arDateFromApproved(dateApproved: string | null | undefined): string {
   const base = dateApproved ? new Date(dateApproved) : new Date()
   const t = isNaN(base.getTime()) ? Date.now() : base.getTime()
   return new Date(t - 3 * 3600 * 1000).toISOString().slice(0, 10)
+}
+
+// Lunes de la semana actual en hora Argentina (UTC-3 fijo, igual que arDateFromApproved) → 'YYYY-MM-DD'.
+// Se usa como profiles.access_from en el alta nueva y cuando un ex alumno vuelve (ventana de acceso hacia atrás).
+function arMondayStr(now: Date = new Date()): string {
+  const ar = new Date(now.getTime() - 3 * 3600 * 1000)
+  ar.setUTCDate(ar.getUTCDate() - (ar.getUTCDay() + 6) % 7)
+  return ar.toISOString().slice(0, 10)
+}
+
+// ¿El perfil se había ido? Cancelado sin días pagos vigentes, o cortado por cobro fallido (ese corte deja
+// subscription_status = 'active'; lo que manda es payment_grace_until vencido). En gracia todavía tiene acceso → no.
+function isReturningAthlete(prof: { subscription_status?: string | null, subscription_end?: string | null, payment_grace_until?: string | null }): boolean {
+  const endDs = prof.subscription_end ? String(prof.subscription_end).slice(0, 10) : null
+  const leftByCancel = prof.subscription_status === 'cancelled' && (!endDs || endDs < arDateFromApproved(null))
+  const cutByFailedPayment = !!prof.payment_grace_until && new Date(prof.payment_grace_until).getTime() <= Date.now()
+  return leftByCancel || cutByFailedPayment
 }
 
 // Registra un pago de MP en la tabla `payments`. Idempotente por mp_payment_id (ON CONFLICT DO NOTHING).

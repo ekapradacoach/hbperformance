@@ -494,6 +494,11 @@
   .cal-cell.full { background: #1a3a1a; }
   .cal-cell.partial { background: #3a3a1a; }
   .cal-cell.today { border: 2px dashed var(--accent); }
+  /* Ventana de acceso (access_from): días anteriores al alta, no navegables (la protección real es la RLS) */
+  .cal-cell.locked { opacity: .35; cursor: default; }
+  .cal-cell.locked:hover { border-color: var(--border); }
+  .day-nav:disabled, .cal-nav:disabled { opacity: .35; cursor: default; }
+  .day-nav:disabled:hover, .cal-nav:disabled:hover { border-color: var(--border); color: inherit; }
   .cal-dot { position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%); width: 7px; height: 7px; border-radius: 50%; background: var(--accent); }
   .cal-legend { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; margin-top: 16px; font-size: 0.76rem; color: var(--text-secondary); }
   .cal-legend .lg { display: inline-flex; align-items: center; gap: 6px; }
@@ -1349,6 +1354,16 @@
     let progBlocks = [];           // bloques del día (con .completion y .exercises)
     let progMonthCursor = null;    // { year, month(0-based) }
     let progMonthData = {};        // 'YYYY-MM-DD' -> { id, total, completed }
+    // Ventana de acceso hacia atrás (profiles.access_from). null = ve todo (alumnos actuales, altas manuales).
+    // Solo UX: la protección real es la RLS (supabase/migrations/20261019_access_from.sql).
+    let ACCESS_FROM = null;        // 'YYYY-MM-DD' | null
+    function beforeAccess(ds) { return !!(ACCESS_FROM && ds && ds < ACCESS_FROM); }
+    function updateProgNavLimits() {
+      document.getElementById('dayPrev').disabled = !!ACCESS_FROM && progDate <= ACCESS_FROM;
+      const mc = progMonthCursor;
+      document.getElementById('pcalPrev').disabled = !!(ACCESS_FROM && mc &&
+        `${mc.year}-${pad2(mc.month + 1)}` <= ACCESS_FROM.slice(0, 7));
+    }
 
     // Estado de "Mensajes" (chat)
     let chatChannel = null;        // canal del atleta (slug del programa o 'dm_' + id)
@@ -1729,7 +1744,11 @@
     });
 
     // -------- Navegación de día --------
-    document.getElementById('dayPrev').addEventListener('click', () => { progDate = addDaysStr(progDate, -1); loadProgramaDay(); });
+    document.getElementById('dayPrev').addEventListener('click', () => {
+      const prev = addDaysStr(progDate, -1);
+      if (beforeAccess(prev)) return;
+      progDate = prev; loadProgramaDay();
+    });
     document.getElementById('dayNext').addEventListener('click', () => { progDate = addDaysStr(progDate, 1); loadProgramaDay(); });
     document.getElementById('dayHoy').addEventListener('click', () => { progDate = TODAY; loadProgramaDay(); });
 
@@ -1738,6 +1757,7 @@
     // Si el día no tiene sesión, loadProgramaDay ya muestra "No hay sesión para este día 💤".
     function goToProgramaDay(ds) {
       if (!ds) return;
+      if (beforeAccess(ds)) ds = ACCESS_FROM;
       progDate = ds; progMode = 'day';
       showView('programa');
     }
@@ -1747,6 +1767,8 @@
     let rmLibById = {};                   // id -> row
     let athleteRm = {};                   // baseId -> { value:number|null, declined:bool }
     async function loadProgramaDay() {
+      if (beforeAccess(progDate)) progDate = ACCESS_FROM;
+      updateProgNavLimits();
       document.getElementById('dayLabel').textContent = prettyLong(progDate);
       const box = document.getElementById('progBlocks');
       box.innerHTML = '<div class="muted">Cargando…</div>';
@@ -2332,6 +2354,7 @@
       if (month < 0) { month = 11; year--; }
       if (month > 11) { month = 0; year++; }
       progMonthCursor = { year, month };
+      if (ACCESS_FROM && `${year}-${pad2(month + 1)}` < ACCESS_FROM.slice(0, 7)) { shiftProgMonth(1); return; }
       loadProgramaMonth();
     }
     document.getElementById('pcalPrev').addEventListener('click', () => shiftProgMonth(-1));
@@ -2374,6 +2397,7 @@
     function renderProgMonth() {
       const { year, month } = progMonthCursor;
       document.getElementById('pcalTitle').textContent = MONTHS_LONG[month] + ' ' + year;
+      updateProgNavLimits();
       const firstDow = (new Date(year, month, 1).getDay() + 6) % 7; // Lunes = 0
       const daysInMonth = new Date(year, month + 1, 0).getDate();
       const cells = [];
@@ -2388,7 +2412,8 @@
           if (p.total > 0 && p.completed >= p.total) cls += ' full';
           else if (p.completed > 0) cls += ' partial';
         }
-        cells.push(`<div class="cal-cell ${cls} ${isToday ? 'today' : ''}" data-date="${ds}">
+        const locked = beforeAccess(ds);
+        cells.push(`<div class="cal-cell ${cls} ${isToday ? 'today' : ''} ${locked ? 'locked' : ''}" ${locked ? '' : `data-date="${ds}"`}>
           <span class="cal-day">${d}</span>
           ${p ? '<span class="cal-dot"></span>' : ''}
         </div>`);
@@ -3983,6 +4008,7 @@
       ATHLETE = profile;
       IS_ASESORIA = isAsesoriaProgram(profile.program);
       HYBRID_VARIANT = profile.hybrid_variant || null;
+      ACCESS_FROM = profile.access_from ? String(profile.access_from).slice(0, 10) : null;
       progDate = TODAY;
 
       // Corte de acceso: cancelada Y con la fecha de fin ya vencida (anterior a hoy) → pantalla de vencido.

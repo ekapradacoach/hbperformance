@@ -336,6 +336,7 @@ custom_price numeric   ← ⚠️ AGREGAR en Supabase (2026-07-27). Precio manua
 hybrid_variant text   ← ⚠️ AGREGAR en Supabase (2026-07-27). '3' | '4'. Solo aplica si program='hybrid' (qué plan entrena; la planificación vive en program_slug 'hybrid-3'/'hybrid-4').
 payment_failed_at timestamptz   ← ⚠️ AGREGAR (2026-07-28). Timestamp del 1er cobro rechazado (cobro fallido); corte a los 3 días.
 shortcut_guide_seen boolean (not null default false)   ← ⚠️ AGREGAR (2026-08-04). true = ya vio el modal de "acceso directo" (videos iOS/Android); no se vuelve a mostrar.
+access_from date   ← ✅ (2026-10-30). NULL = ve toda la planificación. Seteado = solo días >= esa fecha (RLS restrictive, `supabase/migrations/20261019_access_from.sql`). Lo escribe `process-payment`: alta nueva y ex alumno que vuelve → lunes de esa semana (hora AR). create-athlete no lo setea.
 created_at timestamptz
 
 ### programs

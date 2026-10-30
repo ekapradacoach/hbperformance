@@ -530,6 +530,53 @@ Registro cronológico de lo que se va haciendo. Entrada nueva arriba o abajo seg
 - ✅ **SQL ejecutado por Erika** en Supabase (2026-10-15) y vista probada en real (check + nota guardan OK).
   Commiteado y pusheado a `main`.
 
+### 2026-10-19 — Ventana de acceso `access_from` (PREPARADO, sin ejecutar ni deployar)
+- **Objetivo:** que un alumno NUEVO no vea planificaciones de semanas anteriores a su alta (pensando en una futura
+  semana de prueba). Solo hacia atrás; hacia adelante no se limita. `access_from` NULL = ve todo (todos los actuales).
+- **Relevado contra el esquema real** (dump de `pg_policies` + columnas que pasó Erika): planning_days / planning_blocks /
+  exercise_links tienen permissive hybrid-aware + admin + restrictive `is_active_athlete()`. `planning_days.date` NOT NULL.
+  `block_rm_exercises` ya no existe (dropeada 2026-07-28) → fuera de alcance. 30 athletes / 2 admins.
+- **SQL preparado (NO corrido):** `supabase/migrations/20261019_access_from.sql` → columna `profiles.access_from date`
+  (sin default) + helpers SECURITY DEFINER `athlete_can_see_date/day/block` (NOT EXISTS: solo pueden dar false a un
+  atleta con access_from seteado; admin nunca) + 3 policies RESTRICTIVE nuevas "Ventana de acceso (access_from)"
+  (SELECT, authenticated). No toca ninguna policy existente. **Aprobado por Erika** tras revisión.
+  Rollback en DOS archivos (para no editar SQL en una emergencia), todos los scripts en `begin; … commit;`:
+  · `20261019_access_from_ROLLBACK_apagar.sql` — **el de uso por defecto**: borra las 3 policies + funciones y deja la
+    columna. Seguro aunque la process-payment nueva esté deployada.
+  · `20261019_access_from_ROLLBACK_completo.sql` — además borra la columna. ⚠️ NO correrlo con la process-payment nueva
+    deployada (rompería las altas): solo después de volver process-payment a la versión anterior.
+- **Código aplicado en local (sin commit ni deploy):** process-payment alta nueva → `access_from = arMondayStr()`
+  (lunes AR, UTC-3 fijo; probado con bordes domingo-noche/mes/año); reactivación y create-athlete sin cambios (no lo
+  tocan). `app/dashboard.html` → `ACCESS_FROM` + `beforeAccess` / `updateProgNavLimits`: "←" de día y "Mes anterior"
+  deshabilitados en el límite, días previos del calendario `.locked` (no clickeables), `goToProgramaDay` y
+  `loadProgramaDay` clampean a access_from (UX; la protección real es la RLS). esbuild OK, syntax-check OK; probado
+  con Supabase stub: con access_from bloquea 1–18/oct y deja 19–31; con NULL navega hacia atrás sin límite.
+- ⚠️ **Orden obligatorio:** primero el SQL, después el deploy de process-payment (si no, el insert del alta falla).
+- 🔎 **Hallazgo previo (no de esta tarea):** `is_active_athlete()` en producción sigue cortando por
+  `payment_failed_at + 3 días`, pero desde 2026-09-27 la gracia la decide `payment_grace_until` (hasta 15 días). Un
+  alumno con cobro fallido entre el día 4 y el corte real ve el dashboard pero **sin planificación** (la RLS ya lo cortó).
+  Arreglo pendiente aparte: actualizar la función para usar `payment_grace_until`.
+
+### 2026-10-24 — access_from: regla de reactivación + pendientes de seguridad
+- **Decisión (Erika):** toda alta por pago arranca con `access_from` = lunes AR de la semana del alta, incluida la
+  REACTIVACIÓN de alguien que **vuelve después de haberse ido**. Un alumno activo que se re-suscribe (cambio de tarjeta,
+  de programa, duplicado) **conserva** su access_from. create-athlete sigue sin setearlo. Perfiles actuales no se tocan.
+- Verificado: un cobro mensual normal **no** pasa por la rama `existingProfile` (la renovación corta antes por
+  `mp_subscription_id`); solo llega ahí quien vuelve a llenar el modal de pago (suscripción nueva).
+- ✅ **Condición de "vuelve" confirmada y aplicada en local (2026-10-30, sin commit ni deploy):** `isReturningAthlete()` =
+  `cancelled` sin días pagos vigentes **o** `payment_grace_until` vencido (el corte por cobro fallido deja
+  `subscription_status = 'active'`). Reintento exitoso de MP con la misma suscripción = renovación: conserva su historial.
+- ⏳ **Pendientes en sesiones aparte (orden acordado):**
+  1. **ANTES de la Fase 2 — process-payment, cruce de pendings en avisos de `preapproval`:** un webhook
+     `subscription_preapproval` de una suscripción YA vinculada llega sin payer_email, cae al matcheo por recencia
+     (15 min) y recién después chequea "webhook redundante". Si otra persona llenó el modal del mismo programa en esa
+     ventana, se le da de alta con la suscripción de otro alumno. Fix propuesto: chequear `mp_subscription_id` ya
+     vinculado ANTES de buscar el pending.
+  2. **Después de cerrar la Fase 1 — `is_active_athlete()`:** sigue cortando por `payment_failed_at + 3 días`; debe usar
+     `payment_grace_until` (hoy sin alumnos afectados, según Erika).
+  3. **Prioridad baja — admin, alumnos cortados por cobro fallido:** siguen con `subscription_status = 'active'`, así que
+     el admin probablemente los cuenta como activos aunque no tengan acceso. Revisar cómo mostrarlos distinto.
+
 ### 2026-10-26 — Editar email del alumno desde admin + detección de typos en el modal de pago
 - **Disparador:** una alumna pagó y el mail de ingreso no le llegó porque su email quedó guardado con typo
   (`@gmail.con`). No había forma de corregir el email de un alumno (vive en Auth y en `profiles`).
@@ -548,3 +595,13 @@ Registro cronológico de lo que se va haciendo. Entrada nueva arriba o abajo seg
 - `.claude/launch.json`: config `static-node` (puerto 5501) porque en esta PC no hay python.
 - ⏳ **Pendiente (Erika):** deploy `supabase functions deploy update-athlete-email` y corregir el email de la alumna
   desde admin (+ verificar su perfil/pago con el SQL que se pasó por chat).
+
+### 2026-10-30 — access_from en producción (Fase 1)
+- ✅ Migración `20261019_access_from.sql` corrida por Erika. Verificado: 3 policies "Ventana de acceso (access_from)"
+  RESTRICTIVE/SELECT presentes, 0 perfiles con access_from, un alumno sigue viendo su historial.
+- ✅ `process-payment` deployada por Erika (confirmado por ella; sin verificación independiente del código en Supabase).
+- ✅ `app/dashboard.html` publicado con este commit.
+- ⏳ **Pendiente de probar:** cuenta de prueba con access_from (UI + consulta directa a la API), renovación, y la primera
+  alta nueva / reactivación reales (revisar que quede el lunes correcto). El webhook completo no se probó de punta a punta.
+- Nota de operación: al copiar SQL o código desde el editor usar Ctrl+C; el 30/10 la migración local quedó vacía (se
+  restauró antes de commitear) y su texto se pegó primero por error en el editor de la Edge Function (deploy falló, sin efecto).
