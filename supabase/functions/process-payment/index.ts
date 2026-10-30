@@ -54,7 +54,7 @@
 //   mes queda en el mes correcto. Tipos MP: alta_nueva (1er pago) / renovacion_automatica (recurrente).
 //
 // Cambio 2026-09-27 (corte por cobro fallido basado en INTENTOS, no en plazo fijo): antes el corte era a
-//   los 3 días fijos (guard del dashboard) y podía cortar ANTES de que MP reintentara (caso Mariano). Ahora el
+//   los 3 días fijos (guard del dashboard) y podía cortar ANTES de que MP reintentara (caso alumno de prueba). Ahora el
 //   server escribe `profiles.payment_grace_until` y el dashboard corta cuando hoy > grace_until:
 //     · 1er fallo → grace_until = +15 días (backstop por si el 2do webhook nunca llega) + banner + mail.
 //     · 2do fallo REAL → grace_until = ahora (corte inmediato). "Real" = retry_attempt de la invoice MAYOR al
@@ -281,6 +281,19 @@ Deno.serve(async (req) => {
     }
 
     if (status === 'authorized') {
+      // Si esta suscripción ya está vinculada a un perfil, no se busca ningún pending: un pending reciente
+      // puede ser de OTRA persona. Si la consulta falla, se responde 500 para que MP reintente.
+      const { data: linked, error: linkedErr } = await adminClient
+        .from('profiles').select('id').eq('mp_subscription_id', mpSubscriptionId).limit(1)
+      if (linkedErr) {
+        console.error('No se pudo chequear si la suscripción ya está vinculada:', linkedErr.message)
+        return json({ ok: false, error: 'No se pudo verificar la suscripción' }, 500)
+      }
+      if (linked && linked.length > 0) {
+        console.log('Aviso de suscripción ya vinculada → sin alta ni búsqueda de pending:', mpSubscriptionId)
+        return json({ ok: true, status: 'already_provisioned' })
+      }
+
       // Programa: fuente de verdad = preapproval_plan_id mapeado contra site_config.
       // external_reference solo como respaldo/validación (los planes no lo tienen seteado).
       const program = await resolveProgram(adminClient, subscription)

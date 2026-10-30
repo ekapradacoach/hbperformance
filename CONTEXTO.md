@@ -606,3 +606,37 @@ Registro cronológico de lo que se va haciendo. Entrada nueva arriba o abajo seg
   alta nueva / reactivación reales (revisar que quede el lunes correcto). El webhook completo no se probó de punta a punta.
 - Nota de operación: al copiar SQL o código desde el editor usar Ctrl+C; el 30/10 la migración local quedó vacía (se
   restauró antes de commitear) y su texto se pegó primero por error en el editor de la Edge Function (deploy falló, sin efecto).
+
+### 2026-10-30 (b) — process-payment: no cruzar pendings en avisos de suscripciones ya vinculadas
+- **Problema:** un aviso `subscription_preapproval` (o una cuota `scheduled`) llega sin email. Si la suscripción ya era
+  de un alumno y otra persona había llenado el formulario del mismo programa en los últimos 15 min, se creaba una cuenta
+  para esa persona, sin pagar, con la suscripción del alumno. Después `maybeSingle` no reconocía los cobros del alumno.
+- **Arreglo (deployado por Erika el 2026-10-30, tras consulta de cruces sin filas y simulación 18 de 18):** al entrar en `status === 'authorized'` se chequea primero si
+  `mp_subscription_id` ya está en `profiles`: si está, responde `already_provisioned` sin buscar pending; si la consulta
+  falla, responde 500 para que MP reintente. El fallback por recencia NO se tocó.
+- **Único cambio de comportamiento:** baja en admin con la sub vieja viva y pending propio: ya no reactiva con la sub
+  vieja; reactiva cuando llega el aviso de la sub nueva.
+- **Simulación de avisos (correr ANTES de cada deploy de process-payment, desde la raíz del repo):**
+  `node supabase/tests/process-payment.sim.mjs` — corre el código real con MP y Supabase simulados (@example.test), sin
+  red ni base. Tiene que terminar en "18 de 18 casos OK" (sale con código 1 si algo falla). Los casos "CONOCIDO" fijan
+  los cruces abiertos: si se arreglan, hay que actualizarlos. Con la versión anterior falla 5 casos (detecta el cruce).
+  Prueba la lógica de la función, NO cómo se comporta MP en realidad.
+- **Antes de deployar:** correr `supabase/checks/detectar_cruces.sql` (solo lectura, suscripciones duplicadas en `profiles`
+  (`group by mp_subscription_id having count(*) > 1`); si devuelve filas, corregir esos perfiles primero.
+- **Privacidad:** se reemplazó el nombre y un email reales por "alumno de prueba" en process-payment, app/CONTEXTO.md y
+  supabase/payment_grace.sql. El repo es PÚBLICO: esos datos siguen en el historial de git hasta que se decida limpiarlo.
+- ⏳ **Pendientes nuevos:**
+  1. **Paso siguiente — fallback por recencia en planes pagos:** puede asignar una suscripción a otra persona (pending
+     propio con más de 15 min, o mail de MP distinto al del formulario). Propuesta: no dar de alta por recencia y esperar
+     el cobro, que trae el email. Primero medir cuántas altas lo necesitaron.
+  2. **Prioridad baja — email ajeno en el formulario:** alguien escribe el email de otra persona y paga → se reactiva
+     ese perfil y se cancela su suscripción.
+  3. **Fase 2 — probar con cuentas de prueba de MP:** si un preapproval por API (sin plan, `pending`,
+     `external_reference` = id del pending) acepta `free_trial`, y qué pasa si se paga con un mail distinto a `payer_email`.
+
+### 2026-10-30 (c) — Revisión de secretos (archivos actuales + todo el historial)
+- Sin secretos de servidor: 0 coincidencias de claves de Mercado Pago, Resend, service_role/JWT, `sb_secret_`, tokens de
+  GitHub ni claves privadas. Nunca se commitearon `.env` ni `Codigos.txt` (está en `.gitignore`).
+- Solo 2 claves, ambas de front: publishable de Supabase (pública por diseño) y la key de YouTube en `admin/index.html`
+  (⏳ confirmar en Google Cloud que esté restringida por dominio; pendiente desde la auditoría del 2026-08-06).
+- Búsqueda por patrones: no detecta un secreto con formato no contemplado.
