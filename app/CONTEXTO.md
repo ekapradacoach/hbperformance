@@ -2610,7 +2610,7 @@ en ningún lado; los de MP sí ven su precio. Ahora los manuales también.
   auth-gated. Sin redeploy (frontend).
 
 ## 2026-08-13 (n) — process-payment: anti-falso-positivo webhook duplicado + recencia acotada + spam en mail; .gitignore videos
-Raíz: análisis de logs reales del 21/08 (mariano.osteocursos@gmail.com, hybrid). Secuencia: preapproval pending →
+Raíz: análisis de logs reales del 21/08 (alumno de prueba, hybrid). Secuencia: preapproval pending →
 preapproval authorized (alta OK por recencia, se borra el pending) → authorized_payment ×2 (renovación, correcto)
 → **preapproval updated v2** (MP reenvía) → entra a la rama authorized, el pending ya no existe → **ERROR falso
 "ALTA MANUAL REQUERIDA"** aunque el alta ya se había hecho. (El mail de bienvenida SÍ se mandó — cayó en spam del
@@ -2625,7 +2625,7 @@ usuario; no es bug de envío, pero es señal de que puede pasarle a otros.)
    hay EXACTAMENTE UN pending** del programa en la ventana (`gte created_at` + `length===1`). Si hay **2+ recientes**
    y el email no matcheó → **no adivina** (loguea "Recencia AMBIGUA" y cae al chequeo de redundancia / manual). Evita
    cruzar datos entre dos compradores del mismo programa casi simultáneos (decisión del usuario: mejor manual que
-   arriesgar el cruce). El caso de un único pending (como mariano) sigue andando.
+   arriesgar el cruce). El caso de un único pending (como el del alumno de prueba) sigue andando.
 3. **Aviso de spam (punto 1):** el **mail de reactivación (Resend)** ahora incluye una línea:
    *"💡 Si no ves nuestros mails en tu bandeja de entrada, revisá la carpeta de spam o 'promociones'…"*. ⚠️ El mail
    de un **alta NUEVA NO es Resend** → es el **invite de Supabase Auth** (`inviteUserByEmail`); su aviso de spam se
@@ -2801,7 +2801,7 @@ viejas YA vinculadas en `profiles`; una huérfana nunca guardada (ej. perfil man
 no se detecta acá y se cancela a mano en MP. esbuild OK. ⚠️ REQUIERE REDEPLOY MANUAL de process-payment.
 
 ## 2026-09-27 (a) — Corte por cobro fallido: basado en intentos, no en plazo fijo de 3 días
-Problema (caso Mariano): el plazo fijo de 3 días (`PAYMENT_GRACE_MS` en dashboard) corría en paralelo e
+Problema (caso alumno de prueba): el plazo fijo de 3 días (`PAYMENT_GRACE_MS` en dashboard) corría en paralelo e
 independiente de los reintentos reales de MP → cortaba al alumno mientras MP todavía no había reintentado.
 Rediseño (Opción B: corte por 2do fallo real + backstop 15 días):
 - **DB** (`supabase/payment_grace.sql`, correr en Supabase): 2 columnas nuevas en `profiles` →
