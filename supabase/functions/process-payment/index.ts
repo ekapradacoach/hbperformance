@@ -73,6 +73,13 @@
 //   (isReturningAthlete); si nunca perdió el acceso, conserva el suyo. La renovación no lo toca.
 //   ⚠️ Requiere la columna profiles.access_from (supabase/migrations/20261019_access_from.sql): correr el SQL ANTES de deployar.
 //
+// Cambio 2026-11-01 (ningún cobro aprobado sin registrar): el registro en `payments` ya no depende del camino que tome
+//   el aviso. Si el cobro está aprobado y se identifica al perfil (por suscripción o por mail del pagador, sin revincular),
+//   se registra. Si falla la consulta a MP o el guardado → 5xx para que MP reintente; es seguro porque mp_payment_id es
+//   único. Sin perfil identificable → log "COBRO SIN REGISTRAR". El 1er cobro queda como alta_nueva aunque entre por la
+//   rama de renovación. La lógica de gracia y corte NO cambió.
+//   Probar antes de cada deploy: node supabase/tests/process-payment-pagos.sim.mjs
+//
 // Secretos: MP_ACCESS_TOKEN, SUPABASE_URL, SERVICE_ROLE_KEY, RESEND_API_KEY, MP_WEBHOOK_SECRET.
 // ============================================================================
 
@@ -128,6 +135,8 @@ Deno.serve(async (req) => {
     // Objeto payment de MP del 1er cobro (alta nueva). Se trae UNA vez (para email + bruto + neto) y se
     // reutiliza para registrar el pago en `payments` después de crear/reactivar el profile.
     let altaPayment: any = null
+    // true = este aviso trae un cobro APROBADO que todavía no se registró (no había perfil con esta suscripción).
+    let approvedChargePending = false
 
     if (type.includes('preapproval')) {
       // subscription_preapproval / preapproval → data.id ES la preapproval
@@ -137,6 +146,11 @@ Deno.serve(async (req) => {
       const apRes = await fetch(`${MP_API}/authorized_payments/${resourceId}`, {
         headers: { 'Authorization': `Bearer ${MP_TOKEN}` }
       })
+      // Un error transitorio de MP no puede perder el cobro: se pide reintento. 404 = la cuota no existe, reintentar no sirve.
+      if (!apRes.ok && apRes.status !== 404) {
+        console.error('No se pudo traer el authorized_payment:', apRes.status, resourceId)
+        return json({ ok: false, error: 'No se pudo obtener la cuota' }, 502)
+      }
       const ap = await apRes.json()
       preapprovalId = ap?.preapproval_id ? String(ap.preapproval_id) : null
       if (!preapprovalId) {
@@ -152,6 +166,30 @@ Deno.serve(async (req) => {
       const invoiceStatus = ap?.status ? String(ap.status) : null
       const chargeFailed = chargeStatus === 'rejected' || invoiceStatus === 'recycling'
       const chargeApproved = chargeStatus === 'approved'
+
+      // Cobro todavía sin resultado: se pide reintento para volver a mirarlo cuando MP lo resuelva.
+      if (!chargeFailed && chargeStatus && ['pending', 'in_process', 'authorized'].includes(chargeStatus)) {
+        console.log('Cobro en proceso → se pide reintento a MP:', chargeStatus, preapprovalId)
+        return json({ ok: false, status: 'charge_in_process' }, 503)
+      }
+
+      // Cobro aprobado con la cuota todavía en 'recycling': el dinero entró, se registra. Después sigue la lógica
+      // de gracia de abajo tal como estaba.
+      if (chargeFailed && chargeApproved) {
+        const { data: paidProf } = await adminClient
+          .from('profiles')
+          .select('id, program, subscription_start')
+          .eq('mp_subscription_id', preapprovalId)
+          .maybeSingle()
+        if (paidProf) {
+          const paid = await fetchPaymentFromAp(ap, MP_TOKEN)
+          const saved = await registerMpPayment(adminClient, paidProf.id, paidProf.program ?? null, paid,
+            await mpChargeType(adminClient, paidProf.id, paidProf.subscription_start, paid))
+          if (!saved) return json({ ok: false, error: 'No se pudo registrar el cobro' }, 500)
+        } else {
+          console.error('COBRO SIN REGISTRAR: aprobado con cuota en recycling y sin perfil. preapproval:', preapprovalId, '| payment:', ap?.payment?.id)
+        }
+      }
 
       if (chargeFailed) {
         // Política de corte (2026-09-27): el deadline lo decide el server en `payment_grace_until`; el
@@ -218,7 +256,7 @@ Deno.serve(async (req) => {
         // ¿Ya existe un profile con esta suscripción? → distingue RENOVACIÓN de ALTA NUEVA.
         const { data: prof } = await adminClient
           .from('profiles')
-          .select('id, email, program, payment_failed_at, payment_grace_until')
+          .select('id, email, program, subscription_start, payment_failed_at, payment_grace_until')
           .eq('mp_subscription_id', preapprovalId)
           .maybeSingle()
         if (prof) {
@@ -234,7 +272,9 @@ Deno.serve(async (req) => {
           // Registrar el cobro recurrente en `payments`. 1 fetch extra a /v1/payments (bruto+neto).
           // try/catch adentro del helper → si MP falla, no rompe la renovación.
           const renewalPayment = await fetchPaymentFromAp(ap, MP_TOKEN)
-          await registerMpPayment(adminClient, prof.id, prof.program ?? null, renewalPayment, 'renovacion_automatica')
+          const saved = await registerMpPayment(adminClient, prof.id, prof.program ?? null, renewalPayment,
+            await mpChargeType(adminClient, prof.id, prof.subscription_start, renewalPayment))
+          if (!saved) return json({ ok: false, error: 'No se pudo registrar el cobro' }, 500)
           console.log('Renovación (cobro recurrente OK), sin alta:', prof.email)
           return json({ ok: true, status: 'renewal' })
         }
@@ -242,6 +282,7 @@ Deno.serve(async (req) => {
         // Traer el payment de MP UNA sola vez: de ahí sale el email del pagador (para el matching por
         // email de más abajo) y también el bruto+neto para registrar el pago tras crear el profile.
         altaPayment = await fetchPaymentFromAp(ap, MP_TOKEN)
+        approvedChargePending = true
         payerEmail = altaPayment?.payer?.email ? (String(altaPayment.payer.email).trim() || null) : null
         console.log('payerEmail resuelto:', payerEmail || '(no se pudo resolver → fallback por recencia)')
         // Sigo al flujo normal de abajo (alta inicial que llega como authorized_payment).
@@ -269,10 +310,25 @@ Deno.serve(async (req) => {
     const externalReference = subscription.external_reference
 
     if (status === 'pending') {
+      // Con un cobro aprobado la suscripción debería pasar a authorized enseguida: se reintenta para no perderlo.
+      if (approvedChargePending) return json({ ok: false, status: 'subscription_not_ready' }, 503)
       return json({ ok: true, status: 'pending_ignored' })
     }
 
+    // Registra el cobro aprobado de este aviso contra un perfil ya identificado. true si quedó guardado o no había cobro.
+    const registerCharge = async (prof: any, fallbackProgram: string | null): Promise<boolean> => {
+      if (!approvedChargePending) return true
+      return await registerMpPayment(adminClient, prof.id, prof.program ?? fallbackProgram, altaPayment,
+        await mpChargeType(adminClient, prof.id, prof.subscription_start, altaPayment))
+    }
+    const logUnregisteredCharge = (reason: string) => {
+      if (approvedChargePending) {
+        console.error('COBRO SIN REGISTRAR:', reason, '| preapproval:', preapprovalId, '| payment:', altaPayment?.id ?? '(desconocido)')
+      }
+    }
+
     if (status === 'cancelled') {
+      logUnregisteredCharge('suscripción cancelada y sin perfil vinculado')
       await adminClient
         .from('profiles')
         .update({ subscription_status: 'cancelled' })
@@ -284,13 +340,19 @@ Deno.serve(async (req) => {
       // Si esta suscripción ya está vinculada a un perfil, no se busca ningún pending: un pending reciente
       // puede ser de OTRA persona. Si la consulta falla, se responde 500 para que MP reintente.
       const { data: linked, error: linkedErr } = await adminClient
-        .from('profiles').select('id').eq('mp_subscription_id', mpSubscriptionId).limit(1)
+        .from('profiles').select('id, program, subscription_start').eq('mp_subscription_id', mpSubscriptionId).limit(2)
       if (linkedErr) {
         console.error('No se pudo chequear si la suscripción ya está vinculada:', linkedErr.message)
         return json({ ok: false, error: 'No se pudo verificar la suscripción' }, 500)
       }
       if (linked && linked.length > 0) {
         console.log('Aviso de suscripción ya vinculada → sin alta ni búsqueda de pending:', mpSubscriptionId)
+        // El perfil pudo aparecer mientras se procesaba este cobro (avisos casi simultáneos). Con dos perfiles no se adivina.
+        if (linked.length === 1) {
+          if (!(await registerCharge(linked[0], null))) return json({ ok: false, error: 'No se pudo registrar el cobro' }, 500)
+        } else {
+          logUnregisteredCharge('suscripción vinculada a más de un perfil')
+        }
         return json({ ok: true, status: 'already_provisioned' })
       }
 
@@ -352,22 +414,28 @@ Deno.serve(async (req) => {
         // (Ej.: MP reenvía otro "preapproval updated" DESPUÉS de que el alta ya se hizo; el pending ya se borró.)
         // Skip silencioso —como la renovación—, NO alarma. Chequeo exacto (sin comodines) → si no matchea, cae a manual.
         const { data: bySub } = await adminClient
-          .from('profiles').select('id').eq('mp_subscription_id', mpSubscriptionId).maybeSingle()
+          .from('profiles').select('id, program, subscription_start').eq('mp_subscription_id', mpSubscriptionId).maybeSingle()
         let byEmail = null
         if (!bySub && payerEmail) {
           const { data } = await adminClient
-            .from('profiles').select('id').eq('email', payerEmail).maybeSingle()
+            .from('profiles').select('id, program, subscription_start').eq('email', payerEmail).maybeSingle()
           byEmail = data
         }
         if (bySub || byEmail) {
           console.log('Webhook redundante: el alta ya existe para esta suscripción/email → skip silencioso.',
             'preapproval:', preapprovalId, '| payer_email:', payerEmail || '(desconocido)')
+          // Cobro real de un perfil identificado: se registra aunque la suscripción guardada sea otra. No se revincula solo.
+          if (!bySub && approvedChargePending) {
+            console.error('SUSCRIPCION SIN VINCULAR: cobro registrado por mail del pagador; revisar el id guardado. preapproval:', preapprovalId, '| perfil:', byEmail.id)
+          }
+          if (!(await registerCharge(bySub || byEmail, program))) return json({ ok: false, error: 'No se pudo registrar el cobro' }, 500)
           return json({ ok: true, status: 'already_provisioned' })
         }
         // Ni pending, ni profile previo → no damos de alta a nadie automático. Erika lo resuelve a mano.
         // Buscar "ALTA MANUAL REQUERIDA" en los logs. Devuelve 200 para que MP no reintente (no se auto-resuelve).
         console.error('ALTA MANUAL REQUERIDA: pago autorizado sin pending matcheable.',
           'program:', program, '| payer_email:', payerEmail || '(desconocido)', '| preapproval:', preapprovalId)
+        logUnregisteredCharge('sin perfil ni pending')
         return json({ ok: false, status: 'manual_required' })
       }
 
@@ -492,8 +560,10 @@ Deno.serve(async (req) => {
       }
 
       // Registrar el pago del alta en `payments` (bruto+neto del payment ya traído). No bloquea el alta.
-      if (altaAthleteId) {
-        await registerMpPayment(adminClient, altaAthleteId, program, altaPayment, 'alta_nueva')
+      // Si el aviso fue de preapproval no hay cobro todavía: lo registra el authorized_payment.
+      let altaChargeSaved = true
+      if (altaAthleteId && approvedChargePending) {
+        altaChargeSaved = await registerMpPayment(adminClient, altaAthleteId, program, altaPayment, 'alta_nueva')
       }
 
       // Limpiar pending_subscriptions (también actúa de guard de idempotencia). Se borran TODOS los pendings de
@@ -513,6 +583,10 @@ Deno.serve(async (req) => {
         .in('id', pendingIds)
 
       console.log('User created/activated:', email)
+      // El alta ya quedó hecha: el reintento de MP entra por la rama de renovación y solo registra el cobro.
+      if (!altaChargeSaved) return json({ ok: false, error: 'No se pudo registrar el cobro' }, 500)
+    } else {
+      logUnregisteredCharge('suscripción en estado ' + status)
     }
 
     return json({ ok: true })
@@ -684,24 +758,40 @@ function isReturningAthlete(prof: { subscription_status?: string | null, subscri
   return leftByCancel || cutByFailedPayment
 }
 
+// Tipo del cobro que entra por un perfil ya existente: alta_nueva si es su primer pago y su suscripción arrancó hace
+// muy poco (el aviso del cobro puede llegar después del alta); si no, renovación. Ante la duda, renovación.
+async function mpChargeType(adminClient: any, athleteId: string, subscriptionStart: string | null, payment: any): Promise<string> {
+  try {
+    if (!subscriptionStart || !payment) return 'renovacion_automatica'
+    const paidMs = new Date(arDateFromApproved(payment.date_approved)).getTime()
+    const startMs = new Date(subscriptionStart).getTime()
+    if (isNaN(startMs) || Math.abs(paidMs - startMs) > 3 * 24 * 60 * 60 * 1000) return 'renovacion_automatica'
+    const { data, error } = await adminClient.from('payments').select('id').eq('athlete_id', athleteId).limit(1)
+    if (error || (data && data.length > 0)) return 'renovacion_automatica'
+    return 'alta_nueva'
+  } catch (_) {
+    return 'renovacion_automatica'
+  }
+}
+
 // Registra un pago de MP en la tabla `payments`. Idempotente por mp_payment_id (ON CONFLICT DO NOTHING).
-// try/catch total: si algo falla, se loguea y NO se propaga (no bloquea el alta/renovación).
+// Nunca tira: devuelve true si el pago quedó guardado (o ya estaba) y false si no, para que quien llama pida reintento.
 async function registerMpPayment(
   adminClient: any,
   athleteId: string,
   program: string | null,
   payment: any,
   type: string
-): Promise<void> {
+): Promise<boolean> {
   try {
     if (!payment || payment.id == null) {
       console.warn('registerMpPayment: sin payment (o sin id) →', type, '— no se registra el pago')
-      return
+      return false
     }
     const amount = payment.transaction_amount != null ? Number(payment.transaction_amount) : null
     if (amount == null || isNaN(amount)) {
       console.warn('registerMpPayment: payment sin transaction_amount → no se registra:', payment.id)
-      return
+      return false
     }
     const netRaw = payment?.transaction_details?.net_received_amount
     const netAmount = netRaw != null && !isNaN(Number(netRaw)) ? Number(netRaw) : null
@@ -723,11 +813,14 @@ async function registerMpPayment(
       }, { onConflict: 'mp_payment_id', ignoreDuplicates: true })
     if (error) {
       console.error('registerMpPayment: error insertando el pago (no bloquea el alta):', error.message)
+      return false
     } else {
       console.log('Pago MP registrado:', type, '| payment_id:', payment.id, '| net:', netAmount, '| paid_at:', paidAt)
     }
+    return true
   } catch (err) {
     console.error('registerMpPayment: excepción (no bloquea el alta):', err)
+    return false
   }
 }
 

@@ -648,6 +648,12 @@ despliegan a mano en Supabase):
   **invite de Supabase Auth**, cuyo texto/aviso de spam se edita en el dashboard → Auth → Email Templates → Invite).
   **Registro de pagos (2026-09-10):** cada cobro aprobado se inserta en `payments` (bruto + neto real de
   `/v1/payments/{id}`, `paid_at` en hora AR, `mp_payment_id` UNIQUE idempotente, try/catch no bloqueante).
+  **Ningún cobro aprobado sin registrar (2026-11-01):** el registro ya no depende del camino del aviso. Con cobro aprobado
+  y perfil identificado (por suscripción, incluso si el perfil apareció mientras se procesaba, o por mail del pagador, sin
+  revincular: log `SUSCRIPCION SIN VINCULAR`) se registra. Falla de MP o del guardado → 5xx para que MP reintente; cobro en
+  proceso → 503. Sin perfil identificable o suscripción vinculada a 2 perfiles → log `COBRO SIN REGISTRAR` (no se adivina).
+  El 1er cobro queda `alta_nueva` aunque entre por la rama de renovación. Gracia y corte no cambiaron. Antes de cada deploy:
+  `node supabase/tests/process-payment-pagos.sim.mjs` y `node supabase/tests/process-payment.sim.mjs`.
   **Anti-suscripciones-duplicadas (2026-09-11):** en la rama `existingProfile`, si el perfil ya tenía OTRA
   `mp_subscription_id` guardada (distinta a la nueva), se cancela la vieja en MP (`PUT /preapproval/{viejo}
   status:cancelled`) antes de pisarla — try/catch, no bloquea el alta. NO busca por email; solo cubre subs

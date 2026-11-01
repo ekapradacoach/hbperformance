@@ -640,3 +640,12 @@ Registro cronológico de lo que se va haciendo. Entrada nueva arriba o abajo seg
 - Solo 2 claves, ambas de front: publishable de Supabase (pública por diseño) y la key de YouTube en `admin/index.html`
   (⏳ confirmar en Google Cloud que esté restringida por dominio; pendiente desde la auditoría del 2026-08-06).
 - Búsqueda por patrones: no detecta un secreto con formato no contemplado.
+
+### 2026-11-01 — process-payment: cobros aprobados que no quedaban en `payments`
+- **Problema:** 4 cobros automáticos sin fila en `payments` (2 altas, 2 renovaciones). Ya cargados a mano, sin backfill. Los logs de esas fechas no existen: la causa de cada caso sigue sin confirmar hasta consultar MP.
+- **Causa de fondo:** el cobro solo se registraba por dos caminos (renovación con la suscripción correcta y alta por `authorized_payment`). En los demás la función respondía OK y MP no reintentaba: avisos casi simultáneos, suscripción distinta a la guardada, cobro todavía en proceso, aprobado con cuota en `recycling`, o error al consultar MP o al guardar.
+- **Arreglo:** con cobro aprobado y perfil identificado se registra siempre. Por mail del pagador se registra sin revincular (log `SUSCRIPCION SIN VINCULAR`). Errores de MP o del guardado → 5xx para que MP reintente; cobro en proceso → 503. Sin perfil o con la suscripción en 2 perfiles → log `COBRO SIN REGISTRAR`, sin adivinar. El 1er cobro queda `alta_nueva` aunque entre por la rama de renovación.
+- **Sin cambios:** el bloque de gracia y corte es idéntico (comparado con diff). Solo se agregó antes el registro del cobro aprobado con cuota en `recycling`: si ese guardado falla, responde 500 y la gracia se aplica en el reintento.
+- ⏳ **Abierto:** un cobro aprobado con cuota en `recycling` todavía marca fallo de cobro a quien pagó. No se tocó por ser lógica de gracia.
+- **Pruebas:** `supabase/tests/process-payment-pagos.sim.mjs` nueva, con `mp_payment_id` único como la base real y varios avisos por caso, incluidos avisos repetidos. Contra el código anterior fallaban 11 de 20; ahora pasan todos. Simulación anterior sin cambios de resultado. Solo simulación: falta ver el comportamiento real de los reintentos de MP.
+- ⏳ **Pendiente (Erika):** deploy de `process-payment`. Botón "Sincronizar con MP": se decide con los resultados de las consultas.
