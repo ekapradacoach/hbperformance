@@ -72,7 +72,7 @@ globalThis.fetch = async (url, opts = {}) => {
   if ((m = u.match(/\/v1\/payments\/(.+)$/))) return res(mp.payments[m[1]]);
   if ((m = u.match(/\/preapproval\/(.+)$/))) {
     if (opts.method === 'PUT') { calls.push('MP-cancela:' + m[1]); return res({}); }
-    return res({ id: m[1], status: 'authorized', preapproval_plan_id: 'plan-h', external_reference: null, payer_email: '' });
+    return res({ id: m[1], status: mp.subStatus || 'authorized', preapproval_plan_id: mp.plan || 'plan-h', external_reference: mp.ref ?? null, payer_email: '' });
   }
   if (u.includes('resend')) return res({});
   throw new Error('fetch inesperado: ' + u);
@@ -122,6 +122,26 @@ const cases = [
     expect: { status: 'manual_required', profiles: {}, pendings: ['lucia', 'sofia'], calls: [] } },
   { name: 'Dos pendings, cobro con email de una: alta correcta', profiles: [], pendings: [pending('lucia', 3), pending('sofia', 4)], mp: approved('sub-new', 'sofia@example.test'), event: invoiceEvent,
     expect: { profiles: { sofia: ['active', 'sub-new', monday] }, pendings: ['lucia'], calls: ['invita:sofia'] } },
+  // Plan que process-payment NO conoce (no está en site_config): etapa 1 de la Fase 2 con cuentas reales.
+  // "personal" tiene perfil y pending con el mismo mail del pagador: tampoco se toca.
+  { name: 'Plan desconocido: aviso de suscripción, con perfil y pending del mismo mail', profiles: [profile('personal', { access_from: OLD })], pendings: [pending('personal', 3)], mp: { plan: 'plan-x' }, event: preapprovalEvent('sub-x'),
+    expect: { httpStatus: 422, profiles: { personal: ['active', 'sub-personal', OLD] }, pendings: ['personal'], calls: [], payments: 0 } },
+  { name: 'Plan desconocido: cobro aprobado con mail del pagador igual al perfil y al pending', profiles: [profile('personal', { access_from: OLD })], pendings: [pending('personal', 3)], mp: { ...approved('sub-x', 'personal@example.test'), plan: 'plan-x' }, event: invoiceEvent,
+    expect: { httpStatus: 422, profiles: { personal: ['active', 'sub-personal', OLD] }, pendings: ['personal'], calls: [], payments: 0 } },
+  { name: 'Plan desconocido: perfil cancelado del mismo mail no se reactiva', profiles: [profile('personal', { subscription_status: 'cancelled', subscription_end: date(-5) })], pendings: [pending('personal', 3)], mp: { ...approved('sub-x', 'personal@example.test'), plan: 'plan-x' }, event: invoiceEvent,
+    expect: { httpStatus: 422, profiles: { personal: ['cancelled', 'sub-personal', null] }, pendings: ['personal'], calls: [], payments: 0 } },
+  { name: 'Plan desconocido: pending reciente de otra persona no se usa', profiles: [], pendings: [pending('lucia', 2)], mp: { plan: 'plan-x' }, event: preapprovalEvent('sub-x'),
+    expect: { httpStatus: 422, profiles: {}, pendings: ['lucia'], calls: [], payments: 0 } },
+  { name: 'Plan desconocido: cuota programada', profiles: [profile('personal')], pendings: [pending('personal', 3)], mp: { plan: 'plan-x', invoices: { i1: { preapproval_id: 'sub-x', status: 'scheduled' } } }, event: invoiceEvent,
+    expect: { httpStatus: 422, profiles: { personal: ['active', 'sub-personal', null] }, pendings: ['personal'], calls: [], payments: 0 } },
+  { name: 'Plan desconocido: cobro rechazado', profiles: [profile('personal')], pendings: [pending('personal', 3)], mp: { plan: 'plan-x', invoices: { i1: { preapproval_id: 'sub-x', status: 'recycling', retry_attempt: 1, payment: { status: 'rejected' } } } }, event: invoiceEvent,
+    expect: { status: undefined, profiles: { personal: ['active', 'sub-personal', null] }, pendings: ['personal'], calls: [], payments: 0 } },
+  { name: 'Plan desconocido: suscripción cancelada', profiles: [profile('personal')], pendings: [pending('personal', 3)], mp: { plan: 'plan-x', subStatus: 'cancelled' }, event: preapprovalEvent('sub-x'),
+    expect: { status: 'cancelled', profiles: { personal: ['active', 'sub-personal', null] }, pendings: ['personal'], calls: [], payments: 0 } },
+  { name: 'Plan desconocido: external_reference de la etapa 1 se ignora', profiles: [profile('personal')], pendings: [pending('personal', 3)], mp: { ...approved('sub-x', 'personal@example.test'), plan: 'plan-x', ref: 'ETAPA1-1-abcd' }, event: invoiceEvent,
+    expect: { httpStatus: 422, profiles: { personal: ['active', 'sub-personal', null] }, pendings: ['personal'], calls: [], payments: 0 } },
+  { name: 'CONOCIDO: plan desconocido con external_reference = programa válido SÍ reactiva', profiles: [profile('personal', { access_from: OLD })], pendings: [pending('personal', 3)], mp: { ...approved('sub-x', 'personal@example.test'), plan: 'plan-x', ref: 'hybrid' }, event: invoiceEvent,
+    expect: { profiles: { personal: ['active', 'sub-x', OLD] }, pendings: [], calls: ['MP-cancela:sub-personal'] } },
   { name: 'CONOCIDO: pending propio viejo, Lucía única reciente: se cruza', profiles: [], pendings: [pending('compradora', 30), pending('lucia', 2)], event: preapprovalEvent('sub-compradora'),
     expect: { profiles: { lucia: ['active', 'sub-compradora', monday] }, pendings: ['compradora'], calls: ['invita:lucia'] } },
   { name: 'CONOCIDO: mail de MP distinto al form, Lucía única reciente: se cruza', profiles: [], pendings: [pending('lucia', 2)], mp: approved('sub-x', 'otro@example.test'), event: invoiceEvent,
@@ -156,6 +176,7 @@ try {
       profiles: Object.fromEntries(db.profiles.map(p => [user(p.email), [p.subscription_status, p.mp_subscription_id, p.access_from ?? null]])),
       pendings: db.pending_subscriptions.map(p => user(p.email)).sort(),
       calls,
+      payments: db.payments.length,
     };
     const diffs = Object.entries(c.expect).filter(([k, v]) => JSON.stringify(got[k]) !== JSON.stringify(v))
       .map(([k, v]) => `${k}: esperado ${JSON.stringify(v)}, obtenido ${JSON.stringify(got[k])}`);

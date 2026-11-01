@@ -618,7 +618,7 @@ Registro cronológico de lo que se va haciendo. Entrada nueva arriba o abajo seg
   vieja; reactiva cuando llega el aviso de la sub nueva.
 - **Simulación de avisos (correr ANTES de cada deploy de process-payment, desde la raíz del repo):**
   `node supabase/tests/process-payment.sim.mjs` — corre el código real con MP y Supabase simulados (@example.test), sin
-  red ni base. Tiene que terminar en "18 de 18 casos OK" (sale con código 1 si algo falla). Los casos "CONOCIDO" fijan
+  red ni base. Tiene que terminar con todos los casos OK (hoy 27 de 27) (sale con código 1 si algo falla). Los casos "CONOCIDO" fijan
   los cruces abiertos: si se arreglan, hay que actualizarlos. Con la versión anterior falla 5 casos (detecta el cruce).
   Prueba la lógica de la función, NO cómo se comporta MP en realidad.
 - **Antes de deployar:** correr `supabase/checks/detectar_cruces.sql` (solo lectura, suscripciones duplicadas en `profiles`
@@ -640,6 +640,68 @@ Registro cronológico de lo que se va haciendo. Entrada nueva arriba o abajo seg
 - Solo 2 claves, ambas de front: publishable de Supabase (pública por diseño) y la key de YouTube en `admin/index.html`
   (⏳ confirmar en Google Cloud que esté restringida por dominio; pendiente desde la auditoría del 2026-08-06).
 - Búsqueda por patrones: no detecta un secreto con formato no contemplado.
+
+### 2026-10-30 (d) — Fase 2, etapa 1: script para probar identificación con planes
+- `supabase/tests/mp-etapa1.mjs` (local, sin commit). Se descartó el entorno de prueba de MP (rechazaba el pago). Ahora opera en PRODUCCIÓN sobre un único plan de prueba técnica ($100, 1 día gratis), con candados. Antes: menú con un plan de
+  7 días gratis, genera links con `external_reference`, revisa suscripciones, busca por mail, analiza la URL de regreso y
+  compara una cancelación antes/después. Pide la credencial oculta, no la guarda y rechaza las de producción.
+- No toca Supabase ni `process-payment`. Probado solo con MP y terminal simulados; falta correrlo contra MP real.
+- **Decisiones (Erika):** el plan de CrossFit volvió a 0 días el 19/10, la suscripción de su prueba está cancelada y ningún alumno cambió su fecha de cobro. Orden de identificación: opciones con plan → c3 (API con plan y tarjeta cargada con el componente oficial de MP, datos directo a MP) → "sin plan" solo si c3 falla. Ya no se confía en los pendings sin identificación: alta manual.
+- **Etapa 1 con cuentas reales (2026-10-31):** cuenta de trabajo cobra, MP personal paga, sin usar el formulario del sitio. Simulación ampliada (27 de 27): un plan que `process-payment` no conoce responde 422 sin alta, sin reactivar y sin tocar pendings, aunque haya perfil o pending con el mail del pagador. Excepción (caso CONOCIDO): si `external_reference` es un programa válido sí se resuelve; por eso el script solo genera referencias `ETAPA1-...`. MP no documenta monto mínimo: $100 está sin confirmar. Los candados se probaron con MP simulado, no contra MP real.
+
+### 2026-10-31 — Fase 2: resultados de la etapa 1 y plan actualizado (sin código)
+**Resultados con cuentas reales** (una sola suscripción de prueba, pagada con dinero disponible; tarjeta sin probar; ids y mails fuera del repo):
+- `external_reference` en el link del plan: **descartada**, la suscripción queda con el campo vacío.
+- Volver a consultar la suscripción: **descartada**, `payer_email` siguió vacío a la hora y media.
+- Página de regreso: **funciona**, vuelve con `preapproval_id` y es la suscripción correcta.
+- Búsqueda por mail: funciona solo con el mail de la cuenta de MP del pagador. Con otro mail da 0.
+- `payer_id`: viene aunque `payer_email` esté vacío. Coincidió entre dos suscripciones de la misma cuenta (19/10 y 31/10).
+- ✅ **Etapa 1 cerrada (2026-11-01).** Primer cobro: aprobado por $100, cerca de 1 h 20 después de la hora programada. El mail del pagador vino en el pago; la suscripción y su aviso siguieron con `payer_email` vacío.
+- `process-payment` con el plan desconocido, en real: todos los avisos terminaron en 422 "No se pudo determinar el program", sin ningún "User created/activated". MP reintentó cada 15-20 min. El perfil de Erika quedó igual.
+- Cancelación: pasa a `cancelled` y MP **sigue devolviendo `next_payment_date`**. Durante la prueba esa fecha sirve como fin del acceso, pero el sistema no debe tomarla como cobro futuro en una suscripción cancelada.
+- Cierre: pago devuelto y plan de prueba cancelado por Erika desde el panel.
+- Para la etapa 6: el cobro puede llegar más de una hora después de la fecha, así que el acceso no puede cortarse justo al vencer la prueba.
+
+**Decisión (Erika): seguimos con PLANES.** Los planes de prueba de producción se crean por API, como el de la etapa 1, con la página de regreso configurada. Después Erika edita los días de prueba desde el panel de MP. c3 y "sin plan" quedan sin uso mientras esto funcione.
+
+**Identificación:**
+1. **Principal:** la página de regreso de prueba manda al servidor el `preapproval_id` y el id del pending (guardado en el navegador al completar el formulario).
+2. **El servidor no confía en la dirección.** Consulta la suscripción en MP y exige: plan de prueba, `authorized`, no vinculada a ningún perfil, creada después del pending y hace poco. Si algo no cierra: alta manual.
+3. **Respaldo si no vuelve a la página:** búsqueda por el mail del formulario dentro del plan de prueba. Si no encuentra exactamente una: alta manual. **Nunca recencia.**
+4. **`payer_id` en `profiles`**, para detectar a quien repite la prueba con otro mail y la misma cuenta de MP.
+
+**Decidido también (propuesto por Claude, aprobado por Erika el 2026-11-01):**
+- El plan de la suscripción tiene que ser el del programa del pending, y el pending no puede estar ya usado.
+- Ventana de "hace poco": 2 horas entre pending y suscripción.
+- Índice único en `profiles.mp_subscription_id`, porque el regreso y el webhook pueden llegar a la vez. Antes correr `supabase/checks/detectar_cruces.sql`.
+- El webhook de un plan de prueba dispara el respaldo: nunca da de alta por sí solo.
+- `payer_id` ya usado: sin alta automática, queda para revisión.
+- **Alta manual pendiente:** cada caso aparece en admin → Pruebas. Esa suscripción sigue viva en MP y **va a cobrar** aunque la persona no tenga acceso: hay que dar el alta o cancelarla antes del cobro.
+- Primer cobro de una suscripción sin vincular en plan de prueba: sin alta automática, y aviso para resolverlo a mano.
+- Sin id del pending en el navegador (ver riesgos): el regreso le pide el mail del formulario y sigue con las mismas verificaciones.
+
+**Riesgos sin probar (van en la etapa 8):**
+- Celular: link abierto desde Instagram/WhatsApp, pago en la app de MP y regreso en otro navegador, sin el id del pending.
+- Editar los días desde el panel: confirmar que el plan conserva la página de regreso y que sigue volviendo con `preapproval_id` (la etapa 1 no editó el plan).
+- Pago con tarjeta y regreso.
+- `payer_id` no sirve contra alumnos anteriores: `profiles` no lo tiene. Para ellos sigue valiendo el control por mail.
+
+**Etapas:**
+1. Identificación: ✅ cerrada el 2026-11-01.
+2. Datos: marca de prueba en el pending; en el perfil estado de prueba (cuatro valores), inicio, fin y fecha de resolución; `payer_id`; índice único.
+3. Planes de prueba creados por API con la página de regreso (Erika edita los días desde el panel) + función de entrada: elegibilidad, mensaje genérico, límite de intentos, pending creado por el servidor, id devuelto al navegador.
+4. Alta de prueba: función de identificación (regreso + respaldo) y `process-payment`.
+5. `prueba.html`, página de regreso propia, Pixel `StartTrial` sin `Purchase`.
+6. Primer cobro y cancelación: incluye la marca en `cancel-subscription`, fin de acceso si cancela en MP, corte si el cobro es rechazado.
+7. Admin → Pruebas: En prueba, Canceló, Siguió, Cobro rechazado, conversión, altas manuales pendientes.
+8. Prueba real de 1 día, con los riesgos de arriba.
+9. Prueba real de 7 días; después Hybrid y Corredores.
+
+⏳ **Antes del índice único de `mp_subscription_id`:** `process-payment` no revisa el error al guardar el perfil en el alta ni en la reactivación. Si el índice rechaza el guardado, igual borra el pending y registra "User created/activated". Tiene que responder error para que MP reintente.
+
+⏳ **Pendiente nuevo, para revisar más adelante:** hoy, si un link tiene `external_reference` = un programa válido (por ejemplo `hybrid`), `process-payment` resuelve el programa con eso y reactiva un perfil aunque el plan sea desconocido (caso CONOCIDO de la simulación).
+
+Script: la hora se muestra en formato de 24 horas. Sin commit ni push.
 
 ### 2026-11-01 — process-payment: cobros aprobados que no quedaban en `payments`
 - **Problema:** 4 cobros automáticos sin fila en `payments` (2 altas, 2 renovaciones). Ya cargados a mano, sin backfill. Los logs de esas fechas no existen: la causa de cada caso sigue sin confirmar hasta consultar MP.
