@@ -751,8 +751,9 @@ Script: la hora se muestra en formato de 24 horas. Sin commit ni push.
 - `20261102_trial_intentos.sql` y su rollback, locales y sin ejecutar: `trial_attempts` e índice único por mail de pending de prueba. Probados en Postgres en memoria (18 de 18).
 - ✅ **Registro de Auth apagado por Erika y probado en la base real (2026-11-02):** ingreso OK; recuperar contraseña OK; invitación desde `create-athlete` OK hasta entrar al portal, con la cuenta de prueba borrada después; `signUp` rechazado con "Signups not allowed for this instance" (422). La invitación desde `process-payment` se confirma con la primera alta real.
 - ✅ `process-payment` con filtro `is_trial` y alta con mail en Auth deployada por Erika el 2026-11-02, con control de cruces sin filas.
-- ⏳ Función `start-trial`: pendiente.
+- `supabase/functions/start-trial` y `supabase/tests/start-trial.sim.mjs` escritas en local, sin commit ni deploy. Simulación: 42 de 42, con Supabase simulado. ✅ `20261102_trial_intentos.sql` corrida y verificada por Erika el 2026-11-02 (tabla, índice y RLS). ✅ `start-trial` deployada por Erika el 2026-11-02 con `verify_jwt` OFF: desde `crossfit.html` un cuerpo vacío da la respuesta genérica y `trial_attempts` guardó el intento. ⏳ Falta crear el plan, cargarlo en `site_config` y probar con alias.
 
 ## Mantenimiento / pendientes
 Lo que no bloquea la Fase 2 ni arriesga a los alumnos actuales. Una línea y su prioridad.
 - Media: `create-athlete` da error si el mail ya existe en Auth sin perfil (el admin lo ve en pantalla).
+- Baja: al cancelar o editar un plan, MP manda un aviso que `process-payment` trata como suscripción y responde 502 ("Preapproval not found"; visto el 01/11 con el plan de prueba cancelado). Hay que ignorar esos avisos con 200.
