@@ -65,6 +65,10 @@ globalThis.__createClient = () => ({
     // Como Auth real: invitar un mail ya registrado da error.
     inviteUserByEmail: async e => {
       calls.push('invita:' + user(e));
+      if (mp.inviteFails) return { data: null, error: { status: 500, message: 'falla simulada' } };
+      // Como Auth real: confirmado → 422 email_exists; sin confirmar → reenvía y devuelve el mismo usuario.
+      if (mp.authConfirmed?.[user(e)]) return { data: null, error: { status: 422, code: 'email_exists', message: 'already registered' } };
+      if (mp.authUnconfirmed?.[user(e)]) return { data: { user: { id: mp.authUnconfirmed[user(e)] } }, error: null };
       if (db.authUsers.has('new-' + user(e))) return { data: null, error: { message: 'already registered' } };
       db.authUsers.add('new-' + user(e));
       return { data: { user: { id: 'new-' + user(e) } }, error: null };
@@ -75,6 +79,11 @@ globalThis.__createClient = () => ({
       db.authUsers.delete(id);
       return { error: null };
     },
+    listUsers: async () => {
+      if (mp.listFails) return { data: null, error: { message: 'falla simulada' } };
+      return { data: { users: Object.entries(mp.authConfirmed || {}).map(([n, id]) => ({ id, email: n + '@example.test' })) }, error: null };
+    },
+    generateLink: async ({ email }) => { calls.push('mail-ingreso:' + user(email)); return { data: { properties: { action_link: 'https://sim/link' } }, error: null }; },
   } },
 });
 globalThis.Deno = { env: { get: () => 'x' }, serve: h => { globalThis.__handler = h; } };
@@ -95,7 +104,8 @@ globalThis.fetch = async (url, opts = {}) => {
 
 // ---- Datos ficticios ----
 const user = e => String(e).split('@')[0].toLowerCase();
-const pending = (name, minutes) => ({ id: 'p-' + name, full_name: name, email: name + '@example.test', phone: null, program: 'hybrid', created_at: iso(-minutes * 6e4) });
+const pending = (name, minutes, extra = {}) => ({ id: 'p-' + name, full_name: name, email: name + '@example.test', phone: null, program: 'hybrid', is_trial: false, created_at: iso(-minutes * 6e4), ...extra });
+const trialPending = (name, minutes) => pending(name, minutes, { id: 'pt-' + name, is_trial: true });
 const profile = (name, extra = {}) => ({ id: 'u-' + name, full_name: name, email: name + '@example.test', role: 'athlete', program: 'hybrid', subscription_status: 'active', mp_subscription_id: 'sub-' + name, access_from: null, ...extra });
 const preapprovalEvent = id => ({ type: 'subscription_preapproval', data: { id } });
 const invoiceEvent = { type: 'subscription_authorized_payment', data: { id: 'i1' } };
@@ -177,6 +187,31 @@ const cases = [
     expect: { httpStatus: 500, pendings: ['ana'], calls: ['invita:ana'], altaLog: false } },
   { name: 'Guardado falla y tampoco se puede borrar de Auth: 500 y conserva el pending', failWrite: 'profiles', profiles: [], pendings: [pending('lucia', 3)], mp: { deleteFails: true }, event: preapprovalEvent('sub-new'),
     expect: { httpStatus: 500, profiles: {}, pendings: ['lucia'], calls: ['invita:lucia', 'borra-auth:new-lucia'], altaLog: false } },
+  // Un pending de prueba (is_trial) nunca participa de una compra paga.
+  { name: 'Prueba: compra paga sin mail + pending de prueba reciente: no lo toma, alta manual', profiles: [], pendings: [trialPending('lucia', 3)], event: preapprovalEvent('sub-new'),
+    expect: { status: 'manual_required', profiles: {}, pendings: ['lucia'], calls: [] } },
+  { name: 'Prueba: compra paga con mail igual al pending de prueba: no lo toma', profiles: [], pendings: [trialPending('lucia', 3)], mp: approved('sub-new', 'lucia@example.test'), event: invoiceEvent,
+    expect: { status: 'manual_required', profiles: {}, pendings: ['lucia'], calls: [], payments: 0 } },
+  { name: 'Prueba: no vuelve ambigua una compra paga de un solo pending normal', profiles: [], pendings: [pending('sofia', 2), trialPending('lucia', 3)], event: preapprovalEvent('sub-new'),
+    expect: { profiles: { sofia: ['active', 'sub-new', monday] }, pendings: ['lucia'], calls: ['invita:sofia'] } },
+  { name: 'Prueba: el alta paga no borra el pending de prueba del mismo mail', profiles: [], pendings: [pending('lucia', 2), trialPending('lucia', 3)], mp: approved('sub-new', 'lucia@example.test'), event: invoiceEvent,
+    expect: { profiles: { lucia: ['active', 'sub-new', monday] }, pendings: ['lucia'], calls: ['invita:lucia'], payments: 1 } },
+  // Mail que ya existe en Auth y no en profiles (perfil borrado desde el admin).
+  { name: 'Auth confirmado sin perfil: reusa el usuario y manda mail de ingreso', profiles: [], pendings: [pending('lucia', 3)], mp: { authConfirmed: { lucia: 'auth-lucia' } }, event: preapprovalEvent('sub-new'),
+    expect: { httpStatus: 200, profiles: { lucia: ['active', 'sub-new', monday] }, profileIds: ['auth-lucia'], pendings: [], calls: ['invita:lucia', 'mail-ingreso:lucia'], altaLog: true } },
+  { name: 'Auth confirmado sin perfil, con cobro: registra el pago', profiles: [], pendings: [pending('lucia', 3)], mp: { ...approved('sub-new', 'lucia@example.test'), authConfirmed: { lucia: 'auth-lucia' } }, event: invoiceEvent,
+    expect: { httpStatus: 200, profileIds: ['auth-lucia'], pendings: [], payments: 1, altaLog: true } },
+  { name: 'Auth sin confirmar y sin perfil: el invite devuelve el mismo usuario', profiles: [], pendings: [pending('lucia', 3)], mp: { authUnconfirmed: { lucia: 'auth-lucia' } }, event: preapprovalEvent('sub-new'),
+    expect: { httpStatus: 200, profileIds: ['auth-lucia'], pendings: [], calls: ['invita:lucia'], altaLog: true } },
+  { name: 'Auth confirmado con perfil en otra mayúscula: no lo pisa', profiles: [profile('ana', { id: 'auth-ana', email: 'ANA@example.test' })], pendings: [pending('ana', 3)], mp: { authConfirmed: { ana: 'auth-ana' } }, event: preapprovalEvent('sub-nueva'),
+    expect: { httpStatus: 500, profiles: { ana: ['active', 'sub-ana', null] }, profileIds: ['auth-ana'], pendings: ['ana'], calls: ['invita:ana'], altaLog: false } },
+  { name: 'Auth confirmado y falla el guardado: no borra el usuario; el reintento da el alta', failWrite: 'profiles', profiles: [], pendings: [pending('lucia', 3)], mp: { authConfirmed: { lucia: 'auth-lucia' } }, event: preapprovalEvent('sub-new'),
+    expect: { httpStatus: 500, profiles: {}, pendings: ['lucia'], calls: ['invita:lucia'], altaLog: false },
+    retry: { httpStatus: 200, profileIds: ['auth-lucia'], pendings: [], calls: ['invita:lucia', 'invita:lucia', 'mail-ingreso:lucia'], altaLog: true } },
+  { name: 'El invite dice que existe y falla la búsqueda en Auth: 500 y conserva el pending', profiles: [], pendings: [pending('lucia', 3)], mp: { authConfirmed: { lucia: 'auth-lucia' }, listFails: true }, event: preapprovalEvent('sub-new'),
+    expect: { httpStatus: 500, profiles: {}, pendings: ['lucia'], calls: ['invita:lucia'], altaLog: false } },
+  { name: 'Otro error del invite: 500, conserva el pending y no busca en Auth', profiles: [], pendings: [pending('lucia', 3)], mp: { inviteFails: true }, event: preapprovalEvent('sub-new'),
+    expect: { httpStatus: 500, profiles: {}, pendings: ['lucia'], calls: ['invita:lucia'], altaLog: false } },
 ];
 
 // ---- Cargar el código real (reemplazando solo el import de la librería) ----
@@ -207,6 +242,7 @@ try {
       const got = {
         httpStatus: r.status, status: body.status,
         profiles: Object.fromEntries(db.profiles.map(p => [user(p.email), [p.subscription_status, p.mp_subscription_id, p.access_from ?? null]])),
+        profileIds: db.profiles.map(p => p.id),
         pendings: db.pending_subscriptions.map(p => user(p.email)).sort(),
         calls,
         payments: db.payments.length,

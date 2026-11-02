@@ -741,3 +741,18 @@ Script: la hora se muestra en formato de 24 horas. Sin commit ni push.
 - ⏳ **Abierto:** un cobro aprobado con cuota en `recycling` todavía marca fallo de cobro a quien pagó. No se tocó por ser lógica de gracia.
 - **Pruebas:** `supabase/tests/process-payment-pagos.sim.mjs` nueva, con `mp_payment_id` único como la base real y varios avisos por caso, incluidos avisos repetidos. Contra el código anterior fallaban 11 de 20; ahora pasan todos. Simulación anterior sin cambios de resultado. Solo simulación: falta ver el comportamiento real de los reintentos de MP.
 - ⏳ **Pendiente (Erika):** deploy de `process-payment`. Botón "Sincronizar con MP": se decide con los resultados de las consultas.
+
+### 2026-11-02 — Fase 2, etapa 3: propuesta (sin deploy, sin SQL, sin commit)
+- `supabase/tests/mp-plan-prueba.mjs` (local): crea y verifica el plan de prueba de CrossFit. Probado solo con MP simulado.
+- Plan guardado en `site_config.mp_trial_plan_crossfit`; `process-payment` solo mapea `mp_plan_*`, así que hasta la etapa 4 responde 422 a ese plan.
+- **Indispensable antes de crear cualquier pending de prueba:** `process-payment` tiene que ignorar `is_trial = true` al buscar y limpiar pendings; si no, el alta de un comprador pago puede tomar el pending de prueba de otra persona. Va en el mismo archivo que el arreglo del alta con mail en Auth, por eso conviene apagar el registro antes.
+- Alta con mail en Auth y filtro `is_trial` listos en local para el mismo deploy. Simulaciones: 43 de 43 y 21 de 21; los 4 casos de prueba fallan sin el filtro.
+- Decisiones de Erika: pending de prueba sin usar se reusa y renueva su fecha; cuenta en Auth = no elegible; el registro se apaga antes de ese deploy.
+- `20261102_trial_intentos.sql` y su rollback, locales y sin ejecutar: `trial_attempts` e índice único por mail de pending de prueba. Probados en Postgres en memoria (18 de 18).
+- ✅ **Registro de Auth apagado por Erika y probado en la base real (2026-11-02):** ingreso OK; recuperar contraseña OK; invitación desde `create-athlete` OK hasta entrar al portal, con la cuenta de prueba borrada después; `signUp` rechazado con "Signups not allowed for this instance" (422). La invitación desde `process-payment` se confirma con la primera alta real.
+- ✅ `process-payment` con filtro `is_trial` y alta con mail en Auth deployada por Erika el 2026-11-02, con control de cruces sin filas.
+- ⏳ Función `start-trial`: pendiente.
+
+## Mantenimiento / pendientes
+Lo que no bloquea la Fase 2 ni arriesga a los alumnos actuales. Una línea y su prioridad.
+- Media: `create-athlete` da error si el mail ya existe en Auth sin perfil (el admin lo ve en pantalla).

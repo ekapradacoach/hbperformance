@@ -377,6 +377,7 @@ Deno.serve(async (req) => {
           .from('pending_subscriptions')
           .select('*')
           .eq('program', program)
+          .eq('is_trial', false) // un pending de prueba nunca da de alta a una compra paga
           .order('created_at', { ascending: false })
           .limit(50)
         pending = (candidates ?? []).find((p: any) => normEmail(p.email) === target) ?? null
@@ -393,6 +394,7 @@ Deno.serve(async (req) => {
           .from('pending_subscriptions')
           .select('*')
           .eq('program', program)
+          .eq('is_trial', false)
           .gte('created_at', sinceIso)
           .order('created_at', { ascending: false })
         // Varios pendings recientes del MISMO email = una sola persona que reintentó el pago y llenó el modal
@@ -546,13 +548,35 @@ Deno.serve(async (req) => {
           data: { full_name }
         })
 
-        if (inviteError) {
+        // Mail ya confirmado en Auth y sin perfil (ej.: perfil borrado desde el admin y la persona vuelve a pagar):
+        // el invite da email_exists. Se reusa ese usuario: no se puede borrar si tiene archivos en Storage.
+        let athleteUserId: string | null = inviteData?.user?.id ?? null
+        const reuseAuthUser = !!inviteError && (inviteError.code === 'email_exists' || inviteError.status === 422)
+
+        if (inviteError && !reuseAuthUser) {
           console.error('Error inviting user:', inviteError)
           return json({ ok: false, error: inviteError.message }, 500)
         }
 
+        if (reuseAuthUser) {
+          const authUser = await findAuthUserByEmail(adminClient, email)
+          if (authUser.error || !authUser.id) {
+            console.error('ALTA MANUAL REQUERIDA: el invite dice que el mail existe y no se encontró en Auth:', authUser.error || 'sin usuario', '| preapproval:', preapprovalId)
+            return json({ ok: false, error: 'No se pudo resolver el usuario de Auth' }, 500)
+          }
+          // El perfil se buscó por mail exacto: puede existir con otra mayúscula. Nunca pisarlo.
+          const { data: profileById, error: lookupError } = await adminClient
+            .from('profiles').select('id').eq('id', authUser.id).maybeSingle()
+          if (lookupError || profileById) {
+            console.error('ALTA MANUAL REQUERIDA: el usuario de Auth ya tiene perfil o no se pudo comprobar. preapproval:', preapprovalId)
+            return json({ ok: false, error: 'El usuario de Auth ya tiene perfil o no se pudo comprobar' }, 500)
+          }
+          athleteUserId = authUser.id
+          console.warn('Usuario de Auth sin perfil: se reusa. preapproval:', preapprovalId)
+        }
+
         const { error: insertError } = await adminClient.from('profiles').insert({
-          id: inviteData.user.id,
+          id: athleteUserId,
           full_name,
           email,
           phone: phone || null,
@@ -565,19 +589,22 @@ Deno.serve(async (req) => {
         })
         if (insertError) {
           console.error('PERFIL NO GUARDADO (alta nueva):', insertError.message, '| preapproval:', preapprovalId)
+          // Un usuario reusado queda como estaba: el reintento vuelve a pasar por acá.
+          if (reuseAuthUser) return json({ ok: false, error: 'No se pudo guardar el perfil' }, 500)
           // Sin borrar el usuario de Auth, el reintento de MP fallaría siempre en el invite (mail ya registrado).
           // Solo se borra si seguro no tiene perfil.
           const { data: profileById, error: lookupError } = await adminClient
-            .from('profiles').select('id').eq('id', inviteData.user.id).maybeSingle()
+            .from('profiles').select('id').eq('id', athleteUserId).maybeSingle()
           if (!lookupError && !profileById) {
-            const { error: deleteError } = await adminClient.auth.admin.deleteUser(inviteData.user.id)
+            const { error: deleteError } = await adminClient.auth.admin.deleteUser(athleteUserId)
             if (deleteError) console.error('ALTA MANUAL REQUERIDA: no se pudo borrar el usuario de Auth, el reintento va a fallar:', deleteError.message)
           } else {
             console.error('ALTA MANUAL REQUERIDA: el usuario de Auth ya tiene perfil o no se pudo comprobar. No se borra. preapproval:', preapprovalId)
           }
           return json({ ok: false, error: 'No se pudo guardar el perfil' }, 500)
         }
-        altaAthleteId = inviteData.user.id
+        altaAthleteId = athleteUserId
+        if (reuseAuthUser) await sendAccessMail(adminClient, email, full_name)
       }
 
       // Registrar el pago del alta en `payments` (bruto+neto del payment ya traído). No bloquea el alta.
@@ -594,6 +621,7 @@ Deno.serve(async (req) => {
         .from('pending_subscriptions')
         .select('id, email')
         .eq('program', program)
+        .eq('is_trial', false)
       const pendingIds = (samePendings ?? [])
         .filter((p: any) => normEmail(p.email) === normEmail(email))
         .map((p: any) => p.id)
@@ -747,6 +775,56 @@ async function fetchPaymentFromAp(ap: any, mpToken: string | undefined): Promise
     console.warn('Error trayendo el payment de MP:', err)
     return null
   }
+}
+
+// Busca en Auth por mail (la API de admin no filtra por mail). Mismo criterio que update-athlete-email.
+async function findAuthUserByEmail(adminClient: any, email: string): Promise<{ id?: string, error?: string }> {
+  const target = normEmail(email)
+  for (let page = 1; page <= 20; page++) {
+    const { data, error } = await adminClient.auth.admin.listUsers({ page, perPage: 1000 })
+    if (error) return { error: error.message }
+    const users = data?.users ?? []
+    const hit = users.find((u: any) => normEmail(u.email) === target)
+    if (hit) return { id: hit.id }
+    if (users.length < 1000) return {}
+  }
+  return {}
+}
+
+// Mail de ingreso para un usuario de Auth reusado: RECOVERY link, porque el invite no sirve con un usuario confirmado.
+// Si falla se loguea y NO rompe el alta: la persona puede entrar con "¿Olvidaste tu contraseña?".
+async function sendAccessMail(adminClient: any, email: string, fullName: string | null): Promise<void> {
+  const redirectTo = 'https://hbperformance.fit/app/set-password.html'
+  try {
+    const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY')
+    const { data, error } = await adminClient.auth.admin.generateLink({ type: 'recovery', email, options: { redirectTo } })
+    const link = data?.properties?.action_link
+    if (!RESEND_API_KEY || error || !link) throw new Error(error?.message || 'sin RESEND_API_KEY o sin link')
+    const firstName = fullName ? escHtml(String(fullName).split(' ')[0]) : ''
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from: 'HB Performance <noreply@hbperformance.fit>',
+        to: email,
+        subject: 'Activá tu cuenta de HB Performance',
+        html: `<p>¡Hola${firstName ? ' ' + firstName : ''}!</p>
+<p>Ya podés entrar a tu portal de <strong>HB Performance</strong>. Tocá el botón para crear tu contraseña:</p>
+<p><a href="${link}" style="display:inline-block;background:#F5A800;color:#0A0A0A;padding:12px 22px;border-radius:8px;font-weight:700;text-decoration:none;">Crear mi contraseña</a></p>
+<p>Tu usuario es este email: <strong>${escHtml(email)}</strong>.</p>
+<p style="color:#888;font-size:13px;">💡 Si no ves nuestros mails en tu bandeja de entrada, revisá la carpeta de <strong>spam</strong> o "promociones".</p>
+<p>— El equipo de HB Performance</p>`
+      })
+    })
+    if (!res.ok) throw new Error('Resend ' + res.status)
+    console.log('Mail de ingreso (usuario reusado) enviado a:', email)
+  } catch (err) {
+    console.error('No se pudo enviar el mail de ingreso (usuario reusado):', (err as Error).message)
+  }
+}
+
+function escHtml(s: string): string {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
 // Normaliza un email para comparar (case-insensitive, sin espacios). null/undefined → ''.

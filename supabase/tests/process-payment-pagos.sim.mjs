@@ -93,7 +93,7 @@ const charge = (sub, email, invoice = {}) => ({
   payments: { pay1: payment('pay1', email) },
 });
 const profile = (name, extra = {}) => ({ id: 'u-' + name, full_name: name, email: name + '@example.test', role: 'athlete', program: 'hybrid', subscription_status: 'active', mp_subscription_id: 'sub-' + name, subscription_start: '2020-01-06', ...extra });
-const pending = (name, minutes = 3) => ({ id: 'p-' + name, full_name: name, email: name + '@example.test', phone: null, program: 'hybrid', created_at: new Date(Date.now() - minutes * 6e4).toISOString() });
+const pending = (name, minutes = 3) => ({ id: 'p-' + name, full_name: name, email: name + '@example.test', phone: null, program: 'hybrid', is_trial: false, created_at: new Date(Date.now() - minutes * 6e4).toISOString() });
 const old = { athlete_id: 'u-ana', mp_payment_id: 'pay0', type: 'renovacion_automatica', method: 'mp', amount: 45000, net_amount: NET, paid_at: '2020-02-06', program: 'hybrid' };
 const INV = { type: 'subscription_authorized_payment', data: { id: 'i1' } };
 const PRE = id => ({ type: 'subscription_preapproval', data: { id } });
