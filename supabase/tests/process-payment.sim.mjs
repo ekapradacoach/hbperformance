@@ -31,6 +31,7 @@ function table(name) {
   const run = () => {
     const rows = db[name] || (db[name] = []);
     const match = x => s.filters.every(f => f(x));
+    if (db.failWrite === name && (s.op === 'insert' || s.op === 'update')) return { data: null, error: { message: 'escritura rechazada (simulada)' } };
     if (s.op === 'insert') { rows.push({ ...s.value }); return { data: null, error: null }; }
     if (s.op === 'upsert') { rows.push({ ...s.value }); return { data: null, error: null }; }
     if (s.op === 'update') { rows.filter(match).forEach(x => Object.assign(x, s.value)); return { data: null, error: null }; }
@@ -60,7 +61,21 @@ function table(name) {
 }
 globalThis.__createClient = () => ({
   from: table,
-  auth: { admin: { inviteUserByEmail: async e => { calls.push('invita:' + user(e)); return { data: { user: { id: 'new-' + user(e) } }, error: null }; } } },
+  auth: { admin: {
+    // Como Auth real: invitar un mail ya registrado da error.
+    inviteUserByEmail: async e => {
+      calls.push('invita:' + user(e));
+      if (db.authUsers.has('new-' + user(e))) return { data: null, error: { message: 'already registered' } };
+      db.authUsers.add('new-' + user(e));
+      return { data: { user: { id: 'new-' + user(e) } }, error: null };
+    },
+    deleteUser: async id => {
+      calls.push('borra-auth:' + id);
+      if (mp.deleteFails) return { error: { message: 'falla simulada' } };
+      db.authUsers.delete(id);
+      return { error: null };
+    },
+  } },
 });
 globalThis.Deno = { env: { get: () => 'x' }, serve: h => { globalThis.__handler = h; } };
 
@@ -148,6 +163,20 @@ const cases = [
     expect: { profiles: { lucia: ['active', 'sub-x', monday] }, pendings: [], calls: ['invita:lucia'] } },
   { name: 'CONOCIDO: la cruzada paga la suya: se cancela la sub ajena', profiles: [profile('lucia', { mp_subscription_id: 'sub-compradora', access_from: OLD })], pendings: [pending('lucia', 1)], event: preapprovalEvent('sub-lucia'),
     expect: { profiles: { lucia: ['active', 'sub-lucia', OLD] }, pendings: [], calls: ['MP-cancela:sub-compradora'] } },
+  // Falla el guardado del perfil: 500, sin borrar el pending ni registrar el alta. retry = reintento de MP con la base ya sana.
+  { name: 'Guardado falla, alta nueva: 500 y conserva el pending; el reintento da el alta', failWrite: 'profiles', profiles: [], pendings: [pending('lucia', 3)], event: preapprovalEvent('sub-new'),
+    expect: { httpStatus: 500, profiles: {}, pendings: ['lucia'], calls: ['invita:lucia', 'borra-auth:new-lucia'], altaLog: false },
+    retry: { httpStatus: 200, profiles: { lucia: ['active', 'sub-new', monday] }, pendings: [], calls: ['invita:lucia', 'borra-auth:new-lucia', 'invita:lucia'], altaLog: true } },
+  { name: 'Guardado falla, alta con cobro: no registra el pago; el reintento sí', failWrite: 'profiles', profiles: [], pendings: [pending('lucia', 3)], mp: approved('sub-new', 'lucia@example.test'), event: invoiceEvent,
+    expect: { httpStatus: 500, profiles: {}, pendings: ['lucia'], payments: 0, altaLog: false },
+    retry: { httpStatus: 200, profiles: { lucia: ['active', 'sub-new', monday] }, pendings: [], payments: 1, altaLog: true } },
+  { name: 'Guardado falla, reactivación: 500, perfil igual y conserva el pending; el reintento reactiva', failWrite: 'profiles', profiles: [profile('ana', { subscription_status: 'cancelled', subscription_end: date(-5) })], pendings: [pending('ana', 3)], event: preapprovalEvent('sub-nueva'),
+    expect: { httpStatus: 500, profiles: { ana: ['cancelled', 'sub-ana', null] }, pendings: ['ana'], calls: [], altaLog: false },
+    retry: { httpStatus: 200, profiles: { ana: ['active', 'sub-nueva', monday] }, pendings: [], calls: ['MP-cancela:sub-ana'], altaLog: true } },
+  { name: 'Guardado falla y el usuario de Auth ya tiene perfil: no lo borra', failWrite: 'profiles', profiles: [profile('ana', { id: 'new-ana', email: 'ANA@example.test' })], pendings: [pending('ana', 3)], event: preapprovalEvent('sub-nueva'),
+    expect: { httpStatus: 500, pendings: ['ana'], calls: ['invita:ana'], altaLog: false } },
+  { name: 'Guardado falla y tampoco se puede borrar de Auth: 500 y conserva el pending', failWrite: 'profiles', profiles: [], pendings: [pending('lucia', 3)], mp: { deleteFails: true }, event: preapprovalEvent('sub-new'),
+    expect: { httpStatus: 500, profiles: {}, pendings: ['lucia'], calls: ['invita:lucia', 'borra-auth:new-lucia'], altaLog: false } },
 ];
 
 // ---- Cargar el código real (reemplazando solo el import de la librería) ----
@@ -160,26 +189,34 @@ try {
   writeFileSync(ts, code);
   const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
   execFileSync(npx, ['-y', 'esbuild@0.24.0', ts, '--loader:.ts=ts', '--format=esm', '--log-level=warning', '--outfile=' + js], { stdio: 'inherit', shell: process.platform === 'win32' });
-  console.log = console.warn = console.error = () => {};
+  let logs = [];
+  console.log = console.warn = console.error = (...a) => { logs.push(a.join(' ')); };
   await import(pathToFileURL(js).href);
 
   for (const c of cases) {
-    db = { profiles: c.profiles.map(p => ({ ...p })), pending_subscriptions: c.pendings.map(p => ({ ...p })), payments: [], site_config: [{ key: 'mp_plan_hybrid', value: 'plan-h' }] };
+    db = { profiles: c.profiles.map(p => ({ ...p })), pending_subscriptions: c.pendings.map(p => ({ ...p })), payments: [], site_config: [{ key: 'mp_plan_hybrid', value: 'plan-h' }], authUsers: new Set() };
     mp = { invoices: {}, payments: {}, ...c.mp };
     calls = [];
     // Simula un error de la base en todas las lecturas de esa tabla durante este caso
     if (c.failOn) db.failOn = c.failOn;
-    const r = await globalThis.__handler(new Request('http://sim/', { method: 'POST', body: JSON.stringify(c.event) }));
-    const body = await r.json();
-    const got = {
-      httpStatus: r.status, status: body.status,
-      profiles: Object.fromEntries(db.profiles.map(p => [user(p.email), [p.subscription_status, p.mp_subscription_id, p.access_from ?? null]])),
-      pendings: db.pending_subscriptions.map(p => user(p.email)).sort(),
-      calls,
-      payments: db.payments.length,
+    if (c.failWrite) db.failWrite = c.failWrite;
+    const send = async expected => {
+      logs = [];
+      const r = await globalThis.__handler(new Request('http://sim/', { method: 'POST', body: JSON.stringify(c.event) }));
+      const body = await r.json();
+      const got = {
+        httpStatus: r.status, status: body.status,
+        profiles: Object.fromEntries(db.profiles.map(p => [user(p.email), [p.subscription_status, p.mp_subscription_id, p.access_from ?? null]])),
+        pendings: db.pending_subscriptions.map(p => user(p.email)).sort(),
+        calls,
+        payments: db.payments.length,
+        altaLog: logs.some(l => l.includes('User created/activated')),
+      };
+      return Object.entries(expected).filter(([k, v]) => JSON.stringify(got[k]) !== JSON.stringify(v))
+        .map(([k, v]) => `${k}: esperado ${JSON.stringify(v)}, obtenido ${JSON.stringify(got[k])}`);
     };
-    const diffs = Object.entries(c.expect).filter(([k, v]) => JSON.stringify(got[k]) !== JSON.stringify(v))
-      .map(([k, v]) => `${k}: esperado ${JSON.stringify(v)}, obtenido ${JSON.stringify(got[k])}`);
+    const diffs = await send(c.expect);
+    if (c.retry) { db.failWrite = null; (await send(c.retry)).forEach(d => diffs.push('reintento ' + d)); }
     if (diffs.length) { failed++; log(`FALLA  ${c.name}`); diffs.forEach(d => log('         ' + d)); }
     else log(`ok     ${c.name}`);
   }

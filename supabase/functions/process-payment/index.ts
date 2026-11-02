@@ -452,12 +452,38 @@ Deno.serve(async (req) => {
       let altaAthleteId: string | null = existingProfile ? existingProfile.id : null
 
       if (existingProfile) {
+        // ¿VUELVE después de haberse ido? Se calcula ANTES del update (que limpia payment_grace_until).
+        // Solo en ese caso se mueve access_from; un alumno que nunca perdió el acceso y se re-suscribe
+        // (cambio de tarjeta / programa / duplicado) conserva el suyo.
+        const returning = isReturningAthlete(existingProfile)
+        const oldSubId = existingProfile.mp_subscription_id
+
+        const { error: reactivateError } = await adminClient
+          .from('profiles')
+          .update({
+            ...(returning ? { access_from: arMondayStr() } : {}),
+            subscription_status: 'active',
+            mp_subscription_id: mpSubscriptionId,
+            subscription_start: new Date().toISOString().split('T')[0],
+            subscription_end: null, // limpiar el vencimiento de una cancelación previa (mismo criterio que un alta nueva)
+            payment_failed_at: null, // reactivación arranca con la ficha de pago limpia
+            payment_grace_until: null,
+            payment_failed_attempt: null
+          })
+          .eq('email', email)
+
+        // Sin guardar no hay alta: 500 para que MP reintente, conservando el pending.
+        if (reactivateError) {
+          console.error('PERFIL NO GUARDADO (reactivación):', reactivateError.message, '| preapproval:', preapprovalId)
+          return json({ ok: false, error: 'No se pudo guardar el perfil' }, 500)
+        }
+
         // SEGURIDAD anti-duplicados: si el perfil YA tenía OTRA suscripción de MP guardada, cancelarla en MP
-        // ANTES de pisarla con la nueva → evita que queden 2 suscripciones del mismo atleta cobrando en paralelo.
+        // recién DESPUÉS de guardar la nueva → evita 2 suscripciones del mismo atleta cobrando en paralelo, y si el
+        // guardado falla la vieja sigue viva.
         // Mismo patrón que cancel-subscription (PUT /preapproval/{id} status:cancelled). try/catch: si falla,
         // se loguea y NO bloquea el alta (el dato correcto en la DB es lo prioritario). NO busca por email
         // (evita falsos positivos si el mail se comparte). Solo cubre subs viejas YA vinculadas en profiles.
-        const oldSubId = existingProfile.mp_subscription_id
         if (oldSubId && String(oldSubId) !== String(mpSubscriptionId)) {
           try {
             const cancelRes = await fetch(`${MP_API}/preapproval/${oldSubId}`, {
@@ -475,25 +501,6 @@ Deno.serve(async (req) => {
             console.warn('Error cancelando la suscripción vieja en MP (no bloquea el alta):', oldSubId, cancelErr)
           }
         }
-
-        // ¿VUELVE después de haberse ido? Se calcula ANTES del update (que limpia payment_grace_until).
-        // Solo en ese caso se mueve access_from; un alumno que nunca perdió el acceso y se re-suscribe
-        // (cambio de tarjeta / programa / duplicado) conserva el suyo.
-        const returning = isReturningAthlete(existingProfile)
-
-        await adminClient
-          .from('profiles')
-          .update({
-            ...(returning ? { access_from: arMondayStr() } : {}),
-            subscription_status: 'active',
-            mp_subscription_id: mpSubscriptionId,
-            subscription_start: new Date().toISOString().split('T')[0],
-            subscription_end: null, // limpiar el vencimiento de una cancelación previa (mismo criterio que un alta nueva)
-            payment_failed_at: null, // reactivación arranca con la ficha de pago limpia
-            payment_grace_until: null,
-            payment_failed_attempt: null
-          })
-          .eq('email', email)
 
         // Mail de reactivación (el usuario YA existe y YA tiene contraseña → va al LOGIN, no a set-password).
         // Si el envío falla, se loguea pero NO rompe la reactivación (el dato en la DB es lo prioritario).
@@ -544,7 +551,7 @@ Deno.serve(async (req) => {
           return json({ ok: false, error: inviteError.message }, 500)
         }
 
-        await adminClient.from('profiles').insert({
+        const { error: insertError } = await adminClient.from('profiles').insert({
           id: inviteData.user.id,
           full_name,
           email,
@@ -556,6 +563,20 @@ Deno.serve(async (req) => {
           subscription_start: new Date().toISOString().split('T')[0],
           access_from: arMondayStr()   // create-athlete (alta manual) NO lo setea
         })
+        if (insertError) {
+          console.error('PERFIL NO GUARDADO (alta nueva):', insertError.message, '| preapproval:', preapprovalId)
+          // Sin borrar el usuario de Auth, el reintento de MP fallaría siempre en el invite (mail ya registrado).
+          // Solo se borra si seguro no tiene perfil.
+          const { data: profileById, error: lookupError } = await adminClient
+            .from('profiles').select('id').eq('id', inviteData.user.id).maybeSingle()
+          if (!lookupError && !profileById) {
+            const { error: deleteError } = await adminClient.auth.admin.deleteUser(inviteData.user.id)
+            if (deleteError) console.error('ALTA MANUAL REQUERIDA: no se pudo borrar el usuario de Auth, el reintento va a fallar:', deleteError.message)
+          } else {
+            console.error('ALTA MANUAL REQUERIDA: el usuario de Auth ya tiene perfil o no se pudo comprobar. No se borra. preapproval:', preapprovalId)
+          }
+          return json({ ok: false, error: 'No se pudo guardar el perfil' }, 500)
+        }
         altaAthleteId = inviteData.user.id
       }
 
