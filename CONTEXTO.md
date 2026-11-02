@@ -688,7 +688,7 @@ Registro cronológico de lo que se va haciendo. Entrada nueva arriba o abajo seg
 
 **Etapas:**
 1. Identificación: ✅ cerrada el 2026-11-01.
-2. Datos: marca de prueba en el pending; en el perfil estado de prueba (cuatro valores), inicio, fin y fecha de resolución; `payer_id`; índice único.
+2. ✅ Datos (cerrada el 2026-11-02): marca de prueba en el pending; en el perfil estado de prueba (cuatro valores), inicio, fin y fecha de resolución; `payer_id`; índice único.
 3. Planes de prueba creados por API con la página de regreso (Erika edita los días desde el panel) + función de entrada: elegibilidad, mensaje genérico, límite de intentos, pending creado por el servidor, id devuelto al navegador.
 4. Alta de prueba: función de identificación (regreso + respaldo) y `process-payment`.
 5. `prueba.html`, página de regreso propia, Pixel `StartTrial` sin `Purchase`.
@@ -712,7 +712,19 @@ Registro cronológico de lo que se va haciendo. Entrada nueva arriba o abajo seg
 - **Probado** en Postgres en memoria con un esquema armado desde la documentación (42 de 42), también junto con la etapa 2. No probado contra la base real.
 - **Orden:** 1) lista blanca, 2) deploy de `process-payment`, 3) etapa 2.
 - ⏳ **Revisar con resultados:** `supabase/checks/auditar_perfiles.sql` (señales de abuso; no hay historial de cambios) y `supabase/checks/auditar_permisos.sql` (todas las tablas y Storage).
-- ⏳ **Próximos arreglos, en este orden** (riesgos vistos en código y documentación; salvo que se indique, sin confirmar en la base):
+- ✅ `process-payment` (error si no guarda y cancelación después de guardar) deployada por Erika el 2026-11-02, con control de cruces sin filas.
+- **Registro de Auth:** "Allow new users to sign up" estaba prendido. El código oficial de Auth solo lo verifica en el registro público, no en la invitación; la documentación no lo aclara. ⏳ Apagarlo y probar ingreso, recuperación e invitación.
+- ⏳ **Cuentas de Auth sin perfil:** 4, ninguna pagando; 3 identificadas y 1 sin reconocer (sin datos en el repo). Antes de borrarlas: `supabase/checks/antes_de_borrar_usuarios.sql`. Supabase no deja borrar un usuario con archivos en Storage.
+- **Propuesta local (sin commit ni deploy):** en un alta nueva con mail confirmado en Auth y sin perfil, el invite falla y hoy responde 500: la persona paga sin acceso. `process-payment` reusa ese usuario, le crea el perfil y manda un mail de ingreso (link de recuperación). No toca un usuario que ya tenga perfil. Requiere el registro apagado. Simulaciones: 39 de 39 y 21 de 21; no prueba Auth real.
+- ⏳ **Borrado de alumnos en admin (solo análisis):** borra el perfil y deja Auth, borra sus pagos en cascada y no cancela en MP. Recomendado: baja para alumnos reales; eliminar solo para pruebas y errores, con una Edge Function.
+- **Decisiones (Erika, 2026-11-02):** diff del alta con mail ya existente en Auth aprobado, queda en local sin commit y se deploya el día que apague el registro y haga las pruebas. Para alumnos reales se usa "Dar de baja", no "Eliminar". Hoy ninguna de las 4 cuentas sin perfil está pagando ni tiene acceso.
+- ⏳ **Orden de pendientes:**
+  1. ✅ Etapa 2: `20261101_trial_datos.sql` corrida por Erika el 2026-11-02. Verificado en la base real: 6 columnas nuevas, 0 perfiles y 0 pendings marcados; un INSERT anónimo normal pasa y uno con `is_trial = true` da error de RLS.
+  2. Apagar el registro + pruebas + deploy del arreglo del alta con mail ya existente en Auth.
+  3. Consultas de la cuenta desconocida y borrado de las 4 cuentas.
+  4. Edge Function `delete-athlete` para el botón Eliminar.
+  5. `send-push` / `notifications`, `full_name` escapado y resto de la tabla de riesgos (detalle abajo).
+- ⏳ **Detalle del punto 5, en este orden** (riesgos vistos en código y documentación; salvo que se indique, sin confirmar en la base):
   1. `send-push` sin autenticación (confirmado en el código) y `notifications` con INSERT abierto.
   2. Revisar que `full_name` esté escapado en todo el admin.
   3. El resto: INSERT y DELETE sobre el propio perfil; registro abierto en Auth; escrituras sin el corte de `is_active_athlete()`; INSERT de `messages` con `from_id = auth.uid()` sin límite de canal; INSERT abierto en `pending_subscriptions`; firma del webhook de MP en modo monitor (confirmado en el código); buckets públicos de imágenes.
