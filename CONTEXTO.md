@@ -618,7 +618,7 @@ Registro cronológico de lo que se va haciendo. Entrada nueva arriba o abajo seg
   vieja; reactiva cuando llega el aviso de la sub nueva.
 - **Simulación de avisos (correr ANTES de cada deploy de process-payment, desde la raíz del repo):**
   `node supabase/tests/process-payment.sim.mjs` — corre el código real con MP y Supabase simulados (@example.test), sin
-  red ni base. Tiene que terminar con todos los casos OK (hoy 27 de 27) (sale con código 1 si algo falla). Los casos "CONOCIDO" fijan
+  red ni base. Tiene que terminar con todos los casos OK (hoy 32 de 32) (sale con código 1 si algo falla). Los casos "CONOCIDO" fijan
   los cruces abiertos: si se arreglan, hay que actualizarlos. Con la versión anterior falla 5 casos (detecta el cruce).
   Prueba la lógica de la función, NO cómo se comporta MP en realidad.
 - **Antes de deployar:** correr `supabase/checks/detectar_cruces.sql` (solo lectura, suscripciones duplicadas en `profiles`
@@ -697,7 +697,25 @@ Registro cronológico de lo que se va haciendo. Entrada nueva arriba o abajo seg
 8. Prueba real de 1 día, con los riesgos de arriba.
 9. Prueba real de 7 días; después Hybrid y Corredores.
 
-⏳ **Antes del índice único de `mp_subscription_id`:** `process-payment` no revisa el error al guardar el perfil en el alta ni en la reactivación. Si el índice rechaza el guardado, igual borra el pending y registra "User created/activated". Tiene que responder error para que MP reintente.
+### 2026-11-01 — process-payment: error si no se guarda el perfil + migración de la etapa 2 (local)
+- **Arreglo en local (sin commit ni deploy):** si falla el guardado del perfil en un alta o una reactivación, responde 500 para que MP reintente, sin borrar el pending, sin registrar el cobro y sin loguear "User created/activated". Buscar `PERFIL NO GUARDADO` en los logs.
+- **Alta nueva:** además borra el usuario de Auth recién invitado, porque si no el reintento fallaría siempre en el invite. No lo borra si ya tiene perfil o si no se pudo comprobar (`ALTA MANUAL REQUERIDA`). El mail de invitación de ese intento ya salió y su link deja de servir.
+- **Simulación:** 32 de 32; los 5 casos nuevos fallan con el código anterior. No prueba Auth real.
+- **Reactivación (aprobado por Erika, 2026-11-02):** la suscripción vieja se cancela en MP recién después de guardar el perfil. Simulaciones: 32 de 32 y 21 de 21. Se deploya después del arreglo de `profiles`.
+- **Etapa 2:** `20261101_trial_datos.sql` aprobada en diseño por Erika, **sin ejecutar**, y se corre recién con el arreglo deployado. Rollbacks: `_ROLLBACK_apagar` (saca trigger, función y policy) y `_ROLLBACK_completo` (también columnas e índices). Probados en Postgres en memoria con un esquema mínimo, no contra la base real.
+- **Permisos de alumnos:** confirmado el 2026-11-02 con `supabase/checks/permisos_profiles.sql`, ver la entrada siguiente.
+
+### 2026-11-02 — URGENTE: un alumno podía editar cualquier columna de su perfil (lista blanca en producción)
+- ✅ **Migración corrida por Erika y probada desde la consola con su cuenta de prueba:** rechazados `role`, `subscription_end`, `access_from`, `subscription_status` y `program`; `full_name` guarda. Reenviar un valor igual al actual no da error, y con un valor distinto se rechaza.
+- **Hueco confirmado por Erika:** `authenticated` tiene UPDATE sobre `profiles`, la policy propia solo exige `auth.uid() = id` y no había triggers. Un alumno puede cambiarse `role` a admin, vencimiento, estado, `access_from`, etc.
+- **Propuesta:** `20261102_profiles_lista_blanca.sql`, con trigger BEFORE UPDATE. El alumno solo puede cambiar `full_name`, `phone`, `avatar_url`, `hybrid_variant` y `shortcut_guide_seen`; una columna nueva queda protegida. Admin, `service_role` y SQL Editor sin límite. Rollback: `_ROLLBACK_apagar`.
+- **Probado** en Postgres en memoria con un esquema armado desde la documentación (42 de 42), también junto con la etapa 2. No probado contra la base real.
+- **Orden:** 1) lista blanca, 2) deploy de `process-payment`, 3) etapa 2.
+- ⏳ **Revisar con resultados:** `supabase/checks/auditar_perfiles.sql` (señales de abuso; no hay historial de cambios) y `supabase/checks/auditar_permisos.sql` (todas las tablas y Storage).
+- ⏳ **Próximos arreglos, en este orden** (riesgos vistos en código y documentación; salvo que se indique, sin confirmar en la base):
+  1. `send-push` sin autenticación (confirmado en el código) y `notifications` con INSERT abierto.
+  2. Revisar que `full_name` esté escapado en todo el admin.
+  3. El resto: INSERT y DELETE sobre el propio perfil; registro abierto en Auth; escrituras sin el corte de `is_active_athlete()`; INSERT de `messages` con `from_id = auth.uid()` sin límite de canal; INSERT abierto en `pending_subscriptions`; firma del webhook de MP en modo monitor (confirmado en el código); buckets públicos de imágenes.
 
 ⏳ **Pendiente nuevo, para revisar más adelante:** hoy, si un link tiene `external_reference` = un programa válido (por ejemplo `hybrid`), `process-payment` resuelve el programa con eso y reactiva un perfil aunque el plan sea desconocido (caso CONOCIDO de la simulación).
 
