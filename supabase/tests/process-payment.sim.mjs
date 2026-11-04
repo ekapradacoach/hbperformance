@@ -98,6 +98,12 @@ globalThis.fetch = async (url, opts = {}) => {
     if (opts.method === 'PUT') { calls.push('MP-cancela:' + m[1]); return res({}); }
     return res({ id: m[1], status: mp.subStatus || 'authorized', preapproval_plan_id: mp.plan || 'plan-h', external_reference: mp.ref ?? null, payer_email: '' });
   }
+  if (u.includes('/functions/v1/confirm-trial')) {
+    calls.push('confirm-trial:' + opts.body);
+    if (mp.confirmThrows) throw new Error('falla simulada');
+    if (mp.confirmStatus) return { ok: false, status: mp.confirmStatus, json: async () => ({ ok: false, status: 'reintentar' }), text: async () => '' };
+    return res({ ok: true, status: 'provisioned' });
+  }
   if (u.includes('resend')) return res({});
   throw new Error('fetch inesperado: ' + u);
 };
@@ -212,6 +218,25 @@ const cases = [
     expect: { httpStatus: 500, profiles: {}, pendings: ['lucia'], calls: ['invita:lucia'], altaLog: false } },
   { name: 'Otro error del invite: 500, conserva el pending y no busca en Auth', profiles: [], pendings: [pending('lucia', 3)], mp: { inviteFails: true }, event: preapprovalEvent('sub-new'),
     expect: { httpStatus: 500, profiles: {}, pendings: ['lucia'], calls: ['invita:lucia'], altaLog: false } },
+  // Plan de prueba: el alta la decide confirm-trial. Este flujo no invita, no reactiva, no cancela ni toca pendings.
+  { name: 'Plan de prueba: aviso sin vincular va a confirm-trial', profiles: [], pendings: [trialPending('lucia', 3), pending('sofia', 2)], mp: { plan: 'plan-t' }, event: preapprovalEvent('sub-t'),
+    expect: { httpStatus: 200, status: 'trial_provisioned', profiles: {}, pendings: ['lucia', 'sofia'], calls: ['confirm-trial:{"preapproval_id":"sub-t","charge_seen":false}'], payments: 0, altaLog: false } },
+  { name: 'Plan de prueba: perfil cancelado del mismo mail no se reactiva', profiles: [profile('ana', { subscription_status: 'cancelled', subscription_end: date(-5) })], pendings: [trialPending('ana', 3)], mp: { plan: 'plan-t' }, event: preapprovalEvent('sub-t'),
+    expect: { status: 'trial_provisioned', profiles: { ana: ['cancelled', 'sub-ana', null] }, pendings: ['ana'], calls: ['confirm-trial:{"preapproval_id":"sub-t","charge_seen":false}'] } },
+  { name: 'Plan de prueba: primer cobro sin vincular avisa y no da el alta', profiles: [profile('ana')], pendings: [trialPending('ana', 3)], mp: { ...approved('sub-t', 'ana@example.test'), plan: 'plan-t' }, event: invoiceEvent,
+    expect: { httpStatus: 200, profiles: { ana: ['active', 'sub-ana', null] }, pendings: ['ana'], calls: ['confirm-trial:{"preapproval_id":"sub-t","charge_seen":true}'], payments: 0, altaLog: false } },
+  { name: 'Plan de prueba: confirm-trial pide reintento, 502 a MP', profiles: [], pendings: [], mp: { plan: 'plan-t', confirmStatus: 503 }, event: preapprovalEvent('sub-t'),
+    expect: { httpStatus: 502, profiles: {}, altaLog: false } },
+  { name: 'Plan de prueba: no se puede llamar a confirm-trial, 502 a MP', profiles: [], pendings: [], mp: { plan: 'plan-t', confirmThrows: true }, event: preapprovalEvent('sub-t'),
+    expect: { httpStatus: 502, profiles: {}, altaLog: false } },
+  { name: 'Plan de prueba ya vinculado: flujo normal, sin confirm-trial', profiles: [profile('ana', { mp_subscription_id: 'sub-t' })], pendings: [], mp: { plan: 'plan-t' }, event: preapprovalEvent('sub-t'),
+    expect: { status: 'already_provisioned', calls: [] } },
+  { name: 'Plan de prueba ya vinculado: el cobro es renovación, sin confirm-trial', profiles: [profile('ana', { mp_subscription_id: 'sub-t' })], pendings: [], mp: { ...approved('sub-t'), plan: 'plan-t' }, event: invoiceEvent,
+    expect: { status: 'renewal', calls: [], payments: 1 } },
+  { name: 'Plan de prueba cancelado y sin vincular: no llama a confirm-trial', profiles: [], pendings: [], mp: { plan: 'plan-t', subStatus: 'cancelled' }, event: preapprovalEvent('sub-t'),
+    expect: { status: 'cancelled', calls: [] } },
+  { name: 'No se pueden leer los planes de prueba: 500 y sin alta', failOn: 'site_config', profiles: [], pendings: [pending('lucia', 3)], event: preapprovalEvent('sub-new'),
+    expect: { httpStatus: 500, profiles: {}, pendings: ['lucia'], calls: [], altaLog: false } },
 ];
 
 // ---- Cargar el código real (reemplazando solo el import de la librería) ----
@@ -229,7 +254,7 @@ try {
   await import(pathToFileURL(js).href);
 
   for (const c of cases) {
-    db = { profiles: c.profiles.map(p => ({ ...p })), pending_subscriptions: c.pendings.map(p => ({ ...p })), payments: [], site_config: [{ key: 'mp_plan_hybrid', value: 'plan-h' }], authUsers: new Set() };
+    db = { profiles: c.profiles.map(p => ({ ...p })), pending_subscriptions: c.pendings.map(p => ({ ...p })), payments: [], site_config: [{ key: 'mp_plan_hybrid', value: 'plan-h' }, { key: 'mp_trial_plan_crossfit', value: 'plan-t' }], authUsers: new Set() };
     mp = { invoices: {}, payments: {}, ...c.mp };
     calls = [];
     // Simula un error de la base en todas las lecturas de esa tabla durante este caso

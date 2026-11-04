@@ -80,6 +80,9 @@
 //   rama de renovación. La lógica de gracia y corte NO cambió.
 //   Probar antes de cada deploy: node supabase/tests/process-payment-pagos.sim.mjs
 //
+// Cambio 2026-11-02 (etapa 4 de la semana de prueba): los avisos de una suscripción sin vincular de un plan de prueba
+//   van a confirm-trial, que es el único que da esa alta. Una vez vinculada, sigue el flujo normal.
+//
 // Secretos: MP_ACCESS_TOKEN, SUPABASE_URL, SERVICE_ROLE_KEY, RESEND_API_KEY, MP_WEBHOOK_SECRET.
 // ============================================================================
 
@@ -333,6 +336,11 @@ Deno.serve(async (req) => {
         .from('profiles')
         .update({ subscription_status: 'cancelled' })
         .eq('mp_subscription_id', mpSubscriptionId)
+      // Una prueba cancelada sin alta ya no va a cobrar: su caso se cierra. No bloquea la cancelación.
+      await adminClient
+        .from('trial_reviews')
+        .update({ resolved_at: new Date().toISOString() })
+        .eq('preapproval_id', mpSubscriptionId)
       return json({ ok: true, status: 'cancelled' })
     }
 
@@ -354,6 +362,17 @@ Deno.serve(async (req) => {
           logUnregisteredCharge('suscripción vinculada a más de un perfil')
         }
         return json({ ok: true, status: 'already_provisioned' })
+      }
+
+      // Plan de prueba sin vincular: el alta la decide confirm-trial, nunca este flujo.
+      const trialPlan = await isTrialPlan(adminClient, subscription)
+      if (trialPlan === null) {
+        console.error('No se pudieron leer los planes de prueba')
+        return json({ ok: false, error: 'No se pudo verificar el plan' }, 500)
+      }
+      if (trialPlan) {
+        logUnregisteredCharge('primer cobro de una prueba sin vincular')
+        return await delegateToConfirmTrial(mpSubscriptionId, approvedChargePending)
       }
 
       // Programa: fuente de verdad = preapproval_plan_id mapeado contra site_config.
@@ -920,6 +939,38 @@ async function registerMpPayment(
   } catch (err) {
     console.error('registerMpPayment: excepción (no bloquea el alta):', err)
     return false
+  }
+}
+
+// ¿La suscripción es de un plan de prueba? null = no se pudo saber.
+async function isTrialPlan(adminClient: any, subscription: any): Promise<boolean | null> {
+  const planId = subscription?.preapproval_plan_id ? String(subscription.preapproval_plan_id) : null
+  if (!planId) return false
+  const { data, error } = await adminClient
+    .from('site_config')
+    .select('key, value')
+    .in('key', PROGRAMS.map((p) => `mp_trial_plan_${p}`))
+  if (error) return null
+  return (data ?? []).some((r: any) => extractPlanId(r.value) === planId)
+}
+
+// Pasa el aviso a confirm-trial. Si no responde bien, 502 para que MP reintente.
+async function delegateToConfirmTrial(preapprovalId: string, chargeSeen: boolean) {
+  try {
+    const res = await fetch(`${Deno.env.get('SUPABASE_URL')}/functions/v1/confirm-trial`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${Deno.env.get('SERVICE_ROLE_KEY')}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ preapproval_id: preapprovalId, charge_seen: chargeSeen }),
+    })
+    const result = await res.json().catch(() => null)
+    if (!res.ok) {
+      console.error('confirm-trial pidió reintento:', res.status, result?.status, '| preapproval:', preapprovalId)
+      return json({ ok: false, error: 'Prueba sin confirmar' }, 502)
+    }
+    return json({ ok: true, status: 'trial_' + (result?.status ?? 'sin_estado') })
+  } catch (err) {
+    console.error('No se pudo llamar a confirm-trial:', (err as Error).message, '| preapproval:', preapprovalId)
+    return json({ ok: false, error: 'Prueba sin confirmar' }, 502)
   }
 }
 
