@@ -692,9 +692,9 @@ Registro cronológico de lo que se va haciendo. Entrada nueva arriba o abajo seg
 3. Planes de prueba creados por API con la página de regreso (Erika edita los días desde el panel) + función de entrada: elegibilidad, mensaje genérico, límite de intentos, pending creado por el servidor, id devuelto al navegador.
 4. Alta de prueba: función de identificación (regreso + respaldo) y `process-payment`.
 5. `prueba.html`, página de regreso propia, Pixel `StartTrial` sin `Purchase`.
-6. Primer cobro y cancelación: incluye la marca en `cancel-subscription`, fin de acceso si cancela en MP, corte si el cobro es rechazado.
+6. Primer cobro y cancelación: incluye la marca en `cancel-subscription`, fin de acceso si cancela en MP, corte si el cobro es rechazado. + conteo de días de la prueba en el perfil del portal y aviso del día 6 "se termina tu semana gratis" (pedidos de Erika 2026-11-04).
 7. Admin → Pruebas: En prueba, Canceló, Siguió, Cobro rechazado, conversión, altas manuales pendientes.
-8. Prueba real de 1 día, con los riesgos de arriba.
+8. Prueba real de 1 día, con los riesgos de arriba. ⚠️ Antes: revisión legal del texto del cobro automático y del botón de arrepentimiento (Ley 24.240).
 9. Prueba real de 7 días; después Hybrid y Corredores.
 
 ### 2026-11-01 — process-payment: error si no se guarda el perfil + migración de la etapa 2 (local)
@@ -769,7 +769,22 @@ Script: la hora se muestra en formato de 24 horas. Sin commit ni push.
 - ✅ **Etapa 4 probada en real por Erika (2026-11-04), todo según `etapa4_pruebas.md`:** SQL corrido y verificado; `confirm-trial` y `process-payment` deployadas con Verify JWT OFF; suscripción real con MP personal y alias; regreso con `preapproval_id`; el webhook dejó el caso `sin_identificar` sin dar el alta; la confirmación con el id del pending dio el alta, cerró el caso y borró el pending; una sola invitación; portal OK; cancelación en MP reflejada en el perfil; limpieza en 0.
 - Agregado a lo aprobado: límite de 20 pedidos por hora por IP en la página de regreso, porque cada pedido consulta MP con el token de todo el negocio. El camino por mail queda en 5.
 
+### 2026-11-04 — Fase 2, etapa 5: plan aprobado por Erika (páginas de la prueba)
+- **Alcance:** dos páginas nuevas, `prueba.html` y `prueba-regreso.html`. No se tocan funciones, landings ni el pago normal.
+- **`prueba.html`:** explica la semana y el cobro posterior ("7 días gratis, después $X por mes; si cancelás en MP antes del día 7 no se cobra nada"), con el precio de la misma clave de `site_config` que verificó el plan. Campos: nombre, mail, repetir mail, teléfono opcional. Detección de typos de las landings + regla nueva: `gmail.` con cualquier terminación que no sea `.com`. Confirmación obligatoria "Te vamos a escribir a: …" (el autocompletado llena los dos mails con el mismo error) y casilla obligatoria del cobro. Llama a `start-trial`, guarda el id del pending en el navegador y va al checkout. Programa por la dirección (`?programa=crossfit`); por ahora solo CrossFit.
+- **`prueba-regreso.html`:** lee `preapproval_id` + id guardado y llama a `confirm-trial`. Listo → "revisá tu mail (y spam), hasta 5 min". `retry` → reintenta sola ~5 veces en ~1 minuto; si no alcanza, mensaje de revisión. Sin id guardado → pide el mail del formulario, con detección de typos. Revisión → "Recibimos tu suscripción y la estamos revisando", con WhatsApp, sin decir "error". Sin `preapproval_id` → mensaje con WhatsApp.
+- **Pixel:** `PageView` en las dos; `ViewContent`, `InitiateCheckout` y `Lead` en el formulario; `StartTrial` solo con el alta confirmada, una vez por suscripción. Nunca `Purchase` ni `hb_purchase`.
+- **Sin enlazar:** sin links desde el sitio y con `noindex` hasta la etapa 8. El aviso "estás en tu semana de prueba" en el portal queda para la etapa 6.
+- **Prueba:** primero en local con respuestas simuladas (cada estado, celular y escritorio, capturas); Erika revisa textos; commit/push con su OK (publica); prueba real con alias A (camino normal) y alias B (misma cuenta MP, sin id guardado → pide mail → revisión `payer_repetido`); cancelar y limpiar.
+- ⚠️ **Requisito ANTES de la etapa 8 (abrir al público):** Erika revisa con su contador o abogado el texto del cobro automático y el botón de arrepentimiento (Ley 24.240). `prueba.html` tiene un lugar previsto para ese texto (bloque marcado `LEGAL`).
+- ⏳ **Escritas en local, sin commit ni push (2026-11-04):** `prueba.html` y `prueba-regreso.html`. Probadas en el navegador con respuestas simuladas de `site_config`, `start-trial` y `confirm-trial` (simulador fuera del repo): validaciones, tipeo (`gmail.co`, `gmail.com.ar`, `gmial`, `hotmail.con`), mails distintos, casilla, confirmación, UTMs en el pedido, `hb_trial` guardado y sin `hb_purchase`, reintentos (2 y agotados = 6 pedidos), camino por mail con "probá de nuevo", sin `preapproval_id`, precio que no carga (botón bloqueado), `start-trial` con error o sin red, programa sin prueba. Pixel: `ViewContent` → `InitiateCheckout` → `Lead`; `StartTrial` una vez, no se repite al recargar; nunca `Purchase`. Sin desborde horizontal a 390 px. Capturas de 14 estados (celular y escritorio) enviadas a Erika para revisar textos. Falta: revisión de textos, push y prueba real con alias A y B.
+- ✅ **Textos aprobados por Erika (2026-11-04)**, con un agregado: se puede cancelar **desde el perfil en el portal o en Mercado Pago** (en "Cómo funciona", "Qué incluye", nota del precio, casilla y página de alta). El botón del perfil ya aparece en la prueba (`subscription_status = active`) y `cancel-subscription` cancela en MP.
+- **Pedidos de Erika para etapas siguientes (2026-11-04):**
+  - **Etapa 6:** en el perfil del portal, conteo de la semana gratis (días usados y días que quedan, hasta `trial_ends_at`). Va junto con el aviso "estás en tu semana de prueba". Probar también la cancelación desde el perfil durante la prueba: acceso hasta el fin de la semana y sin cobro.
+  - **También etapa 6 (decisión de Erika):** aviso el día 6 de que la semana gratis está por terminar, con un cron diario. Canal (push o mail) a definir según el pendiente de seguridad de `send-push` / `notifications`.
+
 ## Mantenimiento / pendientes
 Lo que no bloquea la Fase 2 ni arriesga a los alumnos actuales. Una línea y su prioridad.
+- Media: si cambia el precio de un programa en `site_config`, hay que cambiar también su plan de prueba en MP (la página de prueba muestra el de `site_config`).
 - Media: `create-athlete` da error si el mail ya existe en Auth sin perfil (el admin lo ve en pantalla).
 - Baja: al cancelar o editar un plan, MP manda un aviso que `process-payment` trata como suscripción y responde 502 ("Preapproval not found"; visto el 01/11 con el plan de prueba cancelado). Hay que ignorar esos avisos con 200.

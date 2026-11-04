@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Meta Pixel Code -->
+<script>
+!function(f,b,e,v,n,t,s)
+{if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+n.queue=[];t=b.createElement(e);t.async=!0;
+t.src=v;s=b.getElementsByTagName(e)[0];
+s.parentNode.insertBefore(t,s)}(window, document,'script',
+'https://connect.facebook.net/en_US/fbevents.js');
+fbq('init', '1008115118926012');
+fbq('track', 'PageView');
+</script>
+<noscript><img height="1" width="1" style="display:none"
+src="https://www.facebook.com/tr?id=1008115118926012&ev=PageView&noscript=1"
+/></noscript>
+<!-- End Meta Pixel Code -->
+<!-- Semana de prueba (Fase 2). Sin links desde el sitio y fuera de Google hasta la etapa 8. -->
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" type="image/png" href="/logo.png">
+<link rel="apple-touch-icon" href="/logo.png">
+<title>Semana de prueba gratis — HB Performance</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Playfair+Display:ital,wght@1,400;1,600;1,700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0A0A0A;
+    --bg-alt: #1A1A1A;
+    --bg-footer: #0D0D0D;
+    --placeholder-text: #666666;
+    --accent: #F5A800;
+    --text: #FFFFFF;
+    --text-secondary: #AAAAAA;
+    --font-display: 'Inter', sans-serif;
+    --font-body: 'Inter', sans-serif;
+    --font-accent: 'Playfair Display', serif;
+    --maxw: 1200px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 80px; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font-body); line-height: 1.6; overflow-x: hidden; }
+  h1, h2, h3 { font-family: var(--font-display); font-weight: 800; line-height: 1.04; letter-spacing: -1px; }
+  .accent { font-family: var(--font-accent); font-style: italic; font-weight: 600; color: var(--accent); letter-spacing: 0; }
+  a { color: inherit; text-decoration: none; }
+  img { max-width: 100%; display: block; }
+  .container { width: 100%; max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
+  .narrow { max-width: 680px; }
+
+  .btn { display: inline-block; font-family: var(--font-display); text-transform: uppercase; font-weight: 700; letter-spacing: 1px; font-size: 1.05rem; padding: 14px 28px; border-radius: 4px; cursor: pointer; transition: transform .2s ease, background .2s ease, color .2s ease, box-shadow .2s ease; border: 2px solid var(--accent); background: transparent; color: var(--accent); }
+  .btn-filled { background: var(--accent); color: #0A0A0A; }
+  .btn-filled:hover { box-shadow: 0 0 22px rgba(245,168,0,0.45); transform: translateY(-2px); }
+  .btn-outline:hover { background: var(--accent); color: #0A0A0A; transform: translateY(-2px); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; transform: none; box-shadow: none; }
+
+  /* ---------- Logo + navbar (igual que las landings) ---------- */
+  .logo { font-family: var(--font-display); color: var(--accent); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; line-height: 1; }
+  .logo .logo-accent { font-family: var(--font-accent); font-style: italic; font-weight: 600; text-transform: none; letter-spacing: 0; }
+  .logo-img { display: block; height: 54px; width: auto; object-fit: contain; }
+  .logo-img--footer { height: 110px; margin: 0 auto; }
+  .logo-lockup { display: flex; align-items: center; gap: 10px; }
+  .logo-lockup .logo-hb   { height: 48px; width: auto; display: block; }
+  .logo-lockup .logo-perf { height: 20px; width: auto; display: block; }
+  .logo-lockup .logo-text { display: none; }
+  .logo-lockup.logo--fallback .logo-hb, .logo-lockup.logo--fallback .logo-perf { display: none; }
+  .logo-lockup.logo--fallback .logo-text { display: inline; }
+  .navbar { position: fixed; top: 0; left: 0; right: 0; z-index: 1000; background: rgba(10,10,10,0.92); backdrop-filter: blur(8px); border-bottom: 1px solid rgba(245,168,0,0.15); }
+  .nav-inner { display: flex; align-items: center; justify-content: space-between; height: 72px; }
+  .nav-links { display: flex; gap: 32px; list-style: none; }
+  .nav-links a { font-family: var(--font-display); text-transform: uppercase; font-weight: 600; letter-spacing: 1px; font-size: 1.05rem; color: var(--text); transition: color .2s ease; }
+  .nav-links a:hover { color: var(--accent); }
+  .hamburger { display: none; flex-direction: column; gap: 5px; background: none; border: none; cursor: pointer; padding: 6px; }
+  .hamburger span { width: 26px; height: 3px; background: var(--accent); border-radius: 2px; transition: transform .3s ease, opacity .3s ease; }
+  .hamburger.open span:nth-child(1) { transform: translateY(8px) rotate(45deg); }
+  .hamburger.open span:nth-child(2) { opacity: 0; }
+  .hamburger.open span:nth-child(3) { transform: translateY(-8px) rotate(-45deg); }
+
+  /* ---------- Hero ---------- */
+  .prog-hero { padding: 150px 0 50px; background: radial-gradient(circle at 75% 15%, rgba(245,168,0,0.12), transparent 55%), var(--bg); border-bottom: 1px solid rgba(245,168,0,0.10); }
+  .back-link { display: inline-flex; align-items: center; gap: 8px; color: var(--text-secondary); font-size: 0.85rem; font-weight: 600; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 26px; transition: color .2s ease, gap .2s ease; }
+  .back-link:hover { color: var(--accent); gap: 12px; }
+  .badge { display: inline-block; font-weight: 600; font-size: 0.8rem; letter-spacing: 1.5px; text-transform: uppercase; color: var(--accent); background: rgba(245,168,0,0.08); border: 1px solid rgba(245,168,0,0.35); border-radius: 999px; padding: 8px 18px; }
+  .prog-hero h1 { font-size: clamp(2.4rem, 7vw, 4.2rem); margin: 18px 0 16px; }
+  .prog-hero .subhead { color: var(--text-secondary); font-size: clamp(1.05rem, 2.2vw, 1.35rem); font-weight: 500; max-width: 620px; }
+
+  /* ---------- Contenido ---------- */
+  .trial-main { padding: 60px 0 90px; }
+  .eyebrow { display: block; color: var(--accent); font-size: 0.8rem; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; margin: 0 0 14px; }
+  .block { margin-bottom: 40px; }
+  .steps { list-style: none; display: grid; gap: 14px; counter-reset: paso; }
+  .steps li { display: flex; gap: 14px; align-items: flex-start; color: var(--text-secondary); font-size: 1.02rem; }
+  .steps li::before { counter-increment: paso; content: counter(paso); flex-shrink: 0; width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--accent); color: var(--accent); font-weight: 700; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; margin-top: 1px; }
+  .steps b { color: var(--text); font-weight: 600; }
+  .feature-list { list-style: none; display: grid; gap: 12px; }
+  .feature-list li { display: flex; gap: 12px; align-items: flex-start; color: var(--text-secondary); font-size: 1.02rem; }
+  .feature-list .fi { color: var(--accent); font-weight: 800; flex-shrink: 0; line-height: 1.5; }
+
+  .price-box { border: 1px solid var(--accent); border-radius: 10px; padding: 26px; background: rgba(245,168,0,0.05); }
+  .price-box .price { font-family: var(--font-display); font-weight: 800; font-size: 2rem; color: var(--text); letter-spacing: -1px; line-height: 1.15; }
+  .price-box .price-after { color: var(--text); font-size: 1.1rem; font-weight: 600; margin-top: 8px; }
+  .price-box .price-after .per { color: var(--text-secondary); font-weight: 500; }
+  .price-box .price-note { color: var(--text-secondary); font-size: 0.95rem; margin-top: 10px; }
+
+  /* ---------- Formulario ---------- */
+  .form-card { background: var(--bg-alt); border: 1px solid #262626; border-radius: 14px; padding: 30px 26px; }
+  .form-card h2 { font-size: 1.6rem; margin-bottom: 20px; }
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; }
+  .field .opt { font-weight: 400; color: #666; }
+  .field input { width: 100%; background: #0F0F0F; border: 1px solid #333; border-radius: 8px; padding: 12px 14px; color: var(--text); font-family: var(--font-body); font-size: 1rem; }
+  .field input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(245,168,0,0.15); }
+  .suggest { display: none; margin-top: 8px; background: rgba(245,168,0,0.08); border: 1px solid rgba(245,168,0,0.35); border-radius: 8px; padding: 10px 12px; font-size: 0.88rem; }
+  .suggest.show { display: block; }
+  .suggest b { color: var(--accent); word-break: break-all; }
+  .suggest-actions { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+  .suggest-actions button { flex: 1; min-width: 120px; font-family: var(--font-body); font-size: 0.85rem; font-weight: 600; padding: 8px 10px; border-radius: 6px; cursor: pointer; }
+  .suggest-yes { background: var(--accent); color: #0A0A0A; border: 1px solid var(--accent); }
+  .suggest-no { background: transparent; color: var(--text-secondary); border: 1px solid #444; }
+  .check { display: flex; gap: 12px; align-items: flex-start; margin: 20px 0 6px; cursor: pointer; font-size: 0.95rem; color: var(--text); }
+  .check input { width: 20px; height: 20px; flex-shrink: 0; margin-top: 2px; accent-color: var(--accent); cursor: pointer; }
+  .form-error { display: none; background: rgba(226,59,59,0.1); border: 1px solid rgba(226,59,59,0.4); color: #ff7b7b; font-size: 0.9rem; padding: 10px 12px; border-radius: 8px; margin-bottom: 14px; text-align: center; }
+  .form-error.show { display: block; }
+  .form-error .err-wa { display: inline-block; margin-top: 8px; color: var(--accent); font-weight: 700; }
+  .submit { width: 100%; margin-top: 16px; text-align: center; }
+  .note { font-size: 0.85rem; color: var(--text-secondary); line-height: 1.45; margin-top: 16px; text-align: center; background: rgba(245,168,0,0.06); border: 1px solid rgba(245,168,0,0.2); border-radius: 8px; padding: 10px 12px; }
+
+  /* LEGAL: texto del cobro automático y botón de arrepentimiento (Ley 24.240). Pendiente de revisión. */
+  .legal-box { margin-top: 18px; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5; border-top: 1px solid #2a2a2a; padding-top: 14px; }
+  .legal-box a { color: var(--accent); text-decoration: underline; }
+
+  .unavailable { text-align: center; padding: 20px 0; }
+  .unavailable p { color: var(--text-secondary); margin: 14px 0 24px; }
+
+  /* ---------- Confirmación del mail ---------- */
+  .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 2000; align-items: center; justify-content: center; padding: 20px; }
+  .modal.show { display: flex; }
+  .modal-card { background: var(--bg-alt); border: 1px solid #262626; border-radius: 14px; padding: 30px 26px; width: 100%; max-width: 420px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.5); }
+  .modal-card h3 { font-size: 1.35rem; letter-spacing: -0.5px; margin-bottom: 14px; }
+  .modal-card p { color: var(--text-secondary); font-size: 0.95rem; }
+  .modal-email { display: block; color: var(--accent); font-weight: 700; font-size: 1.15rem; margin: 10px 0 12px; word-break: break-all; }
+  .modal-actions { display: flex; gap: 10px; margin-top: 22px; }
+  .modal-actions .btn { flex: 1; text-align: center; font-size: 0.95rem; padding: 13px 16px; }
+
+  .wa-float { position: fixed; right: 18px; bottom: 18px; z-index: 1500; display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; background: var(--accent); color: #0A0A0A; font-family: var(--font-display); font-weight: 700; font-size: 0.92rem; padding: 12px 18px; border-radius: 999px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); transition: transform .2s ease, box-shadow .2s ease; }
+  .wa-float:hover { transform: translateY(-2px); box-shadow: 0 0 22px rgba(245,168,0,0.5); }
+
+  footer { background: var(--bg-footer); padding: 64px 0 32px; text-align: center; border-top: 1px solid rgba(245,168,0,0.12); }
+  footer .logo { font-size: 2rem; margin-bottom: 28px; }
+  .copyright { color: var(--placeholder-text); font-size: 0.85rem; }
+
+  @media (max-width: 768px) {
+    .hamburger { display: flex; }
+    .nav-links { position: absolute; top: 72px; left: 0; right: 0; flex-direction: column; gap: 0; background: rgba(10,10,10,0.98); border-bottom: 1px solid rgba(245,168,0,0.15); max-height: 0; overflow: hidden; transition: max-height .35s ease; }
+    .nav-links.open { max-height: 320px; }
+    .nav-links li { width: 100%; text-align: center; }
+    .nav-links a { display: block; padding: 18px 0; border-top: 1px solid rgba(255,255,255,0.05); }
+    .prog-hero { padding: 120px 0 40px; }
+    .trial-main { padding: 44px 0 110px; }
+  }
+  @media (max-width: 480px) {
+    .form-card { padding: 24px 18px; }
+    .modal-actions { flex-direction: column-reverse; }
+    .wa-float { right: 12px; bottom: 12px; font-size: 0.88rem; padding: 11px 15px; }
+  }
+</style>
+</head>
+<body>
+
+<header class="navbar">
+  <div class="container nav-inner">
+    <a href="index.html" class="logo logo-lockup" aria-label="HB Performance — inicio">
+      <img class="logo-hb" src="logo-hb.png" alt="" onerror="this.parentNode.classList.add('logo--fallback');">
+      <img class="logo-perf" src="logo-perf.png" alt="HB Performance">
+      <span class="logo-text">HB <span class="logo-accent">Performance</span></span>
+    </a>
+    <nav aria-label="Navegación principal">
+      <ul class="nav-links" id="navLinks">
+        <li><a href="index.html#programas">Programas</a></li>
+        <li><a href="index.html#asesorias">Asesorías</a></li>
+        <li><a href="index.html#testimonios">Testimonios</a></li>
+      </ul>
+    </nav>
+    <button class="hamburger" id="hamburger" aria-label="Abrir menú" aria-expanded="false" aria-controls="navLinks">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+</header>
+
+<main>
+  <section class="prog-hero">
+    <div class="container narrow">
+      <a href="index.html#programas" class="back-link" id="backLink">← Volver a programas</a>
+      <div>
+        <span class="badge">• 7 días gratis</span>
+        <h1>Probá <span id="heroProgram">el programa</span> <span class="accent">gratis</span></h1>
+        <p class="subhead">Una semana completa de entrenamiento, sin pagar nada. Si no es para vos, cancelás y listo.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="trial-main">
+    <div class="container narrow">
+
+      <!-- Programa sin prueba disponible (o dirección sin ?programa=) -->
+      <div class="unavailable" id="unavailable" hidden>
+        <h2>Esta prueba no está <span class="accent">disponible</span></h2>
+        <p>Mirá nuestros programas o escribinos y te contamos cómo empezar.</p>
+        <a href="index.html#programas" class="btn btn-filled">Ver programas</a>
+      </div>
+
+      <div id="trialContent" hidden>
+        <div class="block">
+          <span class="eyebrow">Cómo funciona</span>
+          <ol class="steps">
+            <li><span>Completás tus datos acá abajo.</span></li>
+            <li><span>Te suscribís en Mercado Pago. <b>Hoy no se cobra nada.</b></span></li>
+            <li><span>Te llega un mail para entrar a tu portal y empezás a entrenar.</span></li>
+            <li><span>Al terminar los 7 días, si no cancelaste, se cobra <b class="js-price">$—</b> y sigue cada mes.</span></li>
+          </ol>
+        </div>
+
+        <div class="block">
+          <span class="eyebrow">Qué incluye</span>
+          <ul class="feature-list">
+            <li><span class="fi">✓</span> La planificación completa del programa, día por día, en tu portal</li>
+            <li><span class="fi">✓</span> Chat grupal con los entrenadores para cualquier duda</li>
+            <li><span class="fi">✓</span> Sin compromiso: cancelás cuando quieras desde tu perfil en el portal o desde Mercado Pago</li>
+          </ul>
+        </div>
+
+        <div class="block">
+          <span class="eyebrow">Precio</span>
+          <div class="price-box">
+            <div class="price">7 días <span class="accent">gratis</span></div>
+            <div class="price-after">Después, <span class="js-price">$—</span> <span class="per">/ mes</span></div>
+            <p class="price-note">Si cancelás antes del día 7, desde tu perfil en el portal o en Mercado Pago, no se cobra nada. La semana gratis es una sola vez por persona.</p>
+          </div>
+        </div>
+
+        <div class="form-card" id="formCard">
+          <h2>Empezá tu semana <span class="accent">gratis</span></h2>
+          <div class="form-error" id="formError" role="alert"></div>
+          <div class="field">
+            <label for="fName">Nombre completo</label>
+            <input type="text" id="fName" autocomplete="name" maxlength="100" required>
+          </div>
+          <div class="field">
+            <label for="fEmail">Email</label>
+            <input type="email" id="fEmail" autocomplete="email" maxlength="254" required>
+            <div class="suggest" id="emailSuggest" role="alert">
+              ¿Quisiste decir <b id="emailSuggestText"></b>?
+              <div class="suggest-actions">
+                <button type="button" class="suggest-yes" id="emailSuggestYes">Sí, corregir</button>
+                <button type="button" class="suggest-no" id="emailSuggestNo">No, está bien</button>
+              </div>
+            </div>
+          </div>
+          <div class="field">
+            <label for="fEmail2">Repetí tu email</label>
+            <input type="email" id="fEmail2" name="email-confirmacion" autocomplete="off" maxlength="254" required>
+          </div>
+          <div class="field">
+            <label for="fPhone">Teléfono <span class="opt">(opcional)</span></label>
+            <input type="tel" id="fPhone" autocomplete="tel" maxlength="30">
+          </div>
+
+          <!-- ================================================================
+               LEGAL (pendiente, requisito antes de la etapa 8):
+               acá va el texto del cobro automático y el botón de arrepentimiento
+               (Ley 24.240), revisado por el contador o abogado.
+               Para mostrarlo: escribir el texto adentro y sacar el atributo hidden.
+               ================================================================ -->
+          <div class="legal-box" id="legalText" hidden></div>
+
+          <label class="check">
+            <input type="checkbox" id="fConsent">
+            <span>Entiendo que al terminar los 7 días se cobra <b class="js-price">$—</b> por mes si no cancelo antes desde mi perfil en el portal o en Mercado Pago.</span>
+          </label>
+
+          <button type="button" class="btn btn-filled submit" id="fSubmit" disabled>Empezar mi semana gratis →</button>
+          <p class="note">📩 Después de suscribirte en Mercado Pago te llega un mail para entrar a tu portal. Puede tardar <b>hasta 5 minutos</b>; si no lo ves, revisá la carpeta de <b>spam</b>.</p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="container">
+    <div class="logo">
+      <img class="logo-img logo-img--footer" src="logo.png" alt="HB Performance"
+           onerror="this.style.display='none';this.nextElementSibling.style.display='inline';">
+      <span class="logo-text" style="display:none;">HB <span class="logo-accent">Performance</span></span>
+    </div>
+    <p class="copyright">© 2025 HB Performance. Todos los derechos reservados.</p>
+  </div>
+</footer>
+
+<a class="wa-float" id="waFloat" href="https://wa.me/5491159574043" target="_blank" rel="noopener" aria-label="Escribinos por WhatsApp">💬 ¿Dudas? Escribinos</a>
+
+<!-- Confirmación del mail antes de ir a Mercado Pago -->
+<div class="modal" id="confirmModal" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+  <div class="modal-card">
+    <h3 id="confirmTitle">¿Tu mail está bien?</h3>
+    <p>Te vamos a escribir a:</p>
+    <span class="modal-email" id="confirmEmail"></span>
+    <p>Ahí te llega el acceso a tu portal. Si tiene un error, no te va a llegar.</p>
+    <div class="modal-actions">
+      <button type="button" class="btn btn-outline" id="confirmNo">Corregir</button>
+      <button type="button" class="btn btn-filled" id="confirmYes">Sí, es correcto →</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var hamburger = document.getElementById('hamburger');
+    var navLinks = document.getElementById('navLinks');
+    hamburger.addEventListener('click', function () {
+      var open = navLinks.classList.toggle('open');
+      hamburger.classList.toggle('open', open);
+      hamburger.setAttribute('aria-expanded', String(open));
+      hamburger.setAttribute('aria-label', open ? 'Cerrar menú' : 'Abrir menú');
+    });
+  })();
+</script>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase.js"></script>
+<script>
+  // Programas con semana de prueba. Sumar Hybrid y Corredores acá cuando tengan su plan de prueba
+  // (y en TRIAL_PROGRAMS de start-trial).
+  var TRIAL_PROGRAMS = {
+    crossfit: { name: 'CrossFit', page: 'crossfit.html', priceKey: 'price_crossfit_ars' }
+  };
+  var WA_DEFAULT = '5491159574043';
+
+  var programId = (new URLSearchParams(location.search).get('programa') || '').toLowerCase();
+  var PROGRAM = TRIAL_PROGRAMS[programId] || null;
+  var PRICE = null; // número en ARS, desde site_config
+
+  // ---- Seguimiento (Meta Pixel + UTMs). Nunca rompe el flujo. ----
+  function hbTrack(ev, params) { try { if (typeof fbq === 'function') fbq('track', ev, params || {}); } catch (e) {} }
+  var HB_UTM = (function () {
+    var out = {};
+    try {
+      var q = new URLSearchParams(location.search);
+      ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content'].forEach(function (k) {
+        var v = q.get(k); if (v) out[k] = v.slice(0, 100);
+      });
+      if (Object.keys(out).length) sessionStorage.setItem('hb_utm', JSON.stringify(out));
+      else { var s = sessionStorage.getItem('hb_utm'); if (s) out = JSON.parse(s) || {}; }
+    } catch (e) {}
+    return out;
+  })();
+  function pixelBase() { return { content_name: PROGRAM.name + ' (prueba)', content_ids: [programId], content_type: 'product' }; }
+
+  var waNumber = WA_DEFAULT;
+  function waLink(msg) { return 'https://wa.me/' + waNumber + '?text=' + encodeURIComponent(msg); }
+  function setWa() {
+    document.getElementById('waFloat').href = waLink('Hola! Tengo una duda sobre la semana de prueba.');
+  }
+  setWa();
+
+  var formError = document.getElementById('formError');
+  function showError(msg, withWa) {
+    formError.textContent = msg;
+    if (withWa) {
+      formError.appendChild(document.createElement('br'));
+      var a = document.createElement('a');
+      a.className = 'err-wa'; a.target = '_blank'; a.rel = 'noopener';
+      a.href = waLink('Hola! Quise empezar la semana de prueba y no pude.');
+      a.textContent = '💬 Abrir WhatsApp';
+      formError.appendChild(a);
+    }
+    formError.classList.add('show');
+    formError.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  }
+  function hideError() { formError.classList.remove('show'); }
+
+  if (!PROGRAM) {
+    document.getElementById('unavailable').hidden = false;
+  } else {
+    document.getElementById('trialContent').hidden = false;
+    document.getElementById('heroProgram').textContent = PROGRAM.name;
+    document.title = 'Probá ' + PROGRAM.name + ' gratis — HB Performance';
+    var back = document.getElementById('backLink');
+    back.href = PROGRAM.page; back.textContent = '← Volver a ' + PROGRAM.name;
+    hbTrack('ViewContent', pixelBase());
+  }
+
+  // ---- Precio y WhatsApp desde site_config. Sin precio no se puede seguir: es el que se cobra al día 7. ----
+  (async function () {
+    if (!PROGRAM) return;
+    try {
+      var res = await sb.from('site_config').select('key, value');
+      if (res.error || !res.data) throw new Error('config');
+      var config = Object.fromEntries(res.data.map(function (r) { return [r.key, r.value]; }));
+      if (config['whatsapp_erika']) { waNumber = config['whatsapp_erika']; setWa(); }
+      var n = Number(config[PROGRAM.priceKey]);
+      if (!(n > 0)) throw new Error('precio');
+      PRICE = n;
+      var txt = '$' + n.toLocaleString('es-AR');
+      document.querySelectorAll('.js-price').forEach(function (el) { el.textContent = txt; });
+      document.getElementById('fSubmit').disabled = false;
+    } catch (e) {
+      showError('No pudimos cargar el precio. Probá de nuevo en un rato o escribinos por WhatsApp.', true);
+    }
+  })();
+
+  // ---- Errores de tipeo en el mail (misma lista que las landings + gmail con terminación distinta de .com) ----
+  var EMAIL_DOMAIN_FIX = { gmial: 'gmail', gmai: 'gmail', gmal: 'gmail', gmali: 'gmail', gamil: 'gmail', gnail: 'gmail', gmaill: 'gmail',
+    hotmial: 'hotmail', hotmal: 'hotmail', hotmai: 'hotmail', hotmil: 'hotmail', homail: 'hotmail', hotmaill: 'hotmail',
+    yahooo: 'yahoo', yaho: 'yahoo', yhaoo: 'yahoo', outlok: 'outlook', outllok: 'outlook', otulook: 'outlook' };
+  var EMAIL_TLD_FIX = { con: 'com', coom: 'com', cmo: 'com', comm: 'com', ocm: 'com', vom: 'com', xom: 'com' };
+  function emailTypoSuggestion(email) {
+    var at = email.lastIndexOf('@');
+    if (at < 1) return null;
+    var parts = email.slice(at + 1).toLowerCase().split('.');
+    if (parts.length < 2) return null;
+    if (EMAIL_DOMAIN_FIX[parts[0]]) parts[0] = EMAIL_DOMAIN_FIX[parts[0]];
+    for (var i = 1; i < parts.length; i++) if (EMAIL_TLD_FIX[parts[i]]) parts[i] = EMAIL_TLD_FIX[parts[i]];
+    if (parts[0] === 'gmail') parts = ['gmail', 'com']; // gmail solo existe como gmail.com (gmail.co, gmail.com.ar…)
+    var fixed = email.slice(0, at + 1) + parts.join('.');
+    return fixed.toLowerCase() !== email.toLowerCase() ? fixed : null;
+  }
+  var emailTypoOk = null;
+  var suggestBox = document.getElementById('emailSuggest');
+  var fEmail = document.getElementById('fEmail');
+  function hideSuggest() { suggestBox.classList.remove('show'); }
+  function checkEmailTypo(email) { // true = hay sugerencia sin responder
+    var s = emailTypoSuggestion(email);
+    if (!s || email === emailTypoOk) { hideSuggest(); return false; }
+    document.getElementById('emailSuggestText').textContent = s;
+    suggestBox.classList.add('show');
+    return true;
+  }
+  fEmail.addEventListener('blur', function () { var v = this.value.trim(); if (v) checkEmailTypo(v); });
+  fEmail.addEventListener('input', hideSuggest);
+  document.getElementById('emailSuggestYes').addEventListener('click', function () {
+    var fixed = document.getElementById('emailSuggestText').textContent;
+    var e2 = document.getElementById('fEmail2');
+    if (e2.value.trim().toLowerCase() === fEmail.value.trim().toLowerCase()) e2.value = fixed;
+    fEmail.value = fixed;
+    hideSuggest();
+    fEmail.focus();
+  });
+  document.getElementById('emailSuggestNo').addEventListener('click', function () {
+    emailTypoOk = fEmail.value.trim();
+    hideSuggest();
+  });
+
+  // ---- Envío: validar → confirmar el mail → start-trial → checkout de MP ----
+  var modal = document.getElementById('confirmModal');
+  var submitBtn = document.getElementById('fSubmit');
+  var formData = null;
+
+  submitBtn.addEventListener('click', function () {
+    hideError();
+    var name = document.getElementById('fName').value.trim();
+    var email = fEmail.value.trim();
+    var email2 = document.getElementById('fEmail2').value.trim();
+    var phone = document.getElementById('fPhone').value.trim();
+    if (name.length < 2) return showError('Ingresá tu nombre completo.');
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return showError('Ingresá un email válido.');
+    if (email.toLowerCase() !== email2.toLowerCase()) return showError('Los dos mails no coinciden. Revisalos.');
+    if (checkEmailTypo(email)) return; // corregir o confirmar la sugerencia primero
+    if (!document.getElementById('fConsent').checked) return showError('Para seguir, marcá que entendés cuándo se cobra.');
+    formData = { full_name: name, email: email, phone: phone };
+    document.getElementById('confirmEmail').textContent = email;
+    modal.classList.add('show');
+    document.getElementById('confirmYes').focus();
+  });
+  document.getElementById('confirmNo').addEventListener('click', function () {
+    modal.classList.remove('show');
+    fEmail.focus(); fEmail.select();
+  });
+
+  document.getElementById('confirmYes').addEventListener('click', async function () {
+    var yes = this;
+    yes.disabled = true; yes.textContent = 'Procesando…';
+    submitBtn.disabled = true;
+    hbTrack('InitiateCheckout', Object.assign(pixelBase(), { value: 0, currency: 'ARS' }));
+    function fail() {
+      modal.classList.remove('show');
+      yes.disabled = false; yes.textContent = 'Sí, es correcto →';
+      submitBtn.disabled = false;
+      showError('No pudimos iniciar tu prueba. Escribinos por WhatsApp y lo resolvemos.', true);
+    }
+    try {
+      var body = Object.assign({ program: programId }, formData, HB_UTM);
+      var fn = await sb.functions.invoke('start-trial', { body: body });
+      var out = fn && fn.data;
+      if ((fn && fn.error) || !out || !out.ok || !out.pending_id || !out.init_point) return fail();
+      hbTrack('Lead', pixelBase());
+      // El id del pending queda en el navegador para que prueba-regreso.html confirme el alta.
+      // No se toca hb_purchase: una prueba no es una compra.
+      try {
+        localStorage.setItem('hb_trial', JSON.stringify({ pending_id: out.pending_id, program: programId, price: PRICE, at: Date.now() }));
+      } catch (e) { /* sin almacenamiento: la página de regreso pide el mail */ }
+      window.location.href = out.init_point;
+    } catch (e) {
+      fail();
+    }
+  });
+</script>
+
+</body>
+</html>

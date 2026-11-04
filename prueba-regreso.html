@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Meta Pixel Code -->
+<script>
+!function(f,b,e,v,n,t,s)
+{if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+n.callMethod.apply(n,arguments):n.queue.push(arguments)};
+if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';
+n.queue=[];t=b.createElement(e);t.async=!0;
+t.src=v;s=b.getElementsByTagName(e)[0];
+s.parentNode.insertBefore(t,s)}(window, document,'script',
+'https://connect.facebook.net/en_US/fbevents.js');
+fbq('init', '1008115118926012');
+fbq('track', 'PageView');
+</script>
+<noscript><img height="1" width="1" style="display:none"
+src="https://www.facebook.com/tr?id=1008115118926012&ev=PageView&noscript=1"
+/></noscript>
+<!-- End Meta Pixel Code -->
+<!-- Regreso de Mercado Pago tras suscribirse a la semana de prueba (back_url del plan de prueba). -->
+<meta name="robots" content="noindex, nofollow">
+<link rel="icon" type="image/png" href="/logo.png">
+<link rel="apple-touch-icon" href="/logo.png">
+<title>Tu semana de prueba — HB Performance</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Playfair+Display:ital,wght@1,400;1,600;1,700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0A0A0A;
+    --bg-alt: #1A1A1A;
+    --accent: #F5A800;
+    --text: #FFFFFF;
+    --text-secondary: #AAAAAA;
+    --font-display: 'Inter', sans-serif;
+    --font-body: 'Inter', sans-serif;
+    --font-accent: 'Playfair Display', serif;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font-body); line-height: 1.6; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; text-align: center; }
+  a { color: inherit; text-decoration: none; }
+  img { max-width: 100%; display: block; }
+  .accent { font-family: var(--font-accent); font-style: italic; font-weight: 600; color: var(--accent); }
+  .wrap { width: 100%; max-width: 480px; }
+  .logo { margin-bottom: 30px; }
+  .logo img { height: 60px; margin: 0 auto; }
+  .logo .logo-text { font-family: var(--font-display); font-weight: 800; font-size: 1.6rem; letter-spacing: -1px; }
+  .icon { font-size: 4.2rem; line-height: 1; margin-bottom: 20px; }
+  h1 { font-family: var(--font-display); font-weight: 800; font-size: 2rem; letter-spacing: -1px; line-height: 1.15; margin-bottom: 18px; }
+  .text { color: var(--text-secondary); font-size: 1.05rem; margin-bottom: 14px; }
+  .note { color: #888; font-size: 0.9rem; margin-bottom: 28px; }
+  .btn { display: inline-block; font-family: var(--font-display); text-transform: uppercase; font-weight: 700; letter-spacing: 1px; font-size: 1rem; padding: 15px 34px; border-radius: 6px; cursor: pointer; border: 2px solid var(--accent); background: var(--accent); color: #0A0A0A; transition: transform .2s ease, box-shadow .2s ease; }
+  .btn:hover { box-shadow: 0 0 22px rgba(245,168,0,0.45); transform: translateY(-2px); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; transform: none; box-shadow: none; }
+  .btn-wa { display: inline-flex; align-items: center; gap: 8px; font-family: var(--font-display); font-weight: 700; font-size: 0.95rem; letter-spacing: 0.3px; padding: 12px 24px; border-radius: 6px; border: 2px solid var(--accent); background: transparent; color: var(--accent); transition: background .2s ease, color .2s ease; }
+  .btn-wa:hover { background: var(--accent); color: #0A0A0A; }
+  .help { margin-top: 28px; }
+  .help p { color: var(--text-secondary); font-size: 0.92rem; margin-bottom: 12px; }
+  .link { display: inline-block; margin-top: 18px; color: var(--text-secondary); font-size: 0.9rem; text-decoration: underline; cursor: pointer; background: none; border: none; font-family: var(--font-body); }
+  .link:hover { color: var(--accent); }
+
+  .spinner { width: 54px; height: 54px; margin: 0 auto 26px; border-radius: 50%; border: 4px solid rgba(245,168,0,0.2); border-top-color: var(--accent); animation: spin 0.9s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 3s; } }
+
+  .form { text-align: left; background: var(--bg-alt); border: 1px solid #262626; border-radius: 14px; padding: 24px 22px; margin-top: 8px; }
+  .form label { display: block; font-size: 0.8rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 6px; }
+  .form input { width: 100%; background: #0F0F0F; border: 1px solid #333; border-radius: 8px; padding: 12px 14px; color: var(--text); font-family: var(--font-body); font-size: 1rem; }
+  .form input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px rgba(245,168,0,0.15); }
+  .form .btn { width: 100%; margin-top: 16px; text-align: center; }
+  .form-error { display: none; background: rgba(226,59,59,0.1); border: 1px solid rgba(226,59,59,0.4); color: #ff7b7b; font-size: 0.9rem; padding: 10px 12px; border-radius: 8px; margin-bottom: 14px; text-align: center; }
+  .form-error.show { display: block; }
+  .suggest { display: none; margin-top: 8px; background: rgba(245,168,0,0.08); border: 1px solid rgba(245,168,0,0.35); border-radius: 8px; padding: 10px 12px; font-size: 0.88rem; }
+  .suggest.show { display: block; }
+  .suggest b { color: var(--accent); word-break: break-all; }
+  .suggest-actions { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+  .suggest-actions button { flex: 1; min-width: 120px; font-family: var(--font-body); font-size: 0.85rem; font-weight: 600; padding: 8px 10px; border-radius: 6px; cursor: pointer; }
+  .suggest-yes { background: var(--accent); color: #0A0A0A; border: 1px solid var(--accent); }
+  .suggest-no { background: transparent; color: var(--text-secondary); border: 1px solid #444; }
+
+  @media (max-width: 420px) { h1 { font-size: 1.65rem; } .icon { font-size: 3.6rem; } }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="logo">
+      <img src="logo.png" alt="HB Performance"
+           onerror="this.style.display='none';document.getElementById('logoText').style.display='block';">
+      <div id="logoText" class="logo-text" style="display:none;">HB <span class="accent">Performance</span></div>
+    </div>
+
+    <!-- Confirmando (y reintentos mientras MP termina de procesar) -->
+    <section id="stLoading">
+      <div class="spinner" aria-hidden="true"></div>
+      <h1>Confirmando tu <span class="accent">prueba</span>…</h1>
+      <p class="text" id="loadingText">Esto tarda unos segundos. No cierres esta página.</p>
+    </section>
+
+    <!-- Alta hecha -->
+    <section id="stOk" hidden>
+      <div class="icon">✅</div>
+      <h1>¡Listo, ya <span class="accent">arrancaste</span>!</h1>
+      <p class="text">Te mandamos un mail para crear tu contraseña y entrar a tu portal. Puede tardar <b>hasta 5 minutos</b>.</p>
+      <p class="note">Si no lo ves en tu bandeja de entrada, revisá la carpeta de <b>spam</b>.<br>Recordá: si no cancelás antes de que terminen los 7 días, desde tu perfil en el portal o en Mercado Pago, se cobra la primera cuota.</p>
+      <a href="index.html" class="btn">Volver al inicio →</a>
+      <div class="help">
+        <p>¿No te llegó el mail? Escribinos:</p>
+        <a class="btn-wa js-wa" data-msg="Hola! Empecé la semana de prueba y no me llegó el mail." href="#" target="_blank" rel="noopener">💬 Escribir por WhatsApp</a>
+      </div>
+    </section>
+
+    <!-- Sin id en el navegador: pedimos el mail del formulario -->
+    <section id="stEmail" hidden>
+      <div class="icon">📩</div>
+      <h1>Un paso <span class="accent">más</span></h1>
+      <p class="text">Ingresá el mail que pusiste en el formulario para terminar de activar tu prueba.</p>
+      <div class="form">
+        <div class="form-error" id="emailError" role="alert"></div>
+        <label for="rEmail">Email</label>
+        <input type="email" id="rEmail" autocomplete="email" maxlength="254">
+        <div class="suggest" id="emailSuggest" role="alert">
+          ¿Quisiste decir <b id="emailSuggestText"></b>?
+          <div class="suggest-actions">
+            <button type="button" class="suggest-yes" id="emailSuggestYes">Sí, corregir</button>
+            <button type="button" class="suggest-no" id="emailSuggestNo">No, está bien</button>
+          </div>
+        </div>
+        <button type="button" class="btn" id="rSubmit">Confirmar →</button>
+      </div>
+    </section>
+
+    <!-- No se pudo confirmar sola: queda para revisión (la suscripción es real, no es un error de la persona) -->
+    <section id="stReview" hidden>
+      <div class="icon">🕐</div>
+      <h1>Recibimos tu <span class="accent">suscripción</span></h1>
+      <p class="text">La estamos revisando y te escribimos pronto para darte el acceso.</p>
+      <p class="note">Si querés, escribinos por WhatsApp y lo resolvemos más rápido.</p>
+      <a class="btn-wa js-wa" data-msg="Hola! Me suscribí a la semana de prueba y quiero confirmar mi acceso." href="#" target="_blank" rel="noopener">💬 Escribir por WhatsApp</a>
+      <div><button type="button" class="link" id="retryEmail" hidden>¿Escribiste mal el mail? Probá de nuevo</button></div>
+    </section>
+
+    <!-- Llegó sin preapproval_id en la dirección -->
+    <section id="stMissing" hidden>
+      <div class="icon">🔎</div>
+      <h1>No encontramos tu <span class="accent">suscripción</span></h1>
+      <p class="text">Si ya te suscribiste en Mercado Pago, escribinos por WhatsApp y lo revisamos.</p>
+      <p class="note">Si todavía no te suscribiste, podés volver al inicio y empezar desde ahí.</p>
+      <a class="btn-wa js-wa" data-msg="Hola! Me suscribí a la semana de prueba y no se confirmó." href="#" target="_blank" rel="noopener">💬 Escribir por WhatsApp</a>
+      <div><a href="index.html" class="link">Volver al inicio</a></div>
+    </section>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase.js"></script>
+  <script>
+    var PROGRAM_NAMES = { crossfit: 'CrossFit', hybrid: 'Hybrid Evolution', corredores: 'Fuerza para Corredores' };
+    var RETRY_DELAYS = [4000, 8000, 12000, 16000, 20000]; // ~1 minuto en total
+    var EMAIL_TRIES_MAX = 3; // el camino por mail tiene límite de 5 por hora en confirm-trial
+
+    // ---- WhatsApp (desde site_config; si falla, el número oficial) ----
+    var waNumber = '5491159574043';
+    function setWa() {
+      document.querySelectorAll('.js-wa').forEach(function (a) {
+        a.href = 'https://wa.me/' + waNumber + '?text=' + encodeURIComponent(a.dataset.msg);
+      });
+    }
+    setWa();
+    (async function () {
+      try {
+        var res = await sb.from('site_config').select('key, value').eq('key', 'whatsapp_erika');
+        if (!res.error && res.data && res.data[0] && res.data[0].value) { waNumber = res.data[0].value; setWa(); }
+      } catch (e) {}
+    })();
+
+    // ---- Estados ----
+    var STATES = ['stLoading', 'stOk', 'stEmail', 'stReview', 'stMissing'];
+    function show(id) { STATES.forEach(function (s) { document.getElementById(s).hidden = (s !== id); }); }
+
+    // ---- Datos: dirección + lo que guardó prueba.html ----
+    var preapprovalId = (new URLSearchParams(location.search).get('preapproval_id') || '').trim();
+    var stash = null;
+    try { stash = JSON.parse(localStorage.getItem('hb_trial') || 'null'); } catch (e) {}
+    function readDone() { try { return JSON.parse(localStorage.getItem('hb_trial_done') || '[]') || []; } catch (e) { return []; } }
+
+    // StartTrial una sola vez por suscripción (una recarga no lo repite). Nunca Purchase.
+    function success() {
+      var done = readDone();
+      if (done.indexOf(preapprovalId) === -1) {
+        try {
+          var params = { currency: 'ARS', value: 0 };
+          if (stash && stash.program) { params.content_name = (PROGRAM_NAMES[stash.program] || stash.program) + ' (prueba)'; params.content_ids = [stash.program]; }
+          if (stash && stash.price > 0) params.predicted_ltv = stash.price;
+          if (typeof fbq === 'function') fbq('track', 'StartTrial', params);
+        } catch (e) {}
+        try {
+          done.push(preapprovalId);
+          localStorage.setItem('hb_trial_done', JSON.stringify(done.slice(-10)));
+          localStorage.removeItem('hb_trial');
+        } catch (e) {}
+      }
+      show('stOk');
+    }
+
+    // ---- Llamada a confirm-trial con reintentos cuando MP todavía no terminó ----
+    var emailTries = 0;
+    async function confirm(payload) {
+      show('stLoading');
+      document.getElementById('loadingText').textContent = 'Esto tarda unos segundos. No cierres esta página.';
+      for (var attempt = 0; attempt <= RETRY_DELAYS.length; attempt++) {
+        var out = null, failed = false;
+        try {
+          var fn = await sb.functions.invoke('confirm-trial', { body: Object.assign({ preapproval_id: preapprovalId }, payload) });
+          if (fn && fn.error) failed = true; else out = fn && fn.data;
+        } catch (e) { failed = true; }
+        if (out && out.ok) return success();
+        var retry = failed || !out || out.retry === true; // sin respuesta clara también vale reintentar
+        if (!retry || attempt === RETRY_DELAYS.length) break;
+        document.getElementById('loadingText').textContent = 'Mercado Pago todavía está procesando tu suscripción. Seguimos intentando…';
+        await new Promise(function (r) { setTimeout(r, RETRY_DELAYS[attempt]); });
+      }
+      document.getElementById('retryEmail').hidden = !(payload.email && emailTries < EMAIL_TRIES_MAX);
+      show('stReview');
+    }
+
+    // ---- Camino por mail (otro navegador, Instagram, modo incógnito) ----
+    var EMAIL_DOMAIN_FIX = { gmial: 'gmail', gmai: 'gmail', gmal: 'gmail', gmali: 'gmail', gamil: 'gmail', gnail: 'gmail', gmaill: 'gmail',
+      hotmial: 'hotmail', hotmal: 'hotmail', hotmai: 'hotmail', hotmil: 'hotmail', homail: 'hotmail', hotmaill: 'hotmail',
+      yahooo: 'yahoo', yaho: 'yahoo', yhaoo: 'yahoo', outlok: 'outlook', outllok: 'outlook', otulook: 'outlook' };
+    var EMAIL_TLD_FIX = { con: 'com', coom: 'com', cmo: 'com', comm: 'com', ocm: 'com', vom: 'com', xom: 'com' };
+    function emailTypoSuggestion(email) {
+      var at = email.lastIndexOf('@');
+      if (at < 1) return null;
+      var parts = email.slice(at + 1).toLowerCase().split('.');
+      if (parts.length < 2) return null;
+      if (EMAIL_DOMAIN_FIX[parts[0]]) parts[0] = EMAIL_DOMAIN_FIX[parts[0]];
+      for (var i = 1; i < parts.length; i++) if (EMAIL_TLD_FIX[parts[i]]) parts[i] = EMAIL_TLD_FIX[parts[i]];
+      if (parts[0] === 'gmail') parts = ['gmail', 'com'];
+      var fixed = email.slice(0, at + 1) + parts.join('.');
+      return fixed.toLowerCase() !== email.toLowerCase() ? fixed : null;
+    }
+    var emailTypoOk = null;
+    var rEmail = document.getElementById('rEmail');
+    var suggestBox = document.getElementById('emailSuggest');
+    function hideSuggest() { suggestBox.classList.remove('show'); }
+    function checkEmailTypo(email) {
+      var s = emailTypoSuggestion(email);
+      if (!s || email === emailTypoOk) { hideSuggest(); return false; }
+      document.getElementById('emailSuggestText').textContent = s;
+      suggestBox.classList.add('show');
+      return true;
+    }
+    rEmail.addEventListener('blur', function () { var v = this.value.trim(); if (v) checkEmailTypo(v); });
+    rEmail.addEventListener('input', function () { hideSuggest(); document.getElementById('emailError').classList.remove('show'); });
+    document.getElementById('emailSuggestYes').addEventListener('click', function () {
+      rEmail.value = document.getElementById('emailSuggestText').textContent; hideSuggest(); rEmail.focus();
+    });
+    document.getElementById('emailSuggestNo').addEventListener('click', function () { emailTypoOk = rEmail.value.trim(); hideSuggest(); });
+    document.getElementById('rSubmit').addEventListener('click', function () {
+      var email = rEmail.value.trim();
+      var err = document.getElementById('emailError');
+      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) { err.textContent = 'Ingresá un email válido.'; err.classList.add('show'); return; }
+      if (checkEmailTypo(email)) return;
+      emailTries++;
+      confirm({ email: email });
+    });
+    document.getElementById('retryEmail').addEventListener('click', function () {
+      rEmail.value = ''; emailTypoOk = null; hideSuggest();
+      show('stEmail'); rEmail.focus();
+    });
+
+    // ---- Arranque ----
+    if (!/^[A-Za-z0-9_-]{1,80}$/.test(preapprovalId)) {
+      show('stMissing');
+    } else if (readDone().indexOf(preapprovalId) !== -1) {
+      show('stOk'); // ya confirmada en este navegador (recarga): no se vuelve a llamar ni se repite StartTrial
+    } else if (stash && typeof stash.pending_id === 'string' && stash.pending_id) {
+      confirm({ pending_id: stash.pending_id });
+    } else {
+      show('stEmail');
+    }
+  </script>
+</body>
+</html>
