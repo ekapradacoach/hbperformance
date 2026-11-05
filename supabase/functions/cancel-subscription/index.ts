@@ -11,6 +11,8 @@
 //    subscription_end = next_payment_date (último día cubierto por lo ya pagado;
 //    fallback: subscription_start + ciclos mensuales hasta la próxima fecha futura).
 //  - El corte de acceso al vencer subscription_end NO se hace acá (paso aparte).
+//  - Semana de prueba (etapa 6): SOLO si trial_status = 'in_trial', subscription_end = día (hora AR) en que termina la
+//    prueba, y además trial_status = 'cancelled' + trial_resolved_at. Cualquier otro perfil: exactamente igual que antes.
 //
 // Deploy: verify_jwt = ON (acción autenticada del atleta).
 //   supabase functions deploy cancel-subscription
@@ -51,7 +53,7 @@ Deno.serve(async (req) => {
     // --- Perfil ---
     const { data: profile, error: profErr } = await admin
       .from('profiles')
-      .select('id, mp_subscription_id, subscription_start, subscription_status, program')
+      .select('id, mp_subscription_id, subscription_start, subscription_status, program, trial_status, trial_ends_at')
       .eq('id', user.id)
       .maybeSingle()
 
@@ -95,12 +97,18 @@ Deno.serve(async (req) => {
     if (!nextPaymentDate) nextPaymentDate = putBody?.next_payment_date ?? null
 
     // --- subscription_end = último día cubierto (next_payment_date, con fallback) ---
-    const subscriptionEnd = computeSubscriptionEnd(nextPaymentDate, profile.subscription_start, autoRecurring)
+    // Semana de prueba en curso: acceso hasta el día en que termina la prueba.
+    const inTrial = profile.trial_status === 'in_trial' && !!profile.trial_ends_at
+    const subscriptionEnd = inTrial
+      ? new Date(new Date(profile.trial_ends_at).getTime() - 3 * 3600 * 1000).toISOString().slice(0, 10)
+      : computeSubscriptionEnd(nextPaymentDate, profile.subscription_start, autoRecurring)
 
     // --- Actualizar la DB ---
     const { error: updErr } = await admin
       .from('profiles')
-      .update({ subscription_status: 'cancelled', subscription_end: subscriptionEnd })
+      .update(inTrial
+        ? { subscription_status: 'cancelled', subscription_end: subscriptionEnd, trial_status: 'cancelled', trial_resolved_at: new Date().toISOString() }
+        : { subscription_status: 'cancelled', subscription_end: subscriptionEnd })
       .eq('id', profile.id)
 
     if (updErr) {

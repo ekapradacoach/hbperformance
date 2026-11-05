@@ -83,6 +83,14 @@
 // Cambio 2026-11-02 (etapa 4 de la semana de prueba): los avisos de una suscripción sin vincular de un plan de prueba
 //   van a confirm-trial, que es el único que da esa alta. Una vez vinculada, sigue el flujo normal.
 //
+// Semana de prueba, etapa 6 (2026-11-05): dos desvíos insertados que SOLO actúan si el perfil de esa suscripción
+//   tiene trial_status = in_trial (o charge_rejected en el aviso de cuota). Cualquier otro perfil, o si la lectura
+//   falla, sigue exactamente por el código de antes (lo prueba process-payment-etapa6.sim.mjs contra 76c477a).
+//   · Cuota: 1er cobro aprobado → converted + alta_nueva; rechazado → corte (cancelled, subscription_end = ayer),
+//     charge_rejected y cancelación en MP, sin gracia ni mail de cobro fallido.
+//   · Cancelación de MP en prueba → acceso hasta el día de fin de la prueba (subscription_end) y trial_status cancelled.
+//   · Una prueba en curso nunca se corta por fecha: solo por estos eventos.
+//
 // Secretos: MP_ACCESS_TOKEN, SUPABASE_URL, SERVICE_ROLE_KEY, RESEND_API_KEY, MP_WEBHOOK_SECRET.
 // ============================================================================
 
@@ -174,6 +182,12 @@ Deno.serve(async (req) => {
       if (!chargeFailed && chargeStatus && ['pending', 'in_process', 'authorized'].includes(chargeStatus)) {
         console.log('Cobro en proceso → se pide reintento a MP:', chargeStatus, preapprovalId)
         return json({ ok: false, status: 'charge_in_process' }, 503)
+      }
+
+      // --- Semana de prueba (etapa 6): solo perfiles in_trial / charge_rejected. Los demás siguen igual que antes. ---
+      if (chargeApproved || chargeFailed) {
+        const trialProf = await findTrialProfile(adminClient, preapprovalId, ['in_trial', 'charge_rejected'])
+        if (trialProf) return await handleTrialCharge(adminClient, trialProf, ap, chargeApproved, MP_TOKEN)
       }
 
       // Cobro aprobado con la cuota todavía en 'recycling': el dinero entró, se registra. Después sigue la lógica
@@ -331,6 +345,10 @@ Deno.serve(async (req) => {
     }
 
     if (status === 'cancelled') {
+      // --- Semana de prueba (etapa 6): cancelación durante la prueba. Los demás perfiles siguen igual que antes. ---
+      const trialCancel = await findTrialProfile(adminClient, mpSubscriptionId, ['in_trial'])
+      if (trialCancel) return await handleTrialCancel(adminClient, trialCancel)
+
       logUnregisteredCharge('suscripción cancelada y sin perfil vinculado')
       await adminClient
         .from('profiles')
@@ -940,6 +958,101 @@ async function registerMpPayment(
     console.error('registerMpPayment: excepción (no bloquea el alta):', err)
     return false
   }
+}
+
+// ---------------------------------------------------------------------------------------------------------------
+// Semana de prueba (etapa 6). Solo se llega acá con un perfil cuyo trial_status está en `states`.
+// ---------------------------------------------------------------------------------------------------------------
+
+// Perfil de prueba vinculado a la suscripción. null = no hay (o no se pudo leer: entonces sigue el flujo de siempre,
+// para que una falla de la base no cambie la respuesta que hoy recibe cualquier alumno).
+async function findTrialProfile(adminClient: any, subscriptionId: string | null, states: string[]): Promise<any | null> {
+  if (!subscriptionId) return null
+  const { data, error } = await adminClient
+    .from('profiles')
+    .select('id, program, trial_status, trial_ends_at, subscription_status')
+    .eq('mp_subscription_id', subscriptionId)
+    .in('trial_status', states)
+    .limit(2)
+  if (error) {
+    console.error('REVISAR PRUEBA: no se pudo leer el perfil de prueba, sigue el flujo normal:', error.message, '| preapproval:', subscriptionId)
+    return null
+  }
+  if (!data || data.length !== 1) {
+    if (data && data.length > 1) console.error('REVISAR PRUEBA: suscripción de prueba en más de un perfil, sigue el flujo normal | preapproval:', subscriptionId)
+    return null
+  }
+  return data[0]
+}
+
+// Primer cobro al terminar la prueba (o un cobro tardío de una prueba ya cortada).
+async function handleTrialCharge(adminClient: any, prof: any, ap: any, chargeApproved: boolean, mpToken: string | undefined) {
+  const preapprovalId = String(ap?.preapproval_id ?? '')
+  const nowIso = new Date().toISOString()
+
+  if (chargeApproved) {
+    // Aprobado (también con la cuota en recycling): primero se registra el pago, después se marca la conversión.
+    // Si algo falla, 500 y el reintento de MP lo completa (el pago no se duplica: mp_payment_id es único).
+    const payment = await fetchPaymentFromAp(ap, mpToken)
+    const saved = await registerMpPayment(adminClient, prof.id, prof.program ?? null, payment, 'alta_nueva')
+    if (!saved) return json({ ok: false, error: 'No se pudo registrar el cobro de la prueba' }, 500)
+    if (prof.trial_status === 'charge_rejected') {
+      console.error('REVISAR PRUEBA: cobro aprobado después de cortar la prueba por cobro rechazado (no se reactiva solo) | preapproval:', preapprovalId)
+      return json({ ok: true, status: 'trial_paid_after_cut' })
+    }
+    const { error } = await adminClient
+      .from('profiles')
+      .update({ trial_status: 'converted', trial_resolved_at: nowIso })
+      .eq('id', prof.id).eq('trial_status', 'in_trial')
+    if (error) {
+      console.error('No se pudo marcar la prueba como convertida:', error.message)
+      return json({ ok: false, error: 'No se pudo guardar la conversión' }, 500)
+    }
+    console.log('Prueba convertida: primer cobro aprobado | preapproval:', preapprovalId)
+    return json({ ok: true, status: 'trial_converted' })
+  }
+
+  // Rechazado: sin gracia. Primero se corta en la base (el corte del portal y de is_active_athlete usa
+  // cancelled + subscription_end anterior a hoy), después se cancela en MP.
+  if (prof.trial_status === 'in_trial') {
+    const yesterday = arDateFromApproved(new Date(Date.now() - 24 * 3600 * 1000).toISOString())
+    const { error } = await adminClient
+      .from('profiles')
+      .update({ subscription_status: 'cancelled', subscription_end: yesterday, trial_status: 'charge_rejected', trial_resolved_at: nowIso })
+      .eq('id', prof.id).eq('trial_status', 'in_trial')
+    if (error) {
+      console.error('No se pudo cortar la prueba con cobro rechazado:', error.message)
+      return json({ ok: false, error: 'No se pudo guardar el corte' }, 500)
+    }
+    console.log('Prueba cortada: primer cobro rechazado | preapproval:', preapprovalId)
+  }
+  // Se intenta cancelar en MP en cada aviso de cobro rechazado, hasta que salga.
+  try {
+    const res = await fetch(`${MP_API}/preapproval/${preapprovalId}`, {
+      method: 'PUT',
+      headers: { 'Authorization': `Bearer ${mpToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'cancelled' }),
+    })
+    if (!res.ok) console.error('REVISAR PRUEBA: MP no canceló la suscripción con cobro rechazado:', res.status, '| preapproval:', preapprovalId)
+  } catch (err) {
+    console.error('REVISAR PRUEBA: no se pudo cancelar en MP:', (err as Error).message, '| preapproval:', preapprovalId)
+  }
+  return json({ ok: true, status: 'trial_charge_rejected' })
+}
+
+// Cancelación durante la prueba (aviso de MP): acceso hasta el día en que termina la prueba (hora AR).
+async function handleTrialCancel(adminClient: any, prof: any) {
+  const endDay = arDateFromApproved(prof.trial_ends_at)
+  const { error } = await adminClient
+    .from('profiles')
+    .update({ subscription_status: 'cancelled', subscription_end: endDay, trial_status: 'cancelled', trial_resolved_at: new Date().toISOString() })
+    .eq('id', prof.id).eq('trial_status', 'in_trial')
+  if (error) {
+    console.error('No se pudo guardar la cancelación de la prueba:', error.message)
+    return json({ ok: false, error: 'No se pudo guardar la cancelación' }, 500)
+  }
+  console.log('Prueba cancelada: acceso hasta', endDay)
+  return json({ ok: true, status: 'trial_cancelled' })
 }
 
 // ¿La suscripción es de un plan de prueba? null = no se pudo saber.
