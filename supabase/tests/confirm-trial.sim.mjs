@@ -33,8 +33,9 @@ function table(name) {
     const match = x => s.filters.every(f => f(x));
     if (s.op === 'insert') { rows.push({ id: name + '-' + rows.length, created_at: at(0), ...s.value }); return { data: null, error: null }; }
     if (s.op === 'upsert') {
-      const old = rows.find(r => r.preapproval_id === s.value.preapproval_id);
-      if (old) Object.assign(old, s.value); else rows.push({ ...s.value });
+      const key = s.opts?.onConflict || 'preapproval_id';
+      const old = rows.find(r => r[key] === s.value[key]);
+      if (old) { if (!s.opts?.ignoreDuplicates) Object.assign(old, s.value); } else rows.push({ ...s.value });
       return { data: null, error: null };
     }
     if (s.op === 'update') { rows.filter(match).forEach(x => Object.assign(x, s.value)); return { data: null, error: null }; }
@@ -49,7 +50,7 @@ function table(name) {
     select(_c, o) { if (o?.head) s.head = true; return b; },
     insert(v) { s.op = 'insert'; s.value = v; return b; },
     update(v) { s.op = 'update'; s.value = v; return b; },
-    upsert(v) { s.op = 'upsert'; s.value = v; return b; },
+    upsert(v, o) { s.op = 'upsert'; s.value = v; s.opts = o; return b; },
     delete() { s.op = 'delete'; return b; },
     eq(k, v) { s.filters.push(x => x[k] === v); return b; },
     is(k, v) { s.filters.push(x => (x[k] ?? null) === v); return b; },
@@ -95,6 +96,12 @@ globalThis.fetch = async u => {
     if (mp.searchFails) return res({}, 500);
     return res({ results: mp.search?.[url.searchParams.get('payer_email')] ?? [] });
   }
+  if (url.pathname === '/authorized_payments/search') {
+    if (mp.invoicesFail) return res({}, 500);
+    return res({ results: (mp.invoices || []).map(i => ({ preapproval_id: url.searchParams.get('preapproval_id'), ...i })) });
+  }
+  const pm = url.pathname.match(/^\/v1\/payments\/(.+)$/);
+  if (pm) return mp.payments?.[pm[1]] ? res(mp.payments[pm[1]]) : res({}, 404);
   const m = url.pathname.match(/^\/preapproval\/(.+)$/);
   if (m) {
     if (mp.subStatusCode) return res({}, mp.subStatusCode);
@@ -105,12 +112,21 @@ globalThis.fetch = async u => {
 
 // ---- Datos ficticios ----
 const pend = (extra = {}) => ({ id: PID, full_name: 'Lucia Prueba', email: 'lucia@example.test', phone: '1100000000', program: 'crossfit', is_trial: true, created_at: at(-10 * MIN), ...extra });
-const CONFIG = [{ key: 'mp_trial_plan_crossfit', value: 'plan-t' }, { key: 'mp_plan_crossfit', value: 'plan-pago' }];
+const CONFIG = [{ key: 'mp_trial_plan_crossfit', value: 'plan-t' }, { key: 'mp_plan_crossfit', value: 'plan-pago' }, { key: 'price_crossfit_ars', value: '45000' }];
 const byId = { preapproval_id: 'sub-1', pending_id: PID };
 const byMail = { preapproval_id: 'sub-1', email: ' LUCIA@example.test ' };
 const hook = { preapproval_id: 'sub-1' };
 const foundOne = { 'lucia@example.test': [{ id: 'sub-1', status: 'authorized' }] };
-const provisioned = { publicText: '{"ok":true}', profiles: 1, pendings: 0, invites: 1 };
+const provisioned = { publicText: '{"ok":true,"new":true}', profiles: 1, pendings: 0, invites: 1 };
+// Fin de la prueba a 7 días, escrito como lo manda MP (hora argentina con -03:00).
+const END_UTC = new Date(Math.floor((Date.now() + 7 * DAY) / 1000) * 1000).toISOString();
+const END_AR = new Date(Date.parse(END_UTC) - 3 * 3600e3).toISOString().replace('Z', '-03:00');
+// Sin prueba: MP cobró al suscribirse y el próximo cobro es en un mes.
+const PAY = { id: 9001, status: 'approved', transaction_amount: 45000, transaction_details: { net_received_amount: 41405.99 }, date_approved: at(-4 * MIN) };
+const paidMp = (extra = {}) => ({ sub: { next_payment_date: at(30 * DAY) }, invoices: [{ id: 'cuota-1', status: 'processed', payment: { id: 9001, status: 'approved' } }], payments: { 9001: PAY }, ...extra });
+const paidOk = { publicText: '{"ok":true,"paid":true,"new":true}', profiles: 1, pendings: 0, invites: 1, payments: 1 };
+const paidProfile = d => { const p = d.profiles.find(x => x.mp_subscription_id === 'sub-1'); return !!p && !p.trial_status && !p.trial_started_at && !p.trial_ends_at && p.subscription_status === 'active' && p.payer_id === '777' && /^\d{4}-\d\d-\d\d$/.test(p.access_from); };
+const paidPayment = d => { const x = d.payments[0], p = d.profiles.find(y => y.mp_subscription_id === 'sub-1'); return !!x && x.type === 'alta_nueva' && x.mp_payment_id === '9001' && x.amount === 45000 && x.net_amount === 41405.99 && x.athlete_id === p.id && x.program === 'crossfit' && x.method === 'mp'; };
 const noAlta = (reason, extra = {}) => ({ publicText: GENERIC, profiles: 0, invites: 0, review: reason, ...extra });
 const retry = { publicText: RETRY, profiles: 0, invites: 0, noReview: true };
 
@@ -118,11 +134,11 @@ const cases = [
   // Altas
   { name: 'Regreso con id: da el alta completa', pendings: [pend()], body: byId, expect: provisioned,
     check: d => { const p = d.profiles[0]; return p.trial_status === 'in_trial' && p.payer_id === '777' && p.mp_subscription_id === 'sub-1' && p.program === 'crossfit' && p.subscription_status === 'active' && p.trial_ends_at > p.trial_started_at && p.id === 'new-1' && p.email === 'lucia@example.test' && /^\d{4}-\d\d-\d\d$/.test(p.access_from); } },
-  { name: 'La fecha de fin es la de MP', pendings: [pend()], mp: { sub: { next_payment_date: '2099-01-02T03:04:05.000-03:00' } }, body: byId, expect: provisioned, check: d => d.profiles[0].trial_ends_at === '2099-01-02T06:04:05.000Z' },
+  { name: 'La fecha de fin es la de MP (con su zona horaria)', pendings: [pend()], mp: { sub: { next_payment_date: END_AR } }, body: byId, expect: provisioned, check: d => d.profiles[0].trial_ends_at === END_UTC },
   { name: 'Regreso con mail: da el alta', pendings: [pend()], body: byMail, expect: provisioned },
   { name: 'Webhook: un pending coincide en la búsqueda, da el alta', internal: true, pendings: [pend()], mp: { search: foundOne }, body: hook, expect: { internalStatus: 'provisioned', httpStatus: 200, profiles: 1, pendings: 0, invites: 1 } },
   { name: 'Cierra el caso abierto al dar el alta', pendings: [pend()], reviews: [{ preapproval_id: 'sub-1', reason: 'sin_identificar' }], body: byId, expect: provisioned, check: d => !!d.trial_reviews[0].resolved_at },
-  { name: 'Ya vinculada: responde bien, sin otra invitación', profiles: [{ id: 'u1', email: 'lucia@example.test', mp_subscription_id: 'sub-1' }], body: byId, expect: { publicText: '{"ok":true}', profiles: 1, invites: 0 } },
+  { name: 'Ya vinculada: responde bien, sin otra invitación', profiles: [{ id: 'u1', email: 'lucia@example.test', mp_subscription_id: 'sub-1', trial_status: 'in_trial' }], body: byId, expect: { publicText: '{"ok":true}', profiles: 1, invites: 0 } },
   { name: 'Ventana justa de casi 2 horas: pasa', pendings: [pend({ created_at: at(-124 * MIN) })], body: byId, expect: provisioned },
 
   // Regreso y webhook a la vez, y reintentos
@@ -169,14 +185,15 @@ const cases = [
   { name: 'Webhook: ignora un pending normal del mismo mail', internal: true, pendings: [pend({ is_trial: false })], mp: { search: foundOne }, body: hook, expect: { internalStatus: 'sin_identificar', profiles: 0 } },
   { name: 'Webhook: ignora un pending de otro programa', internal: true, pendings: [pend({ program: 'hybrid' })], mp: { search: foundOne }, body: hook, expect: { internalStatus: 'sin_identificar', profiles: 0 } },
   { name: 'Webhook: falla la búsqueda en MP, 503', internal: true, pendings: [pend()], mp: { searchFails: true }, body: hook, expect: { httpStatus: 503, profiles: 0, noReview: true } },
-  { name: 'Primer cobro sin vincular: nunca da el alta, anota el cobro', internal: true, pendings: [pend()], mp: { search: foundOne }, body: { ...hook, charge_seen: true }, expect: { internalStatus: 'cobro_sin_vincular', httpStatus: 200, profiles: 0, invites: 0, review: 'cobro_sin_vincular', pendings: 1 }, check: d => !!d.trial_reviews[0]?.charge_seen_at },
+  { name: 'Cobro visto en una suscripción CON prueba: no da el alta, anota el cobro', internal: true, pendings: [pend()], mp: { search: foundOne }, body: { ...hook, charge_seen: true }, expect: { internalStatus: 'cobro_en_prueba', httpStatus: 200, profiles: 0, invites: 0, review: 'cobro_en_prueba', pendings: 1 }, check: d => !!d.trial_reviews[0]?.charge_seen_at },
+  { name: 'Cobro visto y sin identificar: queda anotado en el caso', internal: true, pendings: [pend()], mp: { search: {} }, body: { ...hook, charge_seen: true }, expect: { internalStatus: 'sin_identificar', profiles: 0, invites: 0, review: 'sin_identificar' }, check: d => !!d.trial_reviews[0]?.charge_seen_at },
   { name: 'Un aviso nuevo no reabre un caso resuelto', internal: true, pendings: [], reviews: [{ preapproval_id: 'sub-1', reason: 'x', resolved_at: '2026-01-01' }], mp: { search: {} }, body: hook, expect: { internalStatus: 'sin_identificar' }, check: d => d.trial_reviews[0].resolved_at === '2026-01-01' },
 
   // El público no puede hacerse pasar por el webhook
   { name: 'Clave equivocada: charge_seen no cuenta y sin datos se rechaza', pendings: [pend()], headers: { authorization: 'Bearer otra' }, body: { ...hook, charge_seen: true }, expect: { publicText: GENERIC, profiles: 0, noReview: true } },
   { name: 'Clave equivocada con pending_id: es pedido público, no interno', pendings: [pend()], headers: { authorization: 'Bearer otra' }, body: { ...byId, charge_seen: true }, expect: provisioned, check: d => !d.trial_reviews.length },
   { name: 'Clave vacía: charge_seen no cuenta', pendings: [pend()], headers: { authorization: 'Bearer ' }, body: { ...hook, charge_seen: true }, expect: { publicText: GENERIC, profiles: 0, noReview: true }, check: d => d.mpCalls.length === 0 },
-  { name: 'Clave correcta: charge_seen sí cuenta', pendings: [pend()], headers: { authorization: 'Bearer ' + KEY }, mp: { search: foundOne }, body: { ...hook, charge_seen: true }, expect: { httpStatus: 200, internalStatus: 'cobro_sin_vincular', profiles: 0, invites: 0, review: 'cobro_sin_vincular' } },
+  { name: 'Clave correcta: charge_seen sí cuenta', pendings: [pend()], headers: { authorization: 'Bearer ' + KEY }, mp: { search: foundOne }, body: { ...hook, charge_seen: true }, expect: { httpStatus: 200, internalStatus: 'cobro_en_prueba', profiles: 0, invites: 0, review: 'cobro_en_prueba' } },
   { name: 'Público sin id ni mail: no dispara la búsqueda', pendings: [pend()], mp: { search: foundOne }, body: hook, expect: { publicText: GENERIC, profiles: 0, noReview: true }, check: d => d.mpCalls.length === 0 },
   { name: 'Interno: ignora el pending_id del cuerpo', internal: true, pendings: [pend()], mp: { search: {} }, body: byId, expect: { internalStatus: 'sin_identificar', profiles: 0 } },
 
@@ -203,9 +220,35 @@ const cases = [
   { name: 'Interno, MP falla: 503', internal: true, pendings: [pend()], mp: { subStatusCode: 500 }, body: hook, expect: { httpStatus: 503, profiles: 0 } },
   { name: 'Falla la invitación: libera la reserva', pendings: [pend()], fail: { invite: true }, body: byId, expect: { publicText: RETRY, profiles: 0, pendings: 1, noReview: true }, check: d => !d.pending_subscriptions[0].trial_claimed_at },
   { name: 'Falla guardar el perfil: borra el usuario nuevo y libera; conserva el pending', pendings: [pend()], fail: { 'profiles:insert': true }, body: byId, expect: { publicText: RETRY, profiles: 0, pendings: 1, invites: 1 }, check: d => d.deleted[0] === 'new-1' && !d.pending_subscriptions[0].trial_claimed_at },
-  { name: 'Falla guardar el perfil y el reintento da el alta', pendings: [pend()], fail: { 'profiles:insert': true }, clearFailAndRetry: true, body: byId, expect: { publicText: '{"ok":true}', profiles: 1, pendings: 0, invites: 2 } },
+  { name: 'Falla guardar el perfil y el reintento da el alta', pendings: [pend()], fail: { 'profiles:insert': true }, clearFailAndRetry: true, body: byId, expect: { publicText: '{"ok":true,"new":true}', profiles: 1, pendings: 0, invites: 2 } },
   { name: 'Falla guardar el caso: pide reintento, no pierde el aviso', internal: true, pendings: [pend()], mp: { search: {} }, fail: { 'trial_reviews:upsert': true }, body: hook, expect: { httpStatus: 503, profiles: 0 } },
-  { name: 'Falla borrar el pending: el alta queda hecha', pendings: [pend()], fail: { 'pending_subscriptions:delete': true }, body: byId, expect: { publicText: '{"ok":true}', profiles: 1, pendings: 1 } },
+  { name: 'Falla borrar el pending: el alta queda hecha', pendings: [pend()], fail: { 'pending_subscriptions:delete': true }, body: byId, expect: { publicText: '{"ok":true,"new":true}', profiles: 1, pendings: 1 } },
+
+  // Etapa 5b: MP no aplicó la prueba (cuenta repetida) y cobró la primera cuota → alta paga normal
+  { name: 'Sin prueba y cobrado: alta paga, sin campos de prueba', pendings: [pend()], mp: paidMp(), body: byId, expect: paidOk, check: d => paidProfile(d) && paidPayment(d) },
+  { name: 'Sin prueba por mail: alta paga', pendings: [pend()], mp: paidMp(), body: byMail, expect: paidOk, check: paidProfile },
+  { name: 'Sin prueba con payer_id ya usado: alta paga igual', pendings: [pend()], profiles: [{ id: 'u1', email: 'otra@example.test', payer_id: '777', trial_status: 'in_trial' }], mp: paidMp(), body: byId, expect: { ...paidOk, profiles: 2 }, check: d => paidProfile(d) && paidPayment(d) },
+  { name: 'Con prueba y payer_id ya usado: sigue en revisión', pendings: [pend()], profiles: [{ id: 'u1', email: 'otra@example.test', payer_id: '777' }], body: byId, expect: { ...noAlta('payer_repetido', { pendings: 1 }), profiles: 1 } },
+  { name: 'Sin prueba, cobro en proceso: reintentar, sin alta ni caso', pendings: [pend()], mp: paidMp({ invoices: [{ id: 'c', status: 'scheduled', payment: { id: 9001, status: 'in_process' } }] }), body: byId, expect: { ...retry, pendings: 1, payments: 0 } },
+  { name: 'Sin prueba, todavía sin cuota: reintentar', pendings: [pend()], mp: paidMp({ invoices: [] }), body: byId, expect: { ...retry, pendings: 1, payments: 0 } },
+  { name: 'Sin prueba, cobro rechazado: revisión', pendings: [pend()], mp: paidMp({ invoices: [{ id: 'c', status: 'recycling', payment: { id: 9001, status: 'rejected' } }] }), body: byId, expect: noAlta('primer_cobro_rechazado', { pendings: 1, payments: 0 }) },
+  { name: 'Sin prueba, cobro devuelto: revisión', pendings: [pend()], mp: paidMp({ payments: { 9001: { ...PAY, status: 'refunded' } } }), body: byId, expect: noAlta('primer_cobro_rechazado', { pendings: 1, payments: 0 }) },
+  { name: 'Sin prueba, monto distinto al precio: revisión', pendings: [pend()], mp: paidMp({ payments: { 9001: { ...PAY, transaction_amount: 100 } } }), body: byId, expect: noAlta('monto_distinto', { pendings: 1, payments: 0 }) },
+  { name: 'Sin prueba y sin precio en site_config: revisión', pendings: [pend()], mp: paidMp(), config: CONFIG.filter(r => r.key !== 'price_crossfit_ars'), body: byId, expect: noAlta('sin_precio', { pendings: 1 }) },
+  { name: 'Sin prueba, ya tiene cuenta: revisión, no la toca', pendings: [pend()], profiles: [{ id: 'u1', email: 'lucia@example.test', subscription_status: 'cancelled' }], mp: paidMp(), body: byId, expect: { ...noAlta('ya_tiene_cuenta', { pendings: 1, payments: 0 }), profiles: 1 }, check: d => d.profiles[0].subscription_status === 'cancelled' },
+  { name: 'Plazo dudoso (14 días): revisión', pendings: [pend()], mp: paidMp({ sub: { next_payment_date: at(14 * DAY) } }), body: byId, expect: noAlta('fecha_dudosa', { pendings: 1 }) },
+  { name: 'Plazo de 1 día (prueba editada): alta de prueba', pendings: [pend()], mp: { sub: { next_payment_date: at(DAY) } }, body: byId, expect: provisioned, check: d => d.profiles[0].trial_status === 'in_trial' },
+  { name: 'Con prueba pero hay un cobro en MP: revisión', pendings: [pend()], mp: { invoices: [{ id: 'c', status: 'processed', payment: { id: 9001, status: 'approved' } }], payments: { 9001: PAY } }, body: byId, expect: noAlta('cobro_en_prueba', { pendings: 1 }) },
+  { name: 'Con prueba y cobro anotado antes por el webhook: revisión', pendings: [pend()], reviews: [{ preapproval_id: 'sub-1', reason: 'sin_identificar', charge_seen_at: at(-MIN) }], body: byId, expect: noAlta('cobro_en_prueba', { pendings: 1 }) },
+  { name: 'Falla la búsqueda de cuotas: reintentar', pendings: [pend()], mp: paidMp({ invoicesFail: true }), body: byId, expect: { ...retry, pendings: 1 } },
+  { name: 'Con prueba y falla la búsqueda de cuotas: reintentar, sin alta', pendings: [pend()], mp: { invoicesFail: true }, body: byId, expect: { ...retry, pendings: 1 } },
+  { name: 'Orden real: cobro primero (sin identificar), página después: alta paga y caso cerrado', internal: true, pendings: [pend()], mp: paidMp({ search: {} }), body: { ...hook, charge_seen: true },
+    then: [{ body: byId, internal: false }], expect: paidOk, check: d => paidPayment(d) && !!d.trial_reviews[0].resolved_at && !!d.trial_reviews[0].charge_seen_at },
+  { name: 'Cobro primero e identificado por la búsqueda: alta paga desde el webhook', internal: true, pendings: [pend()], mp: paidMp({ search: foundOne }), body: { ...hook, charge_seen: true }, expect: { internalStatus: 'provisioned_paid', httpStatus: 200, profiles: 1, invites: 1, payments: 1 }, check: paidPayment },
+  { name: 'Página primero, después el aviso del cobro: un solo pago', pendings: [pend()], mp: paidMp({ search: foundOne }), body: byId, then: [{ body: { ...hook, charge_seen: true }, internal: true }], expect: { internalStatus: 'already_linked', profiles: 1, invites: 1, payments: 1 } },
+  { name: 'Recarga de la página después del alta paga: ok sin new y un solo pago', pendings: [pend()], mp: paidMp(), body: byId, twice: true, expect: { publicText: '{"ok":true,"paid":true}', profiles: 1, invites: 1, payments: 1 } },
+  { name: 'Falla registrar el pago: pide reintento', pendings: [pend()], mp: paidMp(), fail: { 'payments:upsert': true }, body: byId, expect: { publicText: RETRY, profiles: 1, invites: 1, payments: 0 } },
+  { name: 'Falla registrar el pago y el reintento lo guarda', pendings: [pend()], mp: paidMp(), fail: { 'payments:upsert': true }, clearFailAndRetry: true, body: byId, expect: { publicText: '{"ok":true,"paid":true}', profiles: 1, invites: 1, payments: 1 }, check: paidPayment },
 ];
 
 // ---- Cargar el código real ----
@@ -231,7 +274,7 @@ try {
   const fresh = (c = {}) => {
     db = {
       trial_attempts: [], pending_subscriptions: (c.pendings || []).map(p => ({ ...p })), profiles: (c.profiles || []).map(p => ({ ...p })),
-      site_config: CONFIG, trial_reviews: (c.reviews || []).map(r => ({ ...r })), authUsers: (c.authUsers || []).map((email, i) => ({ id: 'a' + i, email })),
+      site_config: c.config || CONFIG, payments: [], trial_reviews: (c.reviews || []).map(r => ({ ...r })), authUsers: (c.authUsers || []).map((email, i) => ({ id: 'a' + i, email })),
       invites: [], deleted: [], mpCalls: [], fail: c.fail,
     };
     mp = { ...c.mp };
@@ -253,6 +296,7 @@ try {
     let text = await r.text();
     if (c.twice) { r = await send(c); text = await r.text(); }
     if (c.thenInternal) { r = await send(c, c.thenInternal, true); text = await r.text(); }
+    for (const t of c.then || []) { r = await send(c, t.body, t.internal); text = await r.text(); }
     if (c.clearFailAndRetry) { db.fail = null; r = await send(c); text = await r.text(); }
     const diffs = [];
     const e = c.expect;
@@ -263,6 +307,7 @@ try {
     if (e.internalStatus !== undefined && body.status !== e.internalStatus) diffs.push('estado interno: ' + text);
     if (e.profiles !== undefined && db.profiles.length !== e.profiles) diffs.push(`perfiles: esperado ${e.profiles}, obtenido ${db.profiles.length}`);
     if (e.pendings !== undefined && db.pending_subscriptions.length !== e.pendings) diffs.push(`pendings: esperado ${e.pendings}, obtenido ${db.pending_subscriptions.length}`);
+    if (e.payments !== undefined && db.payments.length !== e.payments) diffs.push(`pagos: esperado ${e.payments}, obtenido ${db.payments.length}`);
     if (e.invites !== undefined && db.invites.length !== e.invites) diffs.push(`invitaciones: esperado ${e.invites}, obtenido ${db.invites.length}`);
     if (e.review && db.trial_reviews[0]?.reason !== e.review) diffs.push(`caso: esperado ${e.review}, obtenido ${db.trial_reviews[0]?.reason}`);
     if (e.noReview && db.trial_reviews.length) diffs.push('guardó un caso que no debía: ' + db.trial_reviews[0].reason);
@@ -270,6 +315,8 @@ try {
     try { checked = !c.check || c.check(db); } catch (_) { checked = false; }
     if (!checked) diffs.push('no cumple la verificación del caso');
     if (logs.some(l => /@/.test(l))) diffs.push('el log contiene un mail');
+    // Un error inesperado también termina en "reintentar": no puede tapar un caso que esperaba otra razón.
+    if (!c.allowCrash && logs.some(l => l.includes('error inesperado'))) diffs.push('error inesperado: ' + logs.find(l => l.includes('error inesperado')));
     if (diffs.length) { failed++; log(`FALLA  ${c.name}`); diffs.forEach(d => log('         ' + d)); }
     else log(`ok     ${c.name}`);
   }

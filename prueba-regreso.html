@@ -112,6 +112,20 @@ src="https://www.facebook.com/tr?id=1008115118926012&ev=PageView&noscript=1"
       </div>
     </section>
 
+    <!-- Alta paga: MP no aplicó la prueba (ya la había usado esa cuenta) y cobró la primera cuota -->
+    <section id="stPaid" hidden>
+      <div class="icon">✅</div>
+      <h1>¡Listo, ya tenés <span class="accent">acceso</span>!</h1>
+      <p class="text">Ya habías usado tu semana gratis, así que se cobró la primera cuota. Ya tenés acceso a tu portal.</p>
+      <p class="text">Te mandamos un mail para crear tu contraseña y entrar. Puede tardar <b>hasta 5 minutos</b>.</p>
+      <p class="note">Si no lo ves en tu bandeja de entrada, revisá la carpeta de <b>spam</b>.</p>
+      <a href="index.html" class="btn">Volver al inicio →</a>
+      <div class="help">
+        <p>¿Dudas o no te llegó el mail? Escribinos:</p>
+        <a class="btn-wa js-wa" data-msg="Hola! Me suscribí desde la semana de prueba, se cobró la primera cuota y tengo una duda." href="#" target="_blank" rel="noopener">💬 Escribir por WhatsApp</a>
+      </div>
+    </section>
+
     <!-- Sin id en el navegador: pedimos el mail del formulario -->
     <section id="stEmail" hidden>
       <div class="icon">📩</div>
@@ -176,7 +190,7 @@ src="https://www.facebook.com/tr?id=1008115118926012&ev=PageView&noscript=1"
     })();
 
     // ---- Estados ----
-    var STATES = ['stLoading', 'stOk', 'stEmail', 'stReview', 'stMissing'];
+    var STATES = ['stLoading', 'stOk', 'stPaid', 'stEmail', 'stReview', 'stMissing'];
     function show(id) { STATES.forEach(function (s) { document.getElementById(s).hidden = (s !== id); }); }
 
     // ---- Datos: dirección + lo que guardó prueba.html ----
@@ -185,23 +199,45 @@ src="https://www.facebook.com/tr?id=1008115118926012&ev=PageView&noscript=1"
     try { stash = JSON.parse(localStorage.getItem('hb_trial') || 'null'); } catch (e) {}
     function readDone() { try { return JSON.parse(localStorage.getItem('hb_trial_done') || '[]') || []; } catch (e) { return []; } }
 
-    // StartTrial una sola vez por suscripción (una recarga no lo repite). Nunca Purchase.
-    function success() {
-      var done = readDone();
-      if (done.indexOf(preapprovalId) === -1) {
+    // Suscripciones ya confirmadas en este navegador. Formato viejo: solo el id (era prueba).
+    function findDone() {
+      var d = readDone();
+      for (var i = 0; i < d.length; i++) {
+        var e = d[i], id = typeof e === 'string' ? e : (e && e.id);
+        if (id === preapprovalId) return { paid: typeof e === 'object' && !!e.paid };
+      }
+      return null;
+    }
+
+    // Pixel, una sola vez por suscripción y solo si ESTE pedido creó el alta (isNew): una recarga u otro
+    // dispositivo no lo repiten. Prueba → StartTrial. Alta paga (MP cobró la primera cuota) → Purchase, sin StartTrial.
+    function success(paid, isNew) {
+      if (!findDone()) {
+        if (isNew) {
+          try {
+            var base = {};
+            if (stash && stash.program) { base.content_ids = [stash.program]; base.content_type = 'product'; }
+            if (paid) {
+              var buy = Object.assign({ currency: 'ARS' }, base);
+              if (stash && stash.program) buy.content_name = PROGRAM_NAMES[stash.program] || stash.program;
+              if (stash && stash.price > 0) buy.value = stash.price;
+              if (typeof fbq === 'function') fbq('track', 'Purchase', buy);
+            } else {
+              var trial = Object.assign({ currency: 'ARS', value: 0 }, base);
+              if (stash && stash.program) trial.content_name = (PROGRAM_NAMES[stash.program] || stash.program) + ' (prueba)';
+              if (stash && stash.price > 0) trial.predicted_ltv = stash.price;
+              if (typeof fbq === 'function') fbq('track', 'StartTrial', trial);
+            }
+          } catch (e) {}
+        }
         try {
-          var params = { currency: 'ARS', value: 0 };
-          if (stash && stash.program) { params.content_name = (PROGRAM_NAMES[stash.program] || stash.program) + ' (prueba)'; params.content_ids = [stash.program]; }
-          if (stash && stash.price > 0) params.predicted_ltv = stash.price;
-          if (typeof fbq === 'function') fbq('track', 'StartTrial', params);
-        } catch (e) {}
-        try {
-          done.push(preapprovalId);
+          var done = readDone();
+          done.push({ id: preapprovalId, paid: !!paid });
           localStorage.setItem('hb_trial_done', JSON.stringify(done.slice(-10)));
           localStorage.removeItem('hb_trial');
         } catch (e) {}
       }
-      show('stOk');
+      show(paid ? 'stPaid' : 'stOk');
     }
 
     // ---- Llamada a confirm-trial con reintentos cuando MP todavía no terminó ----
@@ -215,10 +251,10 @@ src="https://www.facebook.com/tr?id=1008115118926012&ev=PageView&noscript=1"
           var fn = await sb.functions.invoke('confirm-trial', { body: Object.assign({ preapproval_id: preapprovalId }, payload) });
           if (fn && fn.error) failed = true; else out = fn && fn.data;
         } catch (e) { failed = true; }
-        if (out && out.ok) return success();
+        if (out && out.ok) return success(out.paid === true, out.new === true);
         var retry = failed || !out || out.retry === true; // sin respuesta clara también vale reintentar
         if (!retry || attempt === RETRY_DELAYS.length) break;
-        document.getElementById('loadingText').textContent = 'Mercado Pago todavía está procesando tu suscripción. Seguimos intentando…';
+        document.getElementById('loadingText').textContent = 'Mercado Pago todavía está procesando tu suscripción o tu pago. Seguimos intentando…';
         await new Promise(function (r) { setTimeout(r, RETRY_DELAYS[attempt]); });
       }
       document.getElementById('retryEmail').hidden = !(payload.email && emailTries < EMAIL_TRIES_MAX);
@@ -274,8 +310,8 @@ src="https://www.facebook.com/tr?id=1008115118926012&ev=PageView&noscript=1"
     // ---- Arranque ----
     if (!/^[A-Za-z0-9_-]{1,80}$/.test(preapprovalId)) {
       show('stMissing');
-    } else if (readDone().indexOf(preapprovalId) !== -1) {
-      show('stOk'); // ya confirmada en este navegador (recarga): no se vuelve a llamar ni se repite StartTrial
+    } else if (findDone()) {
+      show(findDone().paid ? 'stPaid' : 'stOk'); // ya confirmada en este navegador (recarga): no se llama ni se repite el Pixel
     } else if (stash && typeof stash.pending_id === 'string' && stash.pending_id) {
       confirm({ pending_id: stash.pending_id });
     } else {
