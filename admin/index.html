@@ -1389,6 +1389,21 @@
   .leads-warn { background: rgba(245,168,0,0.08); border: 1px solid rgba(245,168,0,0.35); color: var(--accent); border-radius: 10px; padding: 10px 14px; font-size: 0.85rem; margin: 6px 0 12px; line-height: 1.5; }
   .leads-alumno { display: inline-block; margin-left: 6px; font-size: 0.7rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: rgba(59,190,94,0.15); color: #66d98a; white-space: nowrap; }
   .leads-sub { color: var(--text-secondary); font-size: 0.78rem; }
+  .leads-trial { display: inline-block; margin-left: 6px; font-size: 0.7rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: rgba(120,140,255,0.15); color: #9fb0ff; white-space: nowrap; }
+  /* Semana de prueba (etapa 7) */
+  .met-cards.pr-cards { grid-template-columns: repeat(5, 1fr); }
+  @media (max-width: 1100px) { .met-cards.pr-cards { grid-template-columns: repeat(2, 1fr); } }
+  .tr-badge { display: inline-block; font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+  .tr-in_trial { background: rgba(120,140,255,0.15); color: #9fb0ff; }
+  .tr-converted { background: rgba(59,190,94,0.15); color: #66d98a; }
+  .tr-cancelled { background: rgba(150,150,150,0.16); color: #a8a8a8; }
+  .tr-charge_rejected { background: rgba(226,59,59,0.14); color: #ff7b7b; }
+  .tr-paid { background: rgba(245,168,0,0.15); color: var(--accent); }
+  .tc-grid { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; font-size: 0.86rem; margin: 6px 0 16px; padding: 12px 14px; background: #121212; border: 1px solid #2a2a2a; border-radius: 10px; }
+  .tc-grid .k { color: var(--text-secondary); }
+  .tc-grid .warn { color: #ff7b7b; font-weight: 700; }
+  .tc-grid .good { color: #66d98a; font-weight: 700; }
+  .tc-actions { flex-wrap: wrap; }
   .leads-wa { padding: 6px 12px; font-size: 0.82rem; text-decoration: none; white-space: nowrap; }
   .leads-note { width: 100%; min-width: 160px; background: #141414; border: 1px solid #333; border-radius: 8px; padding: 7px 9px; color: var(--text); font-family: var(--font-body); font-size: 0.85rem; }
   .leads-note:focus { outline: none; border-color: var(--accent); }
@@ -1638,6 +1653,7 @@
         <a data-view="metricas"><span class="ico">📈</span> Métricas</a>
         <a data-view="pagos"><span class="ico">💰</span> Pagos</a>
         <a data-view="leads"><span class="ico">🎯</span> Leads<span class="nav-badge hidden" id="leadsTabBadge"></span></a>
+        <a data-view="pruebas"><span class="ico">🧪</span> Pruebas<span class="nav-badge hidden" id="pruebasTabBadge"></span></a>
         <a data-view="config"><span class="ico">⚙️</span> Configuración</a>
       </nav>
       <div class="sidebar-footer">
@@ -1827,6 +1843,7 @@
           <button class="al-tab active" data-status="active">Activos (<span data-count="active">0</span>)</button>
           <button class="al-tab" data-status="inactive">Inactivos (<span data-count="inactive">0</span>)</button>
           <button class="al-tab" data-status="all">Todos (<span data-count="all">0</span>)</button>
+          <button class="al-tab" data-status="trial">🧪 En prueba (<span data-count="trial">0</span>)</button>
         </div>
 
         <div class="al-progfilter">
@@ -2066,6 +2083,55 @@
           </table>
         </div>
         <div class="met-note">Personas que completaron el formulario de pago y todavía no terminaron de pagar (cuando el pago sale bien, la fila se borra sola). Los que ya figuran como alumnos se ocultan por defecto.</div>
+      </section>
+
+      <!-- =============== VIEW: PRUEBAS (semana de prueba, etapa 7) =============== -->
+      <section id="view-pruebas" class="view">
+        <div class="met-header">
+          <h2 class="section-title">Semana de prueba</h2>
+          <div class="met-month">
+            <label for="prMonth">Mes</label>
+            <input type="month" id="prMonth" class="date-input">
+          </div>
+        </div>
+        <div class="leads-warn" id="prWarn" style="display:none;"></div>
+
+        <div class="met-cards pr-cards">
+          <div class="card"><div class="card-label"><span>⏳</span> En prueba ahora</div><div class="card-value" id="prNow">—</div><div class="card-sub">Pruebas en curso, de cualquier mes</div></div>
+          <div class="card"><div class="card-label"><span>✅</span> Siguieron</div><div class="card-value" id="prConv">—</div><div class="card-sub">Pagaron la primera cuota</div></div>
+          <div class="card"><div class="card-label"><span>🚪</span> Cancelaron</div><div class="card-value" id="prCanc">—</div><div class="card-sub">Durante la prueba</div></div>
+          <div class="card"><div class="card-label"><span>⛔</span> Cobro rechazado</div><div class="card-value" id="prRej">—</div><div class="card-sub">Se cortó el acceso</div></div>
+          <div class="card"><div class="card-label"><span>📈</span> Conversión</div><div class="card-value" id="prRate">—</div><div class="card-sub">Siguieron / pruebas terminadas del mes</div></div>
+        </div>
+
+        <div class="met-section-title">🔎 Para revisar</div>
+        <div class="table-wrap">
+          <table class="al-table met-table">
+            <thead><tr><th>Fecha</th><th>Programa</th><th>Qué pasó</th><th>¿Pagó?</th><th>Persona</th><th></th></tr></thead>
+            <tbody id="prReviewBody"><tr><td class="loading-row" colspan="6">Cargando…</td></tr></tbody>
+          </table>
+        </div>
+
+        <div class="met-section-title">🧪 Pruebas</div>
+        <div class="rank-controls">
+          <label>Estado
+            <select id="prStatus">
+              <option value="all">Todas</option>
+              <option value="in_trial">En prueba</option>
+              <option value="converted">Siguieron</option>
+              <option value="cancelled">Cancelaron</option>
+              <option value="charge_rejected">Cobro rechazado</option>
+            </select>
+          </label>
+          <label class="pag-check"><input type="checkbox" id="prAllMonths"> Todos los meses</label>
+        </div>
+        <div class="table-wrap">
+          <table class="al-table met-table">
+            <thead><tr><th>Nombre</th><th>Programa</th><th>Inicio</th><th>Fin</th><th>Estado</th><th>Mail día 6</th><th>Contacto</th></tr></thead>
+            <tbody id="prBody"><tr><td class="loading-row" colspan="7">Cargando…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="met-note">Los números del mes cuentan las pruebas que empezaron en ese mes. "Para revisar" muestra los casos que el sistema no pudo resolver solo, las pruebas vencidas hace más de un día sin cobro y los pagos que llegaron después de cortar una prueba.</div>
       </section>
 
       <!-- =============== VIEW: CONFIGURACIÓN =============== -->
@@ -2324,6 +2390,42 @@
   </div>
 
   <!-- =============== Modal: Editar email del alumno (admin) =============== -->
+  <!-- Modal: resolver un caso de la semana de prueba (Edge Function trial-admin) -->
+  <div class="modal-backdrop" id="modalTrialCase">
+    <div class="modal">
+      <div class="modal-head">
+        <h3>🔎 Caso de la prueba</h3>
+        <button class="modal-close" data-close="modalTrialCase">✕</button>
+      </div>
+      <div class="modal-error" id="tcError"></div>
+      <p class="pw-sub" id="tcReason"></p>
+      <div id="tcLoading" class="pw-note">Consultando Mercado Pago…</div>
+      <div id="tcBody" style="display:none;">
+        <div class="tc-grid" id="tcMp"></div>
+        <div class="field">
+          <label for="tcPerson">¿A quién le damos el alta?</label>
+          <select id="tcPerson"></select>
+        </div>
+        <div id="tcManual" style="display:none;">
+          <div class="field"><label for="tcName">Nombre completo</label><input type="text" id="tcName" maxlength="100"></div>
+          <div class="field"><label for="tcEmail">Email</label><input type="email" id="tcEmail" maxlength="254" spellcheck="false"></div>
+          <div class="field"><label for="tcPhone">Teléfono <span class="opt">(opcional)</span></label><input type="tel" id="tcPhone" maxlength="30"></div>
+        </div>
+        <div class="field"><label for="tcNote">Nota <span class="opt">(obligatoria para "Marcar resuelto")</span></label><input type="text" id="tcNote" maxlength="500" placeholder="Ej.: lo resolví por WhatsApp"></div>
+        <div class="pw-note" id="tcHint"></div>
+        <div class="modal-actions tc-actions">
+          <button class="btn-ghost" id="tcResolve">Marcar resuelto</button>
+          <button class="btn-ghost" id="tcCancel">Cancelar en MP</button>
+          <button class="btn-primary" id="tcProvision">Dar el alta</button>
+        </div>
+      </div>
+      <div id="tcResult" style="display:none;">
+        <div class="pw-ok" id="tcResultText"></div>
+        <div class="modal-actions"><button class="btn-primary" data-close="modalTrialCase">Listo</button></div>
+      </div>
+    </div>
+  </div>
+
   <div class="modal-backdrop" id="modalEmail">
     <div class="modal">
       <div class="modal-head">
@@ -2720,7 +2822,7 @@
     // ============================================================
     // Navegación entre vistas (SPA)
     // ============================================================
-    const VIEW_TITLES = { dashboard: 'Dashboard', planificacion: 'Planificación', alumnos: 'Alumnos', mensajes: 'Mensajes', metricas: 'Métricas', pagos: 'Pagos', leads: 'Leads', config: 'Configuración' };
+    const VIEW_TITLES = { dashboard: 'Dashboard', planificacion: 'Planificación', alumnos: 'Alumnos', mensajes: 'Mensajes', metricas: 'Métricas', pagos: 'Pagos', leads: 'Leads', pruebas: 'Semana de prueba', config: 'Configuración' };
     function showView(name) {
       // Al salir de Mensajes, cerrar la suscripción realtime abierta
       if (name !== 'mensajes') unsubscribeRealtime();
@@ -2735,6 +2837,7 @@
       if (name === 'metricas') loadMetricas();
       if (name === 'pagos') loadPagos();
       if (name === 'leads') loadLeads();
+      if (name === 'pruebas') loadPruebas();
       if (name === 'config') loadConfig();
       closeSidebar();
     }
@@ -4458,6 +4561,14 @@
       if (days <= 5) return { color: 'yellow', txt: `Vence en ${days} día${days === 1 ? '' : 's'}` };
       return null;
     }
+    // Semana de prueba en curso (etapa 7): "En prueba · termina dd/mm". Los demás alumnos no muestran nada nuevo.
+    function trialTag(a) {
+      if (!a || a.trial_status !== 'in_trial' || !a.trial_ends_at) return '';
+      const t = Date.parse(a.trial_ends_at);
+      if (isNaN(t)) return '';
+      const d = new Date(t - 3 * 3600e3).toISOString().slice(0, 10);
+      return `<span class="tr-badge tr-in_trial" style="margin-left:6px;" title="Semana de prueba: si no cancela, el primer cobro es ese día">🧪 En prueba · termina ${d.slice(8, 10)}/${d.slice(5, 7)}</span>`;
+    }
     function vencBadge(a) {
       const v = vencInfo(a);
       if (!v) return '';
@@ -4469,6 +4580,7 @@
     function matchesStatusTab(a) {
       if (alStatus === 'active') return a.subscription_status === 'active';
       if (alStatus === 'inactive') return a.subscription_status === 'cancelled' || a.subscription_status === 'pending';
+      if (alStatus === 'trial') return a.trial_status === 'in_trial';
       return true; // 'all'
     }
 
@@ -4493,6 +4605,8 @@
       document.querySelector('#alTabs [data-count="active"]').textContent = cActive;
       document.querySelector('#alTabs [data-count="inactive"]').textContent = cInactive;
       document.querySelector('#alTabs [data-count="all"]').textContent = allAthletes.length;
+      const trialCountEl = document.querySelector('#alTabs [data-count="trial"]');
+      if (trialCountEl) trialCountEl.textContent = allAthletes.filter(a => a.trial_status === 'in_trial').length;
 
       const term = alSearchTerm.trim().toLowerCase();
       const rows = allAthletes.filter(a => {
@@ -4529,7 +4643,7 @@
           <td>${esc(a.email) || '—'}</td>
           <td>${esc(a.phone) || '—'}</td>
           <td>${progBadge(a.program)}</td>
-          <td>${estadoBadge(a.subscription_status)}${vencBadge(a)}</td>
+          <td>${estadoBadge(a.subscription_status)}${vencBadge(a)}${trialTag(a)}</td>
           <td>${tipoBadge(a.program)}${origenBadge(a)}</td>
           <td>${fmtDayOnly(a.subscription_start)}</td>
           <td><button class="al-kebab" title="Acciones">⋮</button></td>
@@ -5702,7 +5816,7 @@
           ? `<input type="text" class="leads-note" maxlength="500" value="${esc(r.contact_note || '')}" placeholder="Nota…">`
           : '<span class="leads-sub">—</span>';
         return `<tr data-lid="${esc(r.id)}" class="${r.contacted_at ? 'leads-done' : ''}">
-          <td>${esc(r.full_name || '—')}${leadIsAlumno(r) ? '<span class="leads-alumno">Ya es alumno</span>' : ''}</td>
+          <td>${esc(r.full_name || '—')}${r.is_trial ? '<span class="leads-trial" title="Completó el formulario de la semana de prueba">🧪 Prueba</span>' : ''}${leadIsAlumno(r) ? '<span class="leads-alumno">Ya es alumno</span>' : ''}</td>
           <td>${progBadge(r.program)}</td>
           <td>${leadDays(r.created_at)}</td>
           <td>${leadOrigin(r)}</td>
@@ -5744,6 +5858,256 @@
     document.getElementById('leadsProgram').addEventListener('change', (e) => { leadsProgram = e.target.value; renderLeads(); });
     document.getElementById('leadsStatus').addEventListener('change', (e) => { leadsStatus = e.target.value; renderLeads(); });
     document.getElementById('leadsShowAlumnos').addEventListener('change', (e) => { leadsShowAlumnos = e.target.checked; renderLeads(); });
+
+    // ============================================================
+    // PRUEBAS — semana de prueba (etapa 7)
+    // Lee profiles (trial_*), trial_reviews (policy de lectura admin: 20261106_trial_admin.sql) y payments.
+    // Las acciones sobre un caso van por la Edge Function trial-admin (verifica que quien llama sea admin).
+    // ============================================================
+    const TRIAL_ADMIN_URL = 'https://frjlafrgdcbomdnentbe.supabase.co/functions/v1/trial-admin';
+    const TRIAL_STATUS_LABELS = { in_trial: 'En prueba', converted: 'Siguió', cancelled: 'Canceló', charge_rejected: 'Cobro rechazado' };
+    const TRIAL_REASONS = {
+      sin_identificar: 'No pudimos identificar a la persona: no volvió a la página y su mail de Mercado Pago no coincide con el del formulario.',
+      varios_pendings: 'Varias personas del formulario coinciden con esta suscripción.',
+      varias_suscripciones: 'El mail tiene más de una suscripción viva al plan de prueba.',
+      pending_no_encontrado: 'El formulario de esta persona ya no existe o ya se usó.',
+      mail_no_coincide: 'El mail que escribió al volver no coincide con ningún formulario.',
+      otro_programa: 'El formulario era de otro programa.',
+      fuera_de_ventana: 'Se suscribió más de 2 horas después de completar el formulario.',
+      sin_payer_id: 'Mercado Pago no informa la cuenta del pagador.',
+      payer_repetido: 'La cuenta de Mercado Pago ya hizo la prueba.',
+      ya_tiene_cuenta: 'El mail ya tiene cuenta en el portal (sería una reactivación).',
+      sin_fecha_de_fin: 'Mercado Pago no informa la fecha del próximo cobro.',
+      sin_fecha_de_creacion: 'Mercado Pago no informa la fecha de la suscripción.',
+      cobro_sin_vincular: 'Llegó un cobro y todavía no sabemos de quién es.',
+      cobro_en_prueba: 'Mercado Pago cobró en una suscripción que tenía la semana gratis.',
+      fecha_dudosa: 'No se puede saber si Mercado Pago aplicó la semana gratis.',
+      primer_cobro_rechazado: 'Mercado Pago no aplicó la semana gratis y el primer cobro fue rechazado o devuelto.',
+      monto_distinto: 'El cobro no coincide con el precio del programa.',
+      sin_precio: 'Falta el precio del programa en Configuración.',
+    };
+    function trialReasonText(code) {
+      if (!code) return '—';
+      if (TRIAL_REASONS[code]) return TRIAL_REASONS[code];
+      if (String(code).startsWith('estado_')) return `La suscripción está "${String(code).slice(7)}" en Mercado Pago.`;
+      return code;
+    }
+    const dayAR = ts => { const t = Date.parse(ts); return isNaN(t) ? '' : new Date(t - 3 * 3600e3).toISOString().slice(0, 10); };
+    let prProfiles = null, prReviews = null, prPaidAfterCut = new Set(), prCase = null;
+    let prStatus = 'all', prAllMonths = false;
+
+    async function loadPruebas() {
+      const warn = document.getElementById('prWarn');
+      const monthEl = document.getElementById('prMonth');
+      if (monthEl && !monthEl.value) monthEl.value = dayAR(new Date().toISOString()).slice(0, 7);
+      const { data: profs, error: pErr } = await sb.from('profiles')
+        .select('id, full_name, email, phone, program, subscription_status, trial_status, trial_started_at, trial_ends_at, trial_resolved_at, trial_reminder_sent_at')
+        .not('trial_status', 'is', null);
+      prProfiles = pErr ? null : (profs || []);
+      const { data: revs, error: rErr } = await sb.from('trial_reviews').select('*');
+      prReviews = rErr ? null : (revs || []);
+      warn.style.display = rErr ? 'block' : 'none';
+      if (rErr) warn.textContent = 'No se pueden leer los casos para revisar: falta correr supabase/migrations/20261106_trial_admin.sql.';
+      prPaidAfterCut = new Set();
+      const cut = (prProfiles || []).filter(p => p.trial_status === 'charge_rejected');
+      if (cut.length) {
+        const { data: pays } = await sb.from('payments').select('athlete_id, paid_at').in('athlete_id', cut.map(p => p.id));
+        cut.forEach(p => { if ((pays || []).some(x => x.athlete_id === p.id && String(x.paid_at) >= dayAR(p.trial_resolved_at))) prPaidAfterCut.add(p.id); });
+      }
+      renderPruebas();
+    }
+
+    // Lo que hay para revisar: casos sin resolver + pruebas vencidas sin cobro + pagos después del corte.
+    function prReviewItems() {
+      const items = [];
+      (prReviews || []).filter(r => !r.resolved_at).forEach(r => items.push({ kind: 'case', when: r.created_at, program: r.program, text: trialReasonText(r.reason), paid: !!r.charge_seen_at, who: r.email || '', review: r }));
+      (prProfiles || []).filter(p => p.trial_status === 'in_trial' && Date.parse(p.trial_ends_at) < Date.now() - 864e5)
+        .forEach(p => items.push({ kind: 'stuck', when: p.trial_ends_at, program: p.program, text: 'La prueba terminó hace más de un día y el cobro no llegó.', paid: false, who: p.full_name || p.email, prof: p }));
+      (prProfiles || []).filter(p => prPaidAfterCut.has(p.id))
+        .forEach(p => items.push({ kind: 'paidcut', when: p.trial_resolved_at, program: p.program, text: 'Pagó después de que se le cortó la prueba por cobro rechazado. No se reactivó solo.', paid: true, who: p.full_name || p.email, prof: p }));
+      return items.sort((a, b) => String(b.when).localeCompare(String(a.when)));
+    }
+
+    function updatePruebasTabBadge() {
+      const b = document.getElementById('pruebasTabBadge');
+      if (!b) return;
+      const n = prReviewItems().length;
+      if (n > 0) { b.textContent = n > 99 ? '99+' : n; b.classList.remove('hidden'); } else b.classList.add('hidden');
+    }
+
+    function prContact(p) {
+      const num = leadWaNumber(p && p.phone);
+      return num ? `<a class="btn-ghost leads-wa" href="https://wa.me/${num}" target="_blank" rel="noopener">💬 WhatsApp</a>`
+        : `<span class="leads-sub">${esc((p && p.email) || '—')}</span>`;
+    }
+
+    function renderPruebas() {
+      updatePruebasTabBadge();
+      const month = document.getElementById('prMonth').value;
+      const all = prProfiles || [];
+      const inMonth = all.filter(p => dayAR(p.trial_started_at).slice(0, 7) === month);
+      const count = s => inMonth.filter(p => p.trial_status === s).length;
+      const conv = count('converted'), canc = count('cancelled'), rej = count('charge_rejected');
+      document.getElementById('prNow').textContent = prProfiles ? all.filter(p => p.trial_status === 'in_trial').length : '—';
+      document.getElementById('prConv').textContent = prProfiles ? conv : '—';
+      document.getElementById('prCanc').textContent = prProfiles ? canc : '—';
+      document.getElementById('prRej').textContent = prProfiles ? rej : '—';
+      const done = conv + canc + rej;
+      document.getElementById('prRate').textContent = done ? Math.round(conv * 100 / done) + '%' : '—';
+
+      // Para revisar
+      const rb = document.getElementById('prReviewBody');
+      const items = prReviewItems();
+      rb.innerHTML = items.length ? items.map((it, i) => `<tr data-pri="${i}">
+          <td>${fmtDate(it.when)}</td>
+          <td>${progBadge(it.program)}</td>
+          <td>${esc(it.text)}</td>
+          <td>${it.paid ? '<span class="tr-badge tr-paid">Pagó</span>' : '<span class="leads-sub">No</span>'}</td>
+          <td>${esc(it.who || '—')}</td>
+          <td>${it.kind === 'case' ? '<button class="btn-ghost pr-open">Revisar</button>' : prContact(it.prof)}</td>
+        </tr>`).join('')
+        : `<tr><td class="empty-row" colspan="6">${prReviews ? 'No hay nada para revisar. 🎉' : 'No se pudieron cargar los casos.'}</td></tr>`;
+      rb.querySelectorAll('.pr-open').forEach(btn => btn.addEventListener('click', () => {
+        const it = items[Number(btn.closest('tr').dataset.pri)];
+        if (it) openTrialCase(it.review);
+      }));
+
+      // Tabla de pruebas
+      const body = document.getElementById('prBody');
+      if (!prProfiles) { body.innerHTML = '<tr><td class="empty-row" colspan="7">No se pudieron cargar las pruebas.</td></tr>'; return; }
+      let rows = (prAllMonths ? all : inMonth).slice();
+      if (prStatus !== 'all') rows = rows.filter(p => p.trial_status === prStatus);
+      rows.sort((a, b) => String(b.trial_started_at).localeCompare(String(a.trial_started_at)));
+      body.innerHTML = rows.length ? rows.map(p => {
+        let estado = `<span class="tr-badge tr-${esc(p.trial_status)}">${esc(TRIAL_STATUS_LABELS[p.trial_status] || p.trial_status)}</span>`;
+        if (p.trial_status === 'in_trial') {
+          const d = Math.round((Date.parse(dayAR(p.trial_ends_at) + 'T00:00:00Z') - Date.parse(dayAR(new Date().toISOString()) + 'T00:00:00Z')) / 864e5);
+          estado += `<br><span class="leads-sub">${d > 1 ? `quedan ${d} días` : d === 1 ? 'queda 1 día' : d === 0 ? 'último día' : 'vencida, sin cobro'}</span>`;
+        }
+        return `<tr>
+          <td>${esc(p.full_name || '—')}</td>
+          <td>${progBadge(p.program)}</td>
+          <td>${fmtDayOnly(dayAR(p.trial_started_at))}</td>
+          <td>${fmtDayOnly(dayAR(p.trial_ends_at))}</td>
+          <td>${estado}</td>
+          <td>${p.trial_reminder_sent_at ? '✅ ' + fmtDayOnly(dayAR(p.trial_reminder_sent_at)) : '<span class="leads-sub">—</span>'}</td>
+          <td>${prContact(p)}</td>
+        </tr>`;
+      }).join('') : `<tr><td class="empty-row" colspan="7">${all.length ? 'No hay pruebas que coincidan con el filtro.' : 'Todavía no hay pruebas.'}</td></tr>`;
+    }
+    document.getElementById('prMonth').addEventListener('change', renderPruebas);
+    document.getElementById('prStatus').addEventListener('change', (e) => { prStatus = e.target.value; renderPruebas(); });
+    document.getElementById('prAllMonths').addEventListener('change', (e) => { prAllMonths = e.target.checked; renderPruebas(); });
+
+    // ---- Modal de un caso (inspect → alta / cancelar / resolver) ----
+    async function trialAdmin(payload) {
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) return { ok: false, error: 'Tu sesión expiró. Volvé a iniciar sesión.' };
+      try {
+        const res = await fetch(TRIAL_ADMIN_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+          body: JSON.stringify(payload),
+        });
+        return await res.json();
+      } catch (err) {
+        return { ok: false, error: 'Error de conexión: ' + (err.message || err) };
+      }
+    }
+    function tcShow(part) {
+      document.getElementById('tcLoading').style.display = part === 'loading' ? '' : 'none';
+      document.getElementById('tcBody').style.display = part === 'body' ? '' : 'none';
+      document.getElementById('tcResult').style.display = part === 'result' ? '' : 'none';
+    }
+    async function openTrialCase(review) {
+      prCase = { review, info: null };
+      document.getElementById('tcError').classList.remove('show');
+      document.getElementById('tcReason').textContent = trialReasonText(review.reason);
+      tcShow('loading');
+      openModal('modalTrialCase');
+      const info = await trialAdmin({ action: 'inspect', preapproval_id: review.preapproval_id });
+      if (!info || !info.ok) { modalError('tcError', (info && info.error) || 'No se pudo consultar el caso.'); tcShow('none'); return; }
+      prCase.info = info;
+      const m = info.mp;
+      const modeTxt = m.mode === 'prueba' ? `<span class="good">Con semana gratis</span> (${m.gap_days} días hasta el cobro)`
+        : m.mode === 'paga' ? `<span class="warn">Sin semana gratis</span>: cobra desde el primer día (${m.gap_days} días hasta el próximo)`
+        : `<span class="warn">Dudoso</span> (${m.gap_days == null ? 'sin fechas' : m.gap_days + ' días'})`;
+      const ch = m.charge;
+      const chargeTxt = ch.approved_amount != null ? `<span class="good">Aprobado: $${Number(ch.approved_amount).toLocaleString('es-AR')}</span>`
+        : ch.in_process ? 'En proceso' : ch.rejected ? '<span class="warn">Rechazado o devuelto</span>' : 'Ninguno';
+      document.getElementById('tcMp').innerHTML = `
+        <span class="k">Estado en MP</span><span>${m.status === 'authorized' ? '<span class="good">Activa</span>' : '<span class="warn">' + esc(m.status) + '</span>'}</span>
+        <span class="k">Programa</span><span>${m.program ? progBadge(m.program) : '<span class="warn">No es del plan de prueba</span>'}</span>
+        <span class="k">Vinculada a un alumno</span><span>${m.linked ? '<span class="warn">Sí</span>' : 'No'}</span>
+        <span class="k">Semana gratis</span><span>${modeTxt}</span>
+        <span class="k">Cobro</span><span>${chargeTxt}${m.price ? ` <span class="leads-sub">(precio $${Number(m.price).toLocaleString('es-AR')})</span>` : ''}</span>
+        <span class="k">Cuenta de MP</span><span>${!m.payer_present ? '<span class="warn">Sin dato</span>' : m.payer_used ? '<span class="warn">Ya la usó otro alumno</span>' : 'Nueva'}</span>
+        <span class="k">Suscripción creada</span><span>${fmtDate(m.date_created)}</span>`;
+      const sel = document.getElementById('tcPerson');
+      const pend = info.pendings || [];
+      sel.innerHTML = pend.map(p => `<option value="${esc(p.id)}">${esc(p.full_name || '—')} · ${esc(p.email || '')} · ${fmtDate(p.created_at)}</option>`).join('')
+        + '<option value="__manual">Otra persona (escribir los datos)</option>';
+      const match = pend.find(p => review.email && String(p.email || '').toLowerCase() === String(review.email).toLowerCase());
+      sel.value = match ? match.id : (pend[0] ? pend[0].id : '__manual');
+      document.getElementById('tcManual').style.display = sel.value === '__manual' ? '' : 'none';
+      const canAlta = m.status === 'authorized' && !!m.program && !m.linked && (m.mode === 'prueba' ? !ch.approved_amount && !ch.rejected : m.mode === 'paga' && ch.approved_amount != null);
+      document.getElementById('tcProvision').disabled = !canAlta;
+      document.getElementById('tcCancel').disabled = !m.program || m.linked;
+      document.getElementById('tcHint').textContent = canAlta
+        ? (m.mode === 'paga' ? 'El alta va como alumno pago normal y el cobro queda en Pagos.' : 'El alta va como semana de prueba, con fin en la fecha del próximo cobro de MP.')
+        : 'No se puede dar el alta desde acá con estos datos de Mercado Pago. Podés cancelar en MP o marcar el caso resuelto.';
+      tcShow('body');
+    }
+    document.getElementById('tcPerson').addEventListener('change', (e) => {
+      document.getElementById('tcManual').style.display = e.target.value === '__manual' ? '' : 'none';
+    });
+    async function tcRun(payload, confirmText, btn, okText) {
+      if (!window.confirm(confirmText)) return;
+      document.getElementById('tcError').classList.remove('show');
+      const label = btn.textContent;
+      btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Procesando…';
+      const r = await trialAdmin(payload);
+      btn.disabled = false; btn.textContent = label;
+      if (!r || !r.ok) { modalError('tcError', (r && r.error) || 'No se pudo completar.'); return; }
+      document.getElementById('tcResultText').textContent = okText(r);
+      tcShow('result');
+      loadPruebas();
+    }
+    document.getElementById('tcProvision').addEventListener('click', (e) => {
+      if (!prCase || !prCase.info) return;
+      const sel = document.getElementById('tcPerson').value;
+      const note = document.getElementById('tcNote').value.trim();
+      const payload = { action: 'provision', preapproval_id: prCase.review.preapproval_id, note };
+      let who;
+      if (sel === '__manual') {
+        payload.full_name = document.getElementById('tcName').value.trim();
+        payload.email = document.getElementById('tcEmail').value.trim();
+        payload.phone = document.getElementById('tcPhone').value.trim();
+        if (payload.full_name.length < 2 || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(payload.email)) { modalError('tcError', 'Completá nombre y un email válido.'); return; }
+        who = payload.full_name + ' (' + payload.email + ')';
+      } else {
+        payload.pending_id = sel;
+        const p = (prCase.info.pendings || []).find(x => x.id === sel);
+        who = p ? `${p.full_name} (${p.email})` : sel;
+      }
+      const paga = prCase.info.mp.mode === 'paga';
+      tcRun(payload, `¿Dar el alta ${paga ? 'como alumno pago' : 'de la semana de prueba'} a ${who}?\n\nLe llega la invitación por mail. No se puede deshacer desde acá.`,
+        e.currentTarget, r => `✅ Alta ${r.mode === 'paga' ? 'paga' : 'de prueba'} hecha. Le llega la invitación por mail.${r.warning ? ' ⚠️' + r.warning : ''}`);
+    });
+    document.getElementById('tcCancel').addEventListener('click', (e) => {
+      if (!prCase) return;
+      tcRun({ action: 'cancel', preapproval_id: prCase.review.preapproval_id, note: document.getElementById('tcNote').value.trim() },
+        '¿Cancelar esta suscripción en Mercado Pago?\n\nNo se le cobra más y el caso queda resuelto. No se puede deshacer.',
+        e.currentTarget, r => r.already ? '✅ Ya estaba cancelada en MP. El caso quedó resuelto.' : '✅ Suscripción cancelada en MP. El caso quedó resuelto.');
+    });
+    document.getElementById('tcResolve').addEventListener('click', (e) => {
+      if (!prCase) return;
+      const note = document.getElementById('tcNote').value.trim();
+      if (!note) { modalError('tcError', 'Escribí una nota para marcar el caso resuelto.'); return; }
+      tcRun({ action: 'resolve', preapproval_id: prCase.review.preapproval_id, note },
+        '¿Marcar el caso como resuelto? No cambia nada en Mercado Pago ni en el portal.',
+        e.currentTarget, () => '✅ Caso marcado como resuelto.');
+    });
 
     // ---- Modal cargar/editar ----
     function populatePagoAthletes() {
@@ -6384,6 +6748,7 @@
       loadStats(session.user.id);
       loadLatest();
       loadLeads();   // carga silenciosa → contador de leads sin contactar en el sidebar
+      loadPruebas(); // carga silenciosa → contador de casos de la prueba para revisar
     }
 
     init();
