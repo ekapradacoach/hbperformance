@@ -121,6 +121,15 @@ const cases = [
   // provision: paga
   { name: 'Alta paga: perfil sin prueba + cobro alta_nueva', pendings: [pend()], mp: paidMp(), call: req({ action: 'provision', preapproval_id: 'sub-1', pending_id: PID }),
     expect: r => r.body.ok && r.body.mode === 'paga' && !db.profiles[0].trial_status && !db.profiles[0].trial_ends_at && db.payments.length === 1 && db.payments[0].type === 'alta_nueva' && db.payments[0].mp_payment_id === '9001' && db.payments[0].athlete_id === db.profiles[0].id },
+  { name: 'Corredores: alta paga a $40.000 con su plan', pendings: [pend({ program: 'corredores' })],
+    config: [...CONFIG, { key: 'mp_trial_plan_corredores', value: 'plan-tc' }, { key: 'price_corredores_ars', value: '40000' }],
+    mp: paidMp({ sub: { preapproval_plan_id: 'plan-tc', next_payment_date: at(30 * DAY) }, payments: { 9001: { ...PAY, transaction_amount: 40000 } } }),
+    call: req({ action: 'provision', preapproval_id: 'sub-1', pending_id: PID }),
+    expect: r => r.body.ok && r.body.mode === 'paga' && db.profiles[0].program === 'corredores' && db.payments[0].amount === 40000 },
+  { name: 'Hybrid: alta de prueba sin variante', pendings: [pend({ program: 'hybrid' })],
+    config: [...CONFIG, { key: 'mp_trial_plan_hybrid', value: 'plan-th' }, { key: 'price_hybrid_ars', value: '45000' }],
+    mp: { sub: { preapproval_plan_id: 'plan-th' } }, call: req({ action: 'provision', preapproval_id: 'sub-1', pending_id: PID }),
+    expect: r => r.body.ok && r.body.mode === 'prueba' && db.profiles[0].program === 'hybrid' && db.profiles[0].hybrid_variant == null },
   { name: 'Alta paga y falla registrar el cobro: alta hecha con aviso', pendings: [pend()], mp: paidMp(), fail: { 'payments:upsert': true }, call: req({ action: 'provision', preapproval_id: 'sub-1', pending_id: PID }),
     expect: r => r.body.ok && /cargalo a mano/.test(r.body.warning || '') && db.profiles.length === 1 },
   // provision: reglas fijas
@@ -173,7 +182,7 @@ try {
   console.log = console.warn = console.error = (...a) => logs.push(a.join(' '));
   for (const c of cases) {
     db = { profiles: [{ id: 'admin-1', email: 'coach@example.test', role: 'admin' }, { id: 'alumno-1', email: 'al@example.test', role: 'athlete' }, ...clone(c.profiles || [])],
-      pending_subscriptions: clone(c.pendings || []), trial_reviews: clone(c.reviews || []), payments: [], site_config: CONFIG,
+      pending_subscriptions: clone(c.pendings || []), trial_reviews: clone(c.reviews || []), payments: [], site_config: c.config || CONFIG,
       authUsers: ['coach@example.test', 'al@example.test', ...(c.authUsers || [])], jwts: { [ADMIN]: 'admin-1', [ATHLETE]: 'alumno-1' }, fail: c.fail, mpCalls: 0 };
     mp = { ...clone(c.mp || {}) };
     calls = []; logs = [];

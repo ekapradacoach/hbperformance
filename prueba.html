@@ -98,6 +98,7 @@ src="https://www.facebook.com/tr?id=1008115118926012&ev=PageView&noscript=1"
   .steps b { color: var(--text); font-weight: 600; }
   .feature-list { list-style: none; display: grid; gap: 12px; }
   .feature-list li { display: flex; gap: 12px; align-items: flex-start; color: var(--text-secondary); font-size: 1.02rem; }
+  .feature-list li[hidden] { display: none; }
   .feature-list .fi { color: var(--accent); font-weight: 800; flex-shrink: 0; line-height: 1.5; }
 
   .price-box { border: 1px solid var(--accent); border-radius: 10px; padding: 26px; background: rgba(245,168,0,0.05); }
@@ -228,6 +229,7 @@ src="https://www.facebook.com/tr?id=1008115118926012&ev=PageView&noscript=1"
           <span class="eyebrow">Qué incluye</span>
           <ul class="feature-list">
             <li><span class="fi">✓</span> La planificación completa del programa, día por día, en tu portal</li>
+            <li id="programNote" hidden><span class="fi">✓</span> <span id="programNoteText"></span></li>
             <li><span class="fi">✓</span> Chat grupal con los entrenadores para cualquier duda</li>
             <li><span class="fi">✓</span> Sin compromiso: cancelás cuando quieras desde tu perfil en el portal o desde Mercado Pago</li>
           </ul>
@@ -334,10 +336,12 @@ src="https://www.facebook.com/tr?id=1008115118926012&ev=PageView&noscript=1"
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="supabase.js"></script>
 <script>
-  // Programas con semana de prueba. Sumar Hybrid y Corredores acá cuando tengan su plan de prueba
-  // (y en TRIAL_PROGRAMS de start-trial).
+  // Programas con semana de prueba (deben coincidir con TRIAL_PROGRAMS de start-trial).
   var TRIAL_PROGRAMS = {
-    crossfit: { name: 'CrossFit', page: 'crossfit.html', priceKey: 'price_crossfit_ars' }
+    crossfit: { name: 'CrossFit', page: 'crossfit.html', priceKey: 'price_crossfit_ars' },
+    hybrid: { name: 'Hybrid Evolution', page: 'hybrid.html', priceKey: 'price_hybrid_ars',
+      note: 'Adentro del portal elegís el plan de 3 o 4 días (más una corrida), y lo podés cambiar cuando quieras.' },
+    corredores: { name: 'Fuerza para Corredores', page: 'fuerza-corredores.html', priceKey: 'price_corredores_ars' }
   };
   var WA_DEFAULT = '5491159574043';
 
@@ -389,6 +393,10 @@ src="https://www.facebook.com/tr?id=1008115118926012&ev=PageView&noscript=1"
   } else {
     document.getElementById('trialContent').hidden = false;
     document.getElementById('heroProgram').textContent = PROGRAM.name;
+    if (PROGRAM.note) { // Hybrid: la variante se elige adentro del portal
+      document.getElementById('programNoteText').textContent = PROGRAM.note;
+      document.getElementById('programNote').hidden = false;
+    }
     document.title = 'Probá ' + PROGRAM.name + ' gratis — HB Performance';
     var back = document.getElementById('backLink');
     back.href = PROGRAM.page; back.textContent = '← Volver a ' + PROGRAM.name;

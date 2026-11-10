@@ -75,6 +75,9 @@ const PLAN = { key: 'mp_trial_plan_crossfit', value: 'plan-prueba' };
 const form = (extra = {}) => ({ full_name: 'Lucia Prueba', email: 'lucia@example.test', phone: '1100000000', program: 'crossfit', ...extra });
 const trialPending = (email, minutes = 60, extra = {}) => ({ id: 'previo', full_name: 'Viejo', email, phone: null, program: 'crossfit', is_trial: true, created_at: ago(minutes * MIN), ...extra });
 const LINK = 'https://www.mercadopago.com.ar/subscriptions/checkout?preapproval_plan_id=plan-prueba';
+const PLAN_H = { key: 'mp_trial_plan_hybrid', value: 'plan-hybrid' }, PLAN_C = { key: 'mp_trial_plan_corredores', value: 'plan-corredores' };
+const LINK_H = 'https://www.mercadopago.com.ar/subscriptions/checkout?preapproval_plan_id=plan-hybrid';
+const LINK_C = 'https://www.mercadopago.com.ar/subscriptions/checkout?preapproval_plan_id=plan-corredores';
 const isGeneric = { generic: true };
 
 const cases = [
@@ -94,7 +97,18 @@ const cases = [
   { name: 'Tiene perfil y escribe en mayúsculas', profiles: ['lucia@example.test'], body: form({ email: 'LUCIA@EXAMPLE.TEST' }), expect: { ...isGeneric, trialPendings: 0 } },
   { name: 'Tiene cuenta en Auth sin perfil', authUsers: ['Lucia@example.test'], body: form(), expect: { ...isGeneric, trialPendings: 0 } },
   { name: 'Comodín en el mail: a_b no coincide con el perfil axb', profiles: ['axb@example.test'], body: form({ email: 'a_b@example.test' }), expect: { ok: true, trialPendings: 1 } },
-  { name: 'Otro programa', body: form({ program: 'hybrid' }), expect: { ...isGeneric, trialPendings: 0 } },
+  { name: 'Programa desconocido', body: form({ program: 'yoga' }), expect: { ...isGeneric, trialPendings: 0 } },
+  { name: 'Programa en mayúsculas no cuenta', body: form({ program: 'HYBRID' }), config: [PLAN, PLAN_H], expect: { ...isGeneric, trialPendings: 0 } },
+  // Etapa 9: Hybrid y Corredores, cada uno con su plan de prueba
+  { name: 'Hybrid sin su plan cargado: respuesta genérica', body: form({ program: 'hybrid' }), expect: { ...isGeneric, trialPendings: 0 } },
+  { name: 'Hybrid con su plan: link del plan de Hybrid', body: form({ program: 'hybrid' }), config: [PLAN, PLAN_H, PLAN_C],
+    expect: { ok: true, link: LINK_H, trialPendings: 1 }, check: d => d.pending_subscriptions[0].program === 'hybrid' && d.pending_subscriptions[0].is_trial === true },
+  { name: 'Corredores con su plan: link del plan de Corredores', body: form({ program: 'corredores' }), config: [PLAN, PLAN_H, PLAN_C],
+    expect: { ok: true, link: LINK_C, trialPendings: 1 }, check: d => d.pending_subscriptions[0].program === 'corredores' },
+  { name: 'Corredores sin su plan: no usa el de otro programa', body: form({ program: 'corredores' }), config: [PLAN, PLAN_H], expect: { ...isGeneric, trialPendings: 0 } },
+  { name: 'CrossFit sigue usando su plan con los tres cargados', body: form(), config: [PLAN, PLAN_H, PLAN_C], expect: { ok: true, link: LINK, trialPendings: 1 } },
+  { name: 'Cambia de programa: reusa el pending y actualiza el programa', pendings: [trialPending('lucia@example.test', 30)], body: form({ program: 'hybrid' }), config: [PLAN, PLAN_H],
+    expect: { ok: true, link: LINK_H, pendingId: 'previo', trialPendings: 1 }, check: d => d.pending_subscriptions[0].program === 'hybrid' },
   { name: 'Sin programa', body: form({ program: undefined }), expect: { ...isGeneric, trialPendings: 0 } },
   { name: 'Mail inválido', body: form({ email: 'lucia@' }), expect: { ...isGeneric, trialPendings: 0 } },
   { name: 'Mail que no es texto', body: form({ email: { $ne: 1 } }), expect: { ...isGeneric, trialPendings: 0 } },

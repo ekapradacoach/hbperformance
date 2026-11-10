@@ -113,6 +113,9 @@ globalThis.fetch = async u => {
 // ---- Datos ficticios ----
 const pend = (extra = {}) => ({ id: PID, full_name: 'Lucia Prueba', email: 'lucia@example.test', phone: '1100000000', program: 'crossfit', is_trial: true, created_at: at(-10 * MIN), ...extra });
 const CONFIG = [{ key: 'mp_trial_plan_crossfit', value: 'plan-t' }, { key: 'mp_plan_crossfit', value: 'plan-pago' }, { key: 'price_crossfit_ars', value: '45000' }];
+// Etapa 9: los tres programas con plan de prueba
+const CONFIG3 = [...CONFIG, { key: 'mp_trial_plan_hybrid', value: 'plan-th' }, { key: 'price_hybrid_ars', value: '45000' },
+  { key: 'mp_trial_plan_corredores', value: 'https://x/checkout?preapproval_plan_id=plan-tc' }, { key: 'price_corredores_ars', value: '40000' }];
 const byId = { preapproval_id: 'sub-1', pending_id: PID };
 const byMail = { preapproval_id: 'sub-1', email: ' LUCIA@example.test ' };
 const hook = { preapproval_id: 'sub-1' };
@@ -249,6 +252,19 @@ const cases = [
   { name: 'Recarga de la página después del alta paga: ok sin new y un solo pago', pendings: [pend()], mp: paidMp(), body: byId, twice: true, expect: { publicText: '{"ok":true,"paid":true}', profiles: 1, invites: 1, payments: 1 } },
   { name: 'Falla registrar el pago: pide reintento', pendings: [pend()], mp: paidMp(), fail: { 'payments:upsert': true }, body: byId, expect: { publicText: RETRY, profiles: 1, invites: 1, payments: 0 } },
   { name: 'Falla registrar el pago y el reintento lo guarda', pendings: [pend()], mp: paidMp(), fail: { 'payments:upsert': true }, clearFailAndRetry: true, body: byId, expect: { publicText: '{"ok":true,"paid":true}', profiles: 1, invites: 1, payments: 1 }, check: paidPayment },
+
+  // Etapa 9: Hybrid y Corredores, cada uno con su plan de prueba y su precio
+  { name: 'Hybrid: alta de prueba con program hybrid y sin variante', config: CONFIG3, pendings: [pend({ program: 'hybrid' })], mp: { sub: { preapproval_plan_id: 'plan-th' } }, body: byId, expect: provisioned,
+    check: d => d.profiles[0].program === 'hybrid' && d.profiles[0].trial_status === 'in_trial' && d.profiles[0].hybrid_variant == null },
+  { name: 'Corredores: alta de prueba', config: CONFIG3, pendings: [pend({ program: 'corredores' })], mp: { sub: { preapproval_plan_id: 'plan-tc' } }, body: byId, expect: provisioned,
+    check: d => d.profiles[0].program === 'corredores' && d.profiles[0].trial_status === 'in_trial' },
+  { name: 'Corredores sin prueba: alta paga a $40.000', config: CONFIG3, pendings: [pend({ program: 'corredores' })],
+    mp: paidMp({ sub: { preapproval_plan_id: 'plan-tc', next_payment_date: at(30 * DAY) }, payments: { 9001: { ...PAY, transaction_amount: 40000 } } }), body: byId, expect: paidOk,
+    check: d => d.profiles[0].program === 'corredores' && !d.profiles[0].trial_status && d.payments[0].amount === 40000 && d.payments[0].program === 'corredores' },
+  { name: 'Corredores sin prueba cobrado a $45.000: monto distinto, revisión', config: CONFIG3, pendings: [pend({ program: 'corredores' })],
+    mp: paidMp({ sub: { preapproval_plan_id: 'plan-tc', next_payment_date: at(30 * DAY) } }), body: byId, expect: noAlta('monto_distinto', { pendings: 1, payments: 0 }) },
+  { name: 'Pending de CrossFit con suscripción al plan de Hybrid: otro programa', config: CONFIG3, pendings: [pend()], mp: { sub: { preapproval_plan_id: 'plan-th' } }, body: byId, expect: noAlta('otro_programa', { pendings: 1 }) },
+  { name: 'Plan de Hybrid sin cargar en site_config: no es de prueba', pendings: [pend({ program: 'hybrid' })], mp: { sub: { preapproval_plan_id: 'plan-th' } }, body: byId, expect: { publicText: GENERIC, profiles: 0, noReview: true } },
 ];
 
 // ---- Cargar el código real ----

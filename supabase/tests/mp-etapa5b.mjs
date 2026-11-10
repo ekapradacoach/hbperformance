@@ -5,7 +5,7 @@
 // Correr desde la raíz del repo, en una terminal de VS Code o PowerShell:
 //   node supabase/tests/mp-etapa5b.mjs
 //
-// Responde, con las suscripciones del plan de prueba de CrossFit (incluidas las canceladas):
+// Responde, con las suscripciones del plan de prueba del programa que elijas (incluidas las canceladas):
 //  1. Plazo entre la creación y el próximo cobro: ¿~7 días con prueba y ~1 mes sin prueba?
 //  2. ¿La suscripción trae free_trial en los dos casos? (si sí, no sirve para distinguir)
 //  3. ¿/authorized_payments/search?preapproval_id= lista el primer cobro? No está documentado.
@@ -18,7 +18,8 @@ import readline from 'node:readline/promises';
 
 const SIM_API = process.env.HB_MP_SIM_API || ''; // solo para la simulación local
 const API = SIM_API || 'https://api.mercadopago.com';
-const PLAN_NAME = 'HB Performance - CrossFit - 7 días gratis';
+const PROGRAMS = { crossfit: 'CrossFit', hybrid: 'Hybrid', corredores: 'Fuerza para Corredores' };
+let PLAN_NAME = 'HB Performance - CrossFit - 7 días gratis';
 const out = console.log;
 
 let token = '';
@@ -110,8 +111,11 @@ async function main() {
   out(`Cuenta: ${short(me.data.id)}`);
   if (!SIM_API && (await ask('¿Es tu cuenta de TRABAJO? Escribí SI para seguir: ')).trim() !== 'SI') throw new Error('Cancelado. No se hizo nada.');
 
-  // El plan de prueba: id o dirección del checkout (la de site_config.mp_trial_plan_crossfit).
-  const raw = SIM_API ? 'plan-t' : (await ask('Pegá el valor de mp_trial_plan_crossfit (id o dirección del checkout): ')).trim();
+  // El programa y su plan de prueba: id o dirección del checkout (la de site_config.mp_trial_plan_<programa>).
+  const program = SIM_API ? (process.env.HB_SIM_PROGRAM || 'crossfit') : (await ask('Programa (crossfit / hybrid / corredores): ')).trim().toLowerCase();
+  if (!Object.hasOwn(PROGRAMS, program)) throw new Error('Programa inválido. No se hizo nada.');
+  PLAN_NAME = `HB Performance - ${PROGRAMS[program]} - 7 días gratis`;
+  const raw = SIM_API ? 'plan-t' : (await ask(`Pegá el valor de mp_trial_plan_${program} (id o dirección del checkout): `)).trim();
   rl.close();
   const m = raw.match(/preapproval_plan_id=([A-Za-z0-9_-]+)/);
   planId = m ? m[1] : raw;

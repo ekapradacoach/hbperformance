@@ -1,5 +1,6 @@
 // ============================================================================
-// Fase 2, etapa 3: crea el plan de prueba de CrossFit en PRODUCCIÓN de MP y lo verifica.
+// Fase 2, etapas 3 y 9: crea el plan de prueba de un programa (CrossFit, Hybrid o Fuerza para Corredores) en
+// PRODUCCIÓN de MP y lo verifica. Al empezar pide el programa.
 // Crear un plan no cobra. Nadie puede suscribirse hasta tener el link, y este script no lo publica.
 //
 // Correr desde la raíz del repo, en una terminal de VS Code o PowerShell:
@@ -7,31 +8,39 @@
 //
 // Candados:
 //  · La credencial se pide al iniciar, no se ve y queda solo en memoria.
-//  · Solo crea UN plan, con nombre, prueba y dirección de regreso fijos. El precio tiene que coincidir con site_config
-//    y con el plan pago de CrossFit; si no, no crea nada.
-//  · Si site_config ya tiene el plan de prueba o el script ya creó uno, no crea otro.
+//  · Solo crea UN plan por programa, con nombre, prueba y dirección de regreso fijos. El precio tiene que coincidir con
+//    site_config (price_<programa>_ars) y con el plan pago del programa (mp_plan_<programa>); si no, no crea nada.
+//  · Si site_config ya tiene el plan de prueba de ese programa o el script ya creó uno, no crea otro.
 //  · Todo pasa por mp(), que solo deja salir las llamadas de ALLOWED. No modifica planes ni toca suscripciones.
 //  · No escribe en Supabase: al plan pago y a site_config solo los lee.
-// En tu carpeta de usuario se guarda .hb-mp-plan-prueba.json (sin secretos): plan y cuenta.
+// En tu carpeta de usuario se guarda .hb-mp-plan-prueba.json (sin secretos): cuenta y un plan por programa.
+// (El formato viejo, con el plan de CrossFit suelto, se sigue leyendo igual.)
 // ============================================================================
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import readline from 'node:readline/promises';
 
-const API = 'https://api.mercadopago.com';
+// Solo para la simulación local (supabase/tests/mp-plan-prueba.sim.mjs): MP y Supabase simulados, sin credencial real.
+const SIM = process.env.HB_PLAN_SIM === '1';
+const API = SIM ? process.env.HB_SIM_MP : 'https://api.mercadopago.com';
 const STATE_FILE = path.join(homedir(), '.hb-mp-plan-prueba.json');
-const SUPABASE_URL = 'https://frjlafrgdcbomdnentbe.supabase.co';
+const SUPABASE_URL = SIM ? process.env.HB_SIM_SB : 'https://frjlafrgdcbomdnentbe.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_fx4VccMrxdC3j8ObKnxX7A_GSNoai80'; // pública: la usan las landings
-const PROGRAM = 'crossfit';
-const PLAN_NAME = 'HB Performance - CrossFit - 7 días gratis';
+const PROGRAMS = { crossfit: 'CrossFit', hybrid: 'Hybrid', corredores: 'Fuerza para Corredores' };
 const TRIAL_DAYS = 7;
+let PROGRAM = '';
+let PLAN_NAME = '';
 const BACK_URL = 'https://hbperformance.fit/prueba-regreso.html';
 const out = console.log;
 
 let token = '';
-let state = existsSync(STATE_FILE) ? JSON.parse(readFileSync(STATE_FILE, 'utf8')) : {};
-const save = () => writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
+const STATE_PATH = SIM ? process.env.HB_SIM_STATE : STATE_FILE;
+let state = existsSync(STATE_PATH) ? JSON.parse(readFileSync(STATE_PATH, 'utf8')) : {};
+// Formato viejo: { sellerId, planId, price } era el plan de CrossFit.
+if (!state.plans) state = { sellerId: state.sellerId, plans: state.planId ? { crossfit: { planId: state.planId, price: state.price } } : {} };
+const plan = () => (PROGRAM ? (state.plans[PROGRAM] || (state.plans[PROGRAM] = {})) : {});
+const save = () => writeFileSync(STATE_PATH, JSON.stringify(state, null, 2));
 const hideToken = s => (token ? String(s).split(token).join('[credencial oculta]') : String(s));
 const validId = id => /^[A-Za-z0-9_-]{1,80}$/.test(id);
 // En site_config el plan puede estar como id o como dirección del checkout.
@@ -48,7 +57,7 @@ const ALLOWED = [
   ['GET', () => /^\/users\/me$/],
   ['POST', () => /^\/preapproval_plan$/],
   ['GET', () => (paidPlanId ? new RegExp(`^/preapproval_plan/${paidPlanId}$`) : /$^/)],
-  ['GET', () => (state.planId ? new RegExp(`^/preapproval_plan/${state.planId}$`) : /$^/)],
+  ['GET', () => (plan().planId ? new RegExp(`^/preapproval_plan/${plan().planId}$`) : /$^/)],
 ];
 
 async function mp(method, url, body) {
@@ -126,12 +135,12 @@ async function readConfig() {
 // El precio tiene que ser el mismo en site_config y en el plan pago, para que la prueba no cobre otro monto.
 async function checkedPrice(config) {
   if (!Number.isFinite(config.price) || config.price <= 0) throw new Error('site_config no tiene un precio válido. No se hizo nada.');
-  if (!config.paidPlan) throw new Error('site_config no tiene el plan pago de CrossFit. No se hizo nada.');
+  if (!config.paidPlan) throw new Error(`site_config no tiene el plan pago de ${PROGRAMS[PROGRAM]}. No se hizo nada.`);
   paidPlanId = config.paidPlan;
   const r = await mp('GET', `/preapproval_plan/${paidPlanId}`);
   if (!r.ok) throw new Error('No se pudo leer el plan pago. ' + mpError(r));
   const ar = r.data.auto_recurring || {};
-  out(`Plan pago de CrossFit: $${ar.transaction_amount} ${ar.currency_id}, cada ${ar.frequency} ${ar.frequency_type} | prueba ${ar.free_trial ? JSON.stringify(ar.free_trial) : 'NINGUNA'}`);
+  out(`Plan pago de ${PROGRAMS[PROGRAM]}: $${ar.transaction_amount} ${ar.currency_id}, cada ${ar.frequency} ${ar.frequency_type} | prueba ${ar.free_trial ? JSON.stringify(ar.free_trial) : 'NINGUNA'}`);
   out(`Precio en site_config: $${config.price}`);
   if (Number(ar.transaction_amount) !== config.price || ar.currency_id !== 'ARS' || Number(ar.frequency) !== 1 || ar.frequency_type !== 'months') {
     throw new Error('El plan pago y site_config no coinciden. No se creó nada: revisalos primero.');
@@ -140,9 +149,9 @@ async function checkedPrice(config) {
 }
 
 async function createPlan(ask) {
-  if (state.planId) { out(`Este script ya creó el plan ${state.planId}. No crea otro.`); return; }
+  if (plan().planId) { out(`Este script ya creó el plan de ${PROGRAMS[PROGRAM]}: ${plan().planId}. No crea otro.`); return; }
   const config = await readConfig();
-  if (config.trialPlan) { out(`site_config ya tiene plan de prueba: ${config.trialPlan}. No se crea otro.`); return; }
+  if (config.trialPlan) { out(`site_config ya tiene plan de prueba de ${PROGRAMS[PROGRAM]}: ${config.trialPlan}. No se crea otro.`); return; }
   const price = await checkedPrice(config);
   out(`\nSe va a crear: "${PLAN_NAME}", $${price} por mes, ${TRIAL_DAYS} días gratis.`);
   out(`Regreso: ${BACK_URL}`);
@@ -157,22 +166,22 @@ async function createPlan(ask) {
   });
   if (!r.ok) { out(mpError(r)); return; }
   if (!validId(String(r.data.id))) { out('MP devolvió un id inesperado. No se guardó.'); return; }
-  state = { ...state, planId: r.data.id, price };
+  state.plans[PROGRAM] = { planId: r.data.id, price };
   save();
   out(`\nPlan creado: ${r.data.id}`);
-  out('Todavía no compartas el link. El id se guarda en site_config recién cuando esté aprobada la etapa 3.');
+  out(`Todavía no compartas el link. Cargá el id en site_config, clave mp_trial_plan_${PROGRAM}.`);
   await verify();
 }
 
 async function verify() {
-  if (!state.planId) {
+  if (!plan().planId) {
     const config = await readConfig();
-    if (!config.trialPlan) { out('Todavía no hay plan de prueba. Usá la opción 1.'); return; }
-    state.planId = config.trialPlan;
+    if (!config.trialPlan) { out(`Todavía no hay plan de prueba de ${PROGRAMS[PROGRAM]}. Usá la opción 1.`); return; }
+    plan().planId = config.trialPlan;
   }
-  if (!validId(state.planId)) throw new Error('El id de plan guardado no es válido. No se hizo nada.');
+  if (!validId(plan().planId)) throw new Error('El id de plan guardado no es válido. No se hizo nada.');
   const config = await readConfig();
-  const r = await mp('GET', `/preapproval_plan/${state.planId}`);
+  const r = await mp('GET', `/preapproval_plan/${plan().planId}`);
   if (!r.ok) { out(mpError(r)); return; }
   const ar = r.data.auto_recurring || {}, trial = ar.free_trial;
   const days = trial?.frequency_type === 'days' ? Number(trial.frequency) : null;
@@ -183,29 +192,33 @@ async function verify() {
     [`Prueba de ${TRIAL_DAYS} días`, days === TRIAL_DAYS, trial ? JSON.stringify(trial) : 'NINGUNA'],
     ['Dirección de regreso', r.data.back_url === BACK_URL, r.data.back_url || 'VACÍA'],
     ['Estado activo', r.data.status === 'active', r.data.status],
-    ['Plan en site_config', config.trialPlan === state.planId, config.trialPlan || 'todavía no cargado'],
+    ['Plan en site_config', config.trialPlan === plan().planId, config.trialPlan || 'todavía no cargado'],
   ];
-  out(`\nPlan ${state.planId}`);
+  out(`\nPlan de ${PROGRAMS[PROGRAM]}: ${plan().planId}`);
   checks.forEach(([name, ok, value]) => out(`  ${ok ? 'OK    ' : 'REVISAR'} ${name}: ${hideToken(value)}`));
   save();
 }
 
-const MENU = `
-=== Etapa 3: plan de prueba de CrossFit (PRODUCCIÓN) ===
+const MENU = () => `
+=== Plan de prueba de ${PROGRAMS[PROGRAM]} (PRODUCCIÓN) ===
 1. Crear el plan     Crea el único plan permitido, con el precio verificado. Pide confirmación. No cobra.
 2. Verificar         Revisa nombre, precio, días, regreso y estado. Sirve después de editar el plan en el panel. Solo lee.
 0. Salir`;
 
 async function main() {
   out('Pegá el Access Token de PRODUCCIÓN de tu cuenta de trabajo y tocá Enter. No se va a ver nada al pegarlo.');
-  token = await askHidden('Credencial: ');
+  token = SIM ? 'credencial-simulada' : await askHidden('Credencial: ');
   if (!token) throw new Error('No ingresaste ninguna credencial.');
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   const ask = q => rl.question(q);
   await checkAccount(ask);
+  const chosen = (await ask('Programa (crossfit / hybrid / corredores): ')).trim().toLowerCase();
+  if (!Object.hasOwn(PROGRAMS, chosen)) throw new Error('Programa inválido. No se hizo nada.');
+  PROGRAM = chosen;
+  PLAN_NAME = `HB Performance - ${PROGRAMS[PROGRAM]} - ${TRIAL_DAYS} días gratis`;
   save();
   for (;;) {
-    out(MENU);
+    out(MENU());
     const option = (await ask('Opción: ')).trim();
     if (option === '0') break;
     if (option === '1') await createPlan(ask);

@@ -27,8 +27,8 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
 
-// Por ahora solo CrossFit. Sumar un programa acá cuando tenga su plan de prueba.
-const TRIAL_PROGRAMS = ['crossfit']
+// Programas con plan de prueba (mp_trial_plan_<programa> en site_config). Etapa 9: se suman Hybrid y Corredores.
+const TRIAL_PROGRAMS = ['crossfit', 'hybrid', 'corredores']
 const CHECKOUT_BASE = 'https://www.mercadopago.com.ar/subscriptions/checkout?preapproval_plan_id='
 const GENERIC = { ok: false, error: 'No pudimos iniciar tu prueba, escribinos' }
 const LIMIT_PER_IP = 5
