@@ -303,6 +303,14 @@ Editor de planificación (dentro de `admin/index.html`, para grupos y asesorías
    (Lun→Lun…). Si algún día destino ya tiene bloques, pregunta "¿Reemplazar o agregar?".
 3. **Ejercicios linkeados por bloque** → tabla `exercise_links` (reemplaza el viejo campo YouTube por
    bloque). Chips por ejercicio; click → modal con embed; × → borrar.
+   **Selección múltiple de la biblioteca (2026-11-11):** en el panel "+ Agregar ejercicio", tocar un ejercicio de la
+   biblioteca lo tilda/destilda (ya no autocompleta el formulario). `libSelection[blockId]` guarda los ids en el orden
+   marcado, aparte de la lista (buscar no la pierde). Caja `.ex-lib-sel`: "N seleccionados", lista numerada con ×,
+   "Limpiar" y "Agregar N ejercicios" → `addSelectedExercises` inserta de a uno en ese orden (nombre + video de la
+   biblioteca, `touchLibraryUsage`). Los ya vinculados al bloque (mismo nombre, sin mayúsculas/espacios) se muestran
+   "✓ Ya en el bloque" sin casilla y se saltean al agregar. Si falla uno, frena y quedan marcados los que faltan.
+   "Cancelar" vacía la selección. El formulario manual (nombre + link + "Guardar ejercicio") sigue igual.
+   **Orden:** admin (`attachExercises`) y portal leen `exercise_links` ordenado por `created_at`.
 4. **Buscador de YouTube** integrado (YouTube Data API v3) dentro del mini-panel de ejercicio.
    ⚠️ La API key está **hardcodeada en el JS del front** (`YT_API_KEY`, pública) — restringirla por
    dominio en Google Cloud; idealmente moverla a una Edge Function más adelante.

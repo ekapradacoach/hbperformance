@@ -1856,7 +1856,7 @@
       // Ejercicios linkeados (degrada si la tabla no existe)
       const exByBlock = {};
       const { data: exs, error: exErr } = await sb.from('exercise_links')
-        .select('id, block_id, name, youtube_url').in('block_id', ids);
+        .select('id, block_id, name, youtube_url').in('block_id', ids).order('created_at', { ascending: true }); // orden de carga
       if (!exErr) (exs || []).forEach(e => { (exByBlock[e.block_id] = exByBlock[e.block_id] || []).push(e); });
 
       // Imágenes de comentarios, indexadas por completion_id (degrada si no existe la tabla/bucket)

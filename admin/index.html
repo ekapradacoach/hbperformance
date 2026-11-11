@@ -867,6 +867,24 @@
   /* Cancelar como link liviano (no botón con peso) */
   .ex-cancel-link { background: none; border: none; color: var(--text-secondary); text-decoration: underline; cursor: pointer; font-family: var(--font-body); font-size: 0.88rem; padding: 8px 6px; }
   .ex-cancel-link:hover { color: var(--text); }
+  /* ---- Selección múltiple de la biblioteca (2026-11-11) ---- */
+  .ex-lib-hint { font-size: 0.75rem; color: #7a7a7a; }
+  .ex-lib-cb { flex-shrink: 0; width: 18px; height: 18px; border: 1.5px solid #555; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; font-size: 0.72rem; font-weight: 900; color: transparent; }
+  .ex-lib-item.sel { background: rgba(245,168,0,0.1); color: var(--accent); }
+  .ex-lib-item.sel .ex-lib-cb { background: var(--accent); border-color: var(--accent); color: #0A0A0A; }
+  .ex-lib-item.linked { cursor: default; color: #777; }
+  .ex-lib-item.linked:hover { background: transparent; color: #777; }
+  .ex-lib-tag { flex-shrink: 0; font-size: 0.72rem; color: #66d98a; }
+  .ex-lib-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .ex-lib-sel { margin-top: 8px; background: rgba(245,168,0,0.06); border: 1px solid rgba(245,168,0,0.35); border-radius: 8px; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+  .ex-lib-sel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 0.82rem; font-weight: 700; color: var(--accent); }
+  .ex-lib-sel-clear { background: none; border: none; color: var(--text-secondary); text-decoration: underline; cursor: pointer; font-family: var(--font-body); font-size: 0.8rem; padding: 0; }
+  .ex-lib-sel-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+  .ex-lib-sel-list li { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 0.84rem; color: var(--text); }
+  .ex-lib-sel-list li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ex-lib-sel-x { flex-shrink: 0; background: none; border: none; color: var(--text-secondary); cursor: pointer; font-size: 0.95rem; line-height: 1; padding: 2px 4px; }
+  .ex-lib-sel-x:hover { color: #ff7b7b; }
+  .ex-lib-sel-add { width: 100%; }
   .ex-lib-row { display: flex; align-items: center; }
   .ex-lib-row .ex-lib-item { flex: 1; min-width: 0; }
   .ex-lib-link { flex-shrink: 0; background: none; border: none; cursor: pointer; opacity: 0.55; font-size: 0.85rem; padding: 0 8px; align-self: stretch; }
@@ -3327,7 +3345,8 @@
       blockList.forEach(b => { b.exercises = []; });
       const ids = blockList.map(b => b.id);
       if (!ids.length) return;
-      const { data, error } = await sb.from('exercise_links').select('*').in('block_id', ids);
+      // Orden de carga: así se respetan los que se agregaron juntos, en el orden en que se marcaron
+      const { data, error } = await sb.from('exercise_links').select('*').in('block_id', ids).order('created_at', { ascending: true });
       if (error) { console.warn('exercise_links no disponible:', error.message); return; }
       const byBlock = {};
       (data || []).forEach(e => { (byBlock[e.block_id] = byBlock[e.block_id] || []).push(e); });
@@ -3408,7 +3427,9 @@
                 <div class="ex-lib">
                   <div class="ex-lib-title">Biblioteca de ejercicios</div>
                   <input class="ex-lib-search" placeholder="🔎 Buscar…" autocomplete="off">
+                  <div class="ex-lib-hint">Tocá los ejercicios para marcarlos y agregalos todos juntos.</div>
                   <div class="ex-lib-list"></div>
+                  <div class="ex-lib-sel" style="display:none;"></div>
                 </div>
               </div>
             </div>
@@ -3557,13 +3578,26 @@
           libList.innerHTML = '<div class="ex-lib-empty">Cargando…</div>';
           await loadExerciseLibrary(); // precarga la cache global de la biblioteca
           renderLibList(card, libSearch.value); // vacío → "Usados recientemente" (top 3)
+          renderLibSel(card);                   // lo marcado antes (si se cerró sin Cancelar) sigue ahí
           refreshLibAddBtn(card);
         }
       });
       card.querySelector('.ex-cancel-btn').addEventListener('click', () => {
         panel.style.display = 'none'; nameEl.value = ''; urlEl.value = '';
         libSearch.value = '';
+        libSelection[b.id] = [];   // Cancelar descarta lo marcado
+        renderLibSel(card);
         refreshLibAddBtn(card);
+      });
+      // Selección múltiple: quitar uno, limpiar, agregar todos (delegado: el contenido se redibuja)
+      card.querySelector('.ex-lib-sel').addEventListener('click', (e) => {
+        const x = e.target.closest('.ex-lib-sel-x');
+        if (x) { toggleLibSelection(card, x.dataset.id); return; }
+        if (e.target.closest('.ex-lib-sel-clear')) {
+          libSelection[b.id] = [];
+          renderLibList(card, libSearch.value); renderLibSel(card); return;
+        }
+        if (e.target.closest('.ex-lib-sel-add')) addSelectedExercises(b, card);
       });
       card.querySelector('.ex-search-btn').addEventListener('click', () => openYtSearch(b.id));
       card.querySelector('.ex-save-btn').addEventListener('click', () => saveExercise(b, card));
@@ -3635,19 +3669,30 @@
           : '<div class="ex-lib-empty">Escribí para buscar en la biblioteca.</div>';
         return;
       }
-      listEl.innerHTML = header + items.map(e =>
-        `<div class="ex-lib-row">
-           <button type="button" class="ex-lib-item" data-id="${esc(e.id)}">
-             <span class="ex-lib-name">${esc(e.name)}</span>
+      // Selección múltiple: tildados (en el orden marcado) y ya vinculados a este bloque (sin casilla)
+      const b = blockOfCard(card);
+      const sel = selectionOf(card);
+      listEl.innerHTML = header + items.map(e => {
+        const linked = b && blockHasExercise(b, e.name);
+        const on = !linked && sel.includes(String(e.id));
+        return `<div class="ex-lib-row">
+           <button type="button" class="ex-lib-item${on ? ' sel' : ''}${linked ? ' linked' : ''}" data-id="${esc(e.id)}"
+             ${linked ? 'aria-disabled="true" title="Ya está vinculado a este bloque"' : `aria-pressed="${on}"`}>
+             <span class="ex-lib-left">
+               ${linked ? '' : '<span class="ex-lib-cb" aria-hidden="true">✓</span>'}
+               <span class="ex-lib-name">${esc(e.name)}</span>
+             </span>
+             ${linked ? '<span class="ex-lib-tag">✓ Ya en el bloque</span>' : ''}
              ${e.video_url ? '<span class="ex-lib-has">🎥</span>' : ''}
              ${e.rm_source_id ? '<span class="ex-lib-has" title="Hereda RM">🔗</span>' : ''}
            </button>
            <button type="button" class="ex-lib-more" data-id="${esc(e.id)}" title="Opciones">⋮</button>
-         </div>`).join('');
+         </div>`;
+      }).join('');
       listEl.querySelectorAll('.ex-lib-item').forEach(it => {
         it.addEventListener('click', () => {
-          const ex = (exerciseLibrary || []).find(x => String(x.id) === String(it.dataset.id));
-          if (ex) pickFromLibrary(card, ex);
+          if (it.classList.contains('linked')) { flash('Ese ejercicio ya está vinculado a este bloque.'); return; }
+          toggleLibSelection(card, it.dataset.id);
         });
       });
       listEl.querySelectorAll('.ex-lib-more').forEach(mb => {
@@ -3659,15 +3704,76 @@
       });
     }
 
-    // Autocompleta nombre+URL desde un ejercicio de la biblioteca y marca su uso reciente.
-    function pickFromLibrary(card, ex) {
-      card.querySelector('.ex-name').value = ex.name || '';
-      card.querySelector('.ex-url').value = ex.video_url || '';
+    // ---- Selección múltiple de la biblioteca (2026-11-11) ----
+    // libSelection[blockId] = ids de exercise_library en el orden en que se tildaron. Vive aparte de la lista,
+    // así buscar o volver a "recientes" no la pierde. Se vacía al agregar o con "Cancelar".
+    const libSelection = {};
+    function blockOfCard(card) { return (blocks || []).find(x => String(x.id) === String(card.dataset.id)) || null; }
+    function selectionOf(card) {
+      const id = card.dataset.id;
+      // Si un ejercicio se borró de la biblioteca, sale de la selección
+      const alive = new Set((exerciseLibrary || []).map(e => String(e.id)));
+      libSelection[id] = (libSelection[id] || []).filter(x => alive.has(x));
+      return libSelection[id];
+    }
+    const normExName = s => String(s || '').trim().toLowerCase();
+    function blockHasExercise(b, name) { return (b.exercises || []).some(x => normExName(x.name) === normExName(name)); }
+    function toggleLibSelection(card, exId) {
+      const sel = selectionOf(card);
+      const i = sel.indexOf(String(exId));
+      if (i >= 0) sel.splice(i, 1); else sel.push(String(exId)); // volver a tildar → pasa al final
+      renderLibList(card, card.querySelector('.ex-lib-search').value);
+      renderLibSel(card);
+    }
+    function renderLibSel(card) {
+      const box = card.querySelector('.ex-lib-sel');
+      const sel = selectionOf(card);
+      if (!sel.length) { box.style.display = 'none'; box.innerHTML = ''; return; }
+      const byId = {};
+      (exerciseLibrary || []).forEach(e => { byId[String(e.id)] = e; });
+      const n = sel.length, word = n === 1 ? 'ejercicio' : 'ejercicios';
+      box.innerHTML = `
+        <div class="ex-lib-sel-head"><span>${n} ${n === 1 ? 'seleccionado' : 'seleccionados'}</span>
+          <button type="button" class="ex-lib-sel-clear">Limpiar</button></div>
+        <ol class="ex-lib-sel-list">${sel.map((id, i) => `<li><span>${i + 1}. ${esc((byId[id] || {}).name || '')}</span>
+          <button type="button" class="ex-lib-sel-x" data-id="${esc(id)}" title="Quitar" aria-label="Quitar">✕</button></li>`).join('')}</ol>
+        <button type="button" class="btn-primary ex-lib-sel-add">Agregar ${n} ${word}</button>`;
+      box.style.display = 'flex';
+    }
+    // Vincula los marcados al bloque de a uno, en el orden en que se tildaron. Saltea los que ya están.
+    async function addSelectedExercises(b, card) {
+      const sel = selectionOf(card).slice();
+      if (!sel.length) return;
+      const btn = card.querySelector('.ex-lib-sel-add');
+      btn.disabled = true; btn.textContent = 'Agregando…';
+      const byId = {};
+      (exerciseLibrary || []).forEach(e => { byId[String(e.id)] = e; });
+      b.exercises = b.exercises || [];
+      let added = 0, skipped = 0, failedAt = -1;
+      for (let i = 0; i < sel.length; i++) {
+        const ex = byId[sel[i]];
+        if (!ex || blockHasExercise(b, ex.name)) { skipped++; continue; }
+        const { data, error } = await sb.from('exercise_links')
+          .insert({ block_id: b.id, name: ex.name, youtube_url: ex.video_url || null }).select().single();
+        if (error) { failedAt = i; console.warn('No se pudo vincular el ejercicio:', error.message); break; }
+        b.exercises.push(data);
+        added++;
+        touchLibraryUsage(ex); // "usados recientemente" (no bloquea)
+      }
+      card.querySelector('.ex-chips').innerHTML = exerciseChipsHtml(b);
+      wireChips(b, card);
+      if (failedAt >= 0) {
+        libSelection[b.id] = sel.slice(failedAt); // quedan marcados los que faltan
+        renderLibList(card, card.querySelector('.ex-lib-search').value);
+        renderLibSel(card);
+        flash(`Se ${added === 1 ? 'agregó' : 'agregaron'} ${added} de ${sel.length - skipped}. Probá de nuevo para los que quedaron marcados.`);
+        return;
+      }
+      libSelection[b.id] = [];
       card.querySelector('.ex-lib-search').value = '';
-      touchLibraryUsage(ex);          // registra last_used_at (no bloquea el autocompletar)
-      renderLibList(card, '');        // vuelve a "recientes" (este queda arriba)
-      refreshLibAddBtn(card);         // el nombre ya existe → "✓ En biblioteca"
-      card.querySelector('.ex-name').focus();
+      renderLibSel(card);
+      card.querySelector('.ex-panel').style.display = 'none';
+      flash(`Se ${added === 1 ? 'agregó 1 ejercicio' : 'agregaron ' + added + ' ejercicios'}` + (skipped ? ` · ${skipped} ya ${skipped === 1 ? 'estaba' : 'estaban'} en el bloque` : ''));
     }
 
     // Marca el ejercicio como usado recientemente (cache local + UPDATE en la base).
@@ -4061,6 +4167,8 @@
       b.exercises = (b.exercises || []).filter(x => x.id !== ex.id);
       card.querySelector('.ex-chips').innerHTML = exerciseChipsHtml(b);
       wireChips(b, card);
+      // Si la biblioteca está abierta, el quitado vuelve a poder marcarse
+      if (card.querySelector('.ex-panel').style.display !== 'none') renderLibList(card, card.querySelector('.ex-lib-search').value);
     }
 
     function openExerciseModal(ex) {
