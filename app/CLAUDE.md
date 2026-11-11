@@ -306,6 +306,13 @@ Editor de planificación (dentro de `admin/index.html`, para grupos y asesorías
 4. **Buscador de YouTube** integrado (YouTube Data API v3) dentro del mini-panel de ejercicio.
    ⚠️ La API key está **hardcodeada en el JS del front** (`YT_API_KEY`, pública) — restringirla por
    dominio en Google Cloud; idealmente moverla a una Edge Function más adelante.
+4b. **Escala RPE por bloque** (2026-11-11) — **casilla "RPE"** al lado de "+ Vincular RM". Se guarda como la marca
+   **`[[rpe]]`** al final de `planning_blocks.content` (sin columna nueva), pero **el editor nunca la muestra**: el
+   textarea tiene el texto sin la marca (`removeRpeMark`) y al guardar se arma con `contentWithRpe(texto, tildada)`
+   (también al vincular un RM). Si alguien la escribe a mano, se saca del texto y se tilda la casilla. Viaja al
+   copiar/pegar día y semana. En el portal (`blockCardHtml`) la marca no se muestra y el bloque
+   lleva un botón **"📊 RPE"** que abre el modal `#rpeModal` con la escala de Borg CR-10 (0–10, colores fijos en
+   `RPE_SCALE`), solo informativo: no guarda nada. Se cierra con la X, tocando afuera o con Escape.
 5. **Comentario + fotos del atleta (solo lectura)** — cuando el editor es de una **asesoría**
    (`editorCtx.athleteId` seteado), debajo del contenido de cada bloque se muestra lo que dejó el atleta
    en ese bloque. `attachAthleteComments` trae `block_completions` (con `id` + embed

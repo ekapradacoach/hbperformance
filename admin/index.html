@@ -881,7 +881,11 @@
   .ex-lib-menu-pop .elm-item.danger:hover { background: rgba(226,59,59,0.12); color: #e05252; }
 
   /* ---- Vincular RM (editor) ---- */
-  .rm-linkbar { margin: 6px 0 2px; }
+  .rm-linkbar { margin: 6px 0 2px; display: flex; gap: 8px; flex-wrap: wrap; }
+  /* ---- RPE (marca [[rpe]] en el texto del bloque) ---- */
+  .rpe-check { display: inline-flex; align-items: center; gap: 6px; font-size: 0.85rem; font-weight: 700; color: var(--text-secondary); cursor: pointer; padding: 6px 10px; border: 1px solid #333; border-radius: 6px; user-select: none; }
+  .rpe-check input { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; margin: 0; }
+  .rpe-check:has(input:checked) { color: var(--accent); border-color: var(--accent); background: rgba(245,168,0,0.1); }
   /* ---- (legacy) Ejercicios con RM ---- */
   .rm-section { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 12px; }
   .rm-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
@@ -3375,9 +3379,12 @@
           </div>
         </div>
         <div class="block-body">
-          <textarea class="block-content" placeholder="Escribí el contenido del bloque…">${esc(b.content)}</textarea>
+          <textarea class="block-content" placeholder="Escribí el contenido del bloque…">${esc(removeRpeMark(b.content))}</textarea>
           <div class="rm-linkbar">
             <button class="btn-sm rm-link-btn" title="Seleccioná un % en el texto y vinculalo a un ejercicio">+ Vincular RM</button>
+            <label class="rpe-check" title="El alumno ve un botón RPE en este bloque, que abre la escala de esfuerzo (Borg CR-10)">
+              <input type="checkbox" class="rpe-cb" ${hasRpeMark(b.content) ? 'checked' : ''}> RPE
+            </label>
           </div>
           <div class="exercises">
             <div class="ex-label">Ejercicios</div>
@@ -3485,10 +3492,20 @@
 
       // Contenido + auto-resize
       autoResize(contentEl);
+      const rpeCb = card.querySelector('.rpe-cb');
       contentEl.addEventListener('input', () => {
+        // Si alguien escribe la marca a mano, se saca del texto y se tilda la casilla
+        if (hasRpeMark(contentEl.value)) { contentEl.value = removeRpeMark(contentEl.value); rpeCb.checked = true; }
         autoResize(contentEl);
-        b.content = contentEl.value;
+        b.content = contentWithRpe(contentEl.value, rpeCb.checked);
         scheduleSave(b);
+      });
+
+      // RPE: casilla por bloque (el alumno ve el botón con la escala)
+      rpeCb.addEventListener('change', () => {
+        b.content = contentWithRpe(contentEl.value, rpeCb.checked);
+        scheduleSave(b);
+        flash(rpeCb.checked ? 'RPE activado: el alumno verá el botón con la escala' : 'RPE desactivado en este bloque');
       });
 
       // Ejercicios linkeados
@@ -3790,6 +3807,21 @@
       if (menu.classList.contains('show') && !menu.contains(e.target)) hideExLibMenu();
     });
 
+    // ---- RPE: casilla por bloque. Se guarda como marca [[rpe]] al final de planning_blocks.content (sin SQL), pero
+    // el editor NUNCA la muestra: el textarea tiene el texto sin la marca y la casilla dice si está activa.
+    // El portal oculta la marca y muestra el botón con la escala. Copiar/pegar días y semanas la conserva.
+    function hasRpeMark(content) { return /\[\[\s*rpe\s*\]\]/i.test(String(content || '')); }
+    function removeRpeMark(content) {
+      // Saca la marca (todas) y la línea que quede vacía por ella
+      return String(content || '').replace(/[ \t]*\[\[\s*rpe\s*\]\][ \t]*(\r?\n)?/gi, '').replace(/\s+$/, '');
+    }
+    // Contenido a guardar: el texto del editor tal cual y, si la casilla está tildada, la marca al final.
+    function contentWithRpe(text, on) {
+      if (!on) return text;
+      const c = String(text || '').replace(/\s+$/, '');
+      return c ? c + '\n[[rpe]]' : '[[rpe]]';
+    }
+
     // ---- Vincular RM (marca en el texto libre del bloque) ----
     let vincularCtx = null; // { b, ta, selStart, selEnd, percent }
     function openVincularRm(b, card) {
@@ -3895,7 +3927,8 @@
       const { b, ta, selStart, selEnd, percent } = vincularCtx;
       const mark = `${percent}% [[rm:${ex ? ex.name : 'ejercicio'}]]`;
       ta.value = ta.value.slice(0, selStart) + mark + ta.value.slice(selEnd);
-      b.content = ta.value;
+      const rpeCb = ta.closest('.block-card') && ta.closest('.block-card').querySelector('.rpe-cb');
+      b.content = contentWithRpe(ta.value, !!(rpeCb && rpeCb.checked)); // conserva el RPE del bloque
       autoResize(ta);
       scheduleSave(b);
       closeModal('modalVincularRm');

@@ -358,6 +358,25 @@
   .pb-check input:checked ~ .pb-check-lbl { color: var(--accent); }
 
   .pb-content { font-size: 0.95rem; line-height: 1.55; white-space: pre-line; color: var(--text); word-break: break-word; }
+  /* ---- RPE: botón del bloque y modal de la escala de Borg CR-10 ---- */
+  .pb-rpe-btn { margin-top: 14px; display: inline-flex; align-items: center; gap: 6px; background: rgba(245,168,0,0.1); border: 1px solid rgba(245,168,0,0.5); color: var(--accent); font-family: var(--font-body); font-weight: 700; font-size: 0.88rem; letter-spacing: 0.5px; padding: 8px 14px; border-radius: 999px; cursor: pointer; }
+  .pb-rpe-btn:hover { background: rgba(245,168,0,0.18); }
+  .rpe-modal { display: none; position: fixed; inset: 0; z-index: 3000; background: rgba(0,0,0,0.78); align-items: center; justify-content: center; padding: 16px; }
+  .rpe-modal.show { display: flex; }
+  .rpe-card { position: relative; width: 100%; max-width: 440px; max-height: calc(100vh - 32px); overflow-y: auto; background: #1A1A1A; border: 1px solid #2a2a2a; border-radius: 16px; padding: 22px 18px 16px; box-shadow: 0 20px 50px rgba(0,0,0,0.5); }
+  .rpe-close { position: absolute; top: 10px; right: 10px; width: 36px; height: 36px; border-radius: 50%; border: 1px solid #333; background: #111; color: #ddd; font-size: 1rem; cursor: pointer; }
+  .rpe-close:hover { border-color: var(--accent); color: var(--accent); }
+  .rpe-head { display: flex; align-items: center; gap: 12px; padding-right: 40px; }
+  .rpe-big { font-family: var(--font-display); font-weight: 900; font-size: 2.6rem; line-height: 1; letter-spacing: -1px; color: var(--accent); }
+  .rpe-sub { color: #ddd; font-weight: 600; font-size: 0.95rem; line-height: 1.25; }
+  .rpe-q { color: var(--text-secondary); font-size: 0.95rem; margin: 10px 0 14px; }
+  .rpe-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+  .rpe-row { display: flex; align-items: center; gap: 14px; border-radius: 8px; padding: 6px 12px; color: #1a1a1a; }
+  .rpe-num { display: flex; flex-direction: column; align-items: center; min-width: 34px; font-family: var(--font-display); font-weight: 900; font-size: 1.35rem; line-height: 1; }
+  .rpe-num small { font-size: 0.55rem; font-weight: 800; letter-spacing: 1px; margin-bottom: 2px; opacity: 0.8; }
+  .rpe-txt { font-weight: 700; font-size: 0.98rem; }
+  .rpe-row.rpe-light { color: #fff; }
+  .rpe-foot { color: #888; font-size: 0.75rem; margin: 12px 0 0; text-align: center; }
 
   /* Ejercicios */
   .pb-ex { border-top: 1px solid var(--border); padding-top: 12px; margin-top: 14px; }
@@ -1333,6 +1352,17 @@
   </div>
 
   <!-- ===== Modal de imagen (compartido: bloques + comunidad) ===== -->
+  <!-- Escala RPE de Borg CR-10 (bloques con la marca [[rpe]]). Solo informativa. -->
+  <div class="rpe-modal" id="rpeModal" role="dialog" aria-modal="true" aria-labelledby="rpeTitle">
+    <div class="rpe-card">
+      <button type="button" class="rpe-close" id="rpeClose" aria-label="Cerrar">✕</button>
+      <div class="rpe-head"><span class="rpe-big" id="rpeTitle">RPE</span><span class="rpe-sub">Escala de esfuerzo percibido</span></div>
+      <p class="rpe-q">¿Cuánto esfuerzo te pidió este bloque?</p>
+      <ol class="rpe-rows" id="rpeRows"></ol>
+      <p class="rpe-foot">Escala de Borg CR-10 (Borg, 1982; Foster et al., 2001).</p>
+    </div>
+  </div>
+
   <div class="img-modal" id="imgModal">
     <button class="img-modal-close" id="imgModalClose" aria-label="Cerrar">✕</button>
     <img id="imgModalImg" src="" alt="Imagen">
@@ -1895,13 +1925,48 @@
             <span class="pb-check-lbl">Completado</span>
           </label>
         </div>
-        ${b.content ? `<div class="pb-content">${renderRmContent(b.content)}</div>` : ''}
+        ${visibleContent(b.content) ? `<div class="pb-content">${renderRmContent(visibleContent(b.content))}</div>` : ''}
         ${exHtml}
+        ${hasRpeMark(b.content) ? '<button type="button" class="pb-rpe-btn" aria-haspopup="dialog">📊 RPE</button>' : ''}
         ${blockCartelesHtml(b, cartelState)}
         <div class="pb-comment">${commentHtml(b)}</div>
         <div class="pb-imgs">${blockImgsHtml(b)}</div>
       </div>`;
     }
+
+    // ---- RPE (marca [[rpe]] en el texto del bloque, la pone el admin) ----
+    // La marca no se muestra: el bloque lleva un botón que abre la escala de Borg CR-10. Solo informativo.
+    function hasRpeMark(content) { return /\[\[\s*rpe\s*\]\]/i.test(String(content || '')); }
+    function visibleContent(content) {
+      return String(content || '').replace(/[ \t]*\[\[\s*rpe\s*\]\][ \t]*(\r?\n)?/gi, '').replace(/\s+$/, '');
+    }
+    const RPE_SCALE = [
+      [0, 'Reposo', '#C8E6C9'], [1, 'Muy, muy ligero', '#A5D6A7'], [2, 'Muy ligero', '#81C784'], [3, 'Ligero', '#4CAF50'],
+      [4, 'Algo pesado', '#9CCC65'], [5, 'Pesado', '#D4E157'], [6, 'Más pesado', '#FFEB3B'], [7, 'Muy pesado', '#FFC107'],
+      [8, 'Muy, muy pesado', '#FF9800'], [9, 'Máximo', '#F4511E', true], [10, 'Extremo', '#C62828', true],
+    ];
+    let rpeLastFocus = null;
+    function openRpeModal() {
+      const list = document.getElementById('rpeRows');
+      if (!list.childElementCount) {
+        list.innerHTML = RPE_SCALE.map(([n, txt, bg, light]) =>
+          `<li class="rpe-row${light ? ' rpe-light' : ''}" style="background:${bg}">
+             <span class="rpe-num"><small>RPE</small>${n}</span><span class="rpe-txt">${txt}</span>
+           </li>`).join('');
+      }
+      rpeLastFocus = document.activeElement;
+      document.getElementById('rpeModal').classList.add('show');
+      document.getElementById('rpeClose').focus();
+    }
+    function closeRpeModal() {
+      document.getElementById('rpeModal').classList.remove('show');
+      if (rpeLastFocus && rpeLastFocus.focus) rpeLastFocus.focus();
+    }
+    document.getElementById('rpeClose').addEventListener('click', closeRpeModal);
+    document.getElementById('rpeModal').addEventListener('click', (e) => { if (e.target.id === 'rpeModal') closeRpeModal(); });
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && document.getElementById('rpeModal').classList.contains('show')) closeRpeModal();
+    });
 
     // ---- Sistema de RM (marcas [[rm:Nombre]] en el texto libre) ----
     const RM_MARK_RE = /(\d+(?:[.,]\d+)?)\s*%\s*\[\[rm:\s*([^\]]+?)\s*\]\]/g;
@@ -2076,6 +2141,7 @@
       if (!b) return;
       const chip = e.target.closest('.pb-chip');
       if (chip) { const ex = (b.exercises || []).find(x => String(x.id) === chip.dataset.ex); openVideo(ex); return; }
+      if (e.target.closest('.pb-rpe-btn')) { openRpeModal(); return; }
       // Cartel de RM en el bloque: guardar o declinar
       if (e.target.closest('.rm-reg-save')) { registerRm(e.target.closest('.pb-rm-register')); return; }
       if (e.target.closest('.rm-reg-decline')) { declineRm(e.target.closest('.pb-rm-register')); return; }
