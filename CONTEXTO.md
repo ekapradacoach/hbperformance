@@ -939,7 +939,31 @@ Script: la hora se muestra en formato de 24 horas. Sin commit ni push.
 - **Registro nuevo `mp_webhook_log`:** una fila por aviso, con ids de MP, estados, respuesta y resultado (`registrado` / `ya_estaba` / `cobro_sin_registrar` / `saltado` / `error`). Sin datos personales. Solo admin lee. Aditivo: no cambia ninguna respuesta (la simulación de etapa 6 da 402 de 402 escenarios idénticos). Si el SQL no está corrido, el registro falla en silencio.
 - **Pruebas:** simulación de pagos 23 de 23 (resultado por aviso, sin mails, falla del registro sin efecto, cuota sin estado del pago), `process-payment.sim` 52 de 52, etapa 6 OK.
 - **Propuesto, sin construir:** registrar también desde los avisos `payment` (solo pagos aprobados de una suscripción ya vinculada, sin altas) y el botón "Sincronizar con MP".
-- ⏳ **Pendiente (Erika):** correr `20261113_mp_webhook_log.sql` y después deployar `process-payment`.
+- ✅ **Hecho (13/11):** SQL corrido y `process-payment` deployado (ver la entrada siguiente).
+
+### 2026-11-13 (b) — Deploy de process-payment, verificación de los cobros sin registrar y próximos pasos
+**Deploys hechos (confirmados por Erika):**
+- `20261113_mp_webhook_log.sql` corrido en el SQL Editor. Verificación: tabla = 1, rls = true, policies = 1.
+- `process-payment` deployado desde el panel de Supabase con la versión del commit c4ae58a, que incluye el arreglo A (790066a) y el registro de avisos. Verificado que aparecen `approvedChargePending` y `recordWebhookResult`. Verify JWT sigue en OFF.
+- Ya no queda nada pendiente de deploy de `process-payment`.
+
+**Resultados de la verificación:**
+- Contra MP: los 4 casos de cobros no registrados (A, B, C y D) tenían guardado el id de suscripción correcto. Se descarta "id mal cargado" como causa.
+- Causa más probable: avisos solapados, avisos tempranos, cuota en `recycling`, o aviso de cuota que no llega o llega sin estado. No se pudo confirmar cuál en cada caso por falta de logs de esas fechas.
+- No hay suscripciones repetidas en más de un perfil.
+- Hay 18 pagos cargados a mano sin `mp_payment_id` (cargas viejas de suscripción MP). Para el futuro botón "Sincronizar con MP" hay que marcarlos como posibles duplicados.
+- Pagos con monto de hasta $100: 0 filas. El plan de prueba técnica de la Fase 2 no contamina Ingresos.
+
+**Tabla `mp_webhook_log`:** una fila por aviso de MP procesado: fecha, tipo y acción del aviso, ids de suscripción y de pago, estados del cobro, de la cuota y de la suscripción, respuesta dada a MP y resultado (`registrado` / `ya_estaba` / `cobro_sin_registrar` / `saltado` / `error`) con un motivo corto. No guarda mails ni nombres. Solo la leen los admin. Por ahora se consulta desde el SQL Editor:
+`select received_at, event_type, preapproval_id, payment_id, charge_status, invoice_status, http_status, result, reason from mp_webhook_log order by received_at desc limit 50;`
+
+**Pendientes / próximos pasos:**
+- Probar con las renovaciones reales del 15/11 y el 17/11: si un cobro no aparece en Pagos, revisar `mp_webhook_log` y los logs de `process-payment` dentro de las 24 horas.
+- Riesgo abierto: un cobro aprobado con la cuota en `recycling` se registra, pero puede marcarle un fallo de cobro a quien pagó. Observar si ocurre.
+- Falta confirmar en MP (Tus integraciones → Webhooks) qué eventos están activados, en especial "Pagos", y si el pago trae el id de suscripción. De eso dependen la segunda vía de registro por avisos `payment` y el botón "Sincronizar con MP".
+- Botón "Sincronizar con MP": propuesto, **no construido**. Diseño: buscar por cuenta en `/v1/payments/search` (60 días por defecto, paginado); clasificar sin guardar (ya registrado / faltante con perfil por suscripción / faltante sin perfil, que nunca se asigna por mail / plan de prueba técnica, excluido); marcar posibles duplicados contra las cargas sin `mp_payment_id` (mismo alumno, mismo monto, pocos días de diferencia); guardar solo lo que Erika tilde, con `ON CONFLICT (mp_payment_id) DO NOTHING`; no tocar vencimientos, gracia ni acceso; solo admin.
+- Sin construir: bandeja de "pagos sin asignar" y aviso en el checkout de usar el mismo email que en MP.
+- `update-athlete-email`: el código y el botón "✏️ Editar email" del admin están en el repo desde el 26/10 (14fcbc7). ⏳ Falta confirmar si la función está deployada en Supabase.
 
 ## Mantenimiento / pendientes
 Lo que no bloquea la Fase 2 ni arriesga a los alumnos actuales. Una línea y su prioridad.

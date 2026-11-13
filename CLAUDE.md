@@ -159,6 +159,22 @@ en el muro para revelar las 4 restantes (`.testi-more`), cambiando a "Ver menos"
 - ⚠️ Limitación conocida: el pixel del navegador **pierde compras** con ad-blockers / Safari ITP. Mejora futura:
   **Conversions API server-side** desde `process-payment` (no implementado). Por ahora, versión estándar.
 
+## Pagos de MP — registro y diagnóstico (2026-11-13)
+- **Deployado** `process-payment` con la versión de c4ae58a: arreglo A (790066a, ningún cobro aprobado identificado
+  sin registrar) + registro de avisos. Verify JWT en OFF. Detalle del flujo en `app/CLAUDE.md`.
+- **`mp_webhook_log`** (SQL `supabase/migrations/20261113_mp_webhook_log.sql`, ya corrido): una fila por aviso de MP con
+  fecha, tipo, acción, ids de suscripción y pago, estados (cobro, cuota, suscripción), respuesta a MP y resultado
+  (`registrado` / `ya_estaba` / `cobro_sin_registrar` / `saltado` / `error`). Sin mails ni nombres. Solo admin la lee.
+  Se consulta en el SQL Editor:
+  `select received_at, event_type, preapproval_id, payment_id, charge_status, invoice_status, http_status, result, reason from mp_webhook_log order by received_at desc limit 50;`
+- **Si un cobro no aparece en Pagos:** revisar `mp_webhook_log` y los logs de `process-payment` dentro de las 24 horas
+  (los logs de Supabase duran ~1 día).
+- ⚠️ Hay **18 pagos cargados a mano sin `mp_payment_id`** (cargas viejas de suscripción MP): cualquier sincronización
+  con MP tiene que marcarlos como posibles duplicados.
+- **Botón "Sincronizar con MP": propuesto, no construido.** Diseño y pendientes en `CONTEXTO.md` (2026-11-13 (b)).
+- ⚠️ En la bitácora y el repo, los casos de pagos se nombran por letra y fecha: sin nombres, mails, ids de suscripción
+  ni números de operación.
+
 ## Cómo trabajar
 1. Leé `CONTEXTO.md` para el estado actual.
 2. Hacé el cambio pedido respetando colores y tipografía salvo indicación contraria.
