@@ -91,6 +91,11 @@
 //   · Cancelación de MP en prueba → acceso hasta el día de fin de la prueba (subscription_end) y trial_status cancelled.
 //   · Una prueba en curso nunca se corta por fecha: solo por estos eventos.
 //
+// Cambio 2026-11-13 (resultados persistentes): cada aviso deja una fila en mp_webhook_log (ids de MP, estados,
+//   respuesta y resultado: registrado / ya_estaba / cobro_sin_registrar / saltado / error), sin mails ni nombres.
+//   Lo escribe un envoltorio después de procesar: nunca cambia la respuesta a MP y si falla solo se loguea.
+//   SQL: supabase/migrations/20261113_mp_webhook_log.sql.
+//
 // Secretos: MP_ACCESS_TOKEN, SUPABASE_URL, SERVICE_ROLE_KEY, RESEND_API_KEY, MP_WEBHOOK_SECRET.
 // ============================================================================
 
@@ -103,9 +108,19 @@ const corsHeaders = {
 const MP_API = 'https://api.mercadopago.com'
 const PROGRAMS = ['crossfit', 'hybrid', 'corredores']
 
+// Datos del aviso en curso para mp_webhook_log, por cliente de Supabase (uno por aviso): así registerMpPayment
+// anota el resultado sin cambiar su firma, y dos avisos simultáneos no se mezclan.
+const WEBHOOK_CTX = new WeakMap<object, any>()
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
+  const ctx: any = {}
+  const res = await handleWebhook(req, ctx)
+  await recordWebhookResult(ctx, res)
+  return res
+})
 
+async function handleWebhook(req: Request, ctx: any): Promise<Response> {
   try {
     // --- I1: validar la firma del webhook de MP (MODO MONITOR: loguea pero NO bloquea) ---
     // Va primero, antes de cualquier fetch/mutación, para quedar listo para el enforce futuro.
@@ -119,6 +134,7 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SERVICE_ROLE_KEY') ?? ''
     )
+    WEBHOOK_CTX.set(adminClient, ctx)
     const MP_TOKEN = Deno.env.get('MP_ACCESS_TOKEN')
 
     // --- Parseo robusto: body JSON y/o querystring (IPN) ---
@@ -133,6 +149,9 @@ Deno.serve(async (req) => {
     const type = String(body?.type || body?.topic || qpType || '')
     const action = String(body?.action || '')
     const resourceId = body?.data?.id || body?.id || qpId
+    ctx.eventType = type || null
+    ctx.action = action || null
+    ctx.resourceId = resourceId ? String(resourceId) : null
 
     if (!resourceId) {
       return json({ ok: true, skipped: 'no-resource-id' })
@@ -152,6 +171,7 @@ Deno.serve(async (req) => {
     if (type.includes('preapproval')) {
       // subscription_preapproval / preapproval → data.id ES la preapproval
       preapprovalId = String(resourceId)
+      ctx.preapprovalId = preapprovalId
     } else if (type.includes('authorized_payment')) {
       // subscription_authorized_payment → data.id es un authorized_payment (una "cuota"/invoice)
       const apRes = await fetch(`${MP_API}/authorized_payments/${resourceId}`, {
@@ -177,6 +197,10 @@ Deno.serve(async (req) => {
       const invoiceStatus = ap?.status ? String(ap.status) : null
       const chargeFailed = chargeStatus === 'rejected' || invoiceStatus === 'recycling'
       const chargeApproved = chargeStatus === 'approved'
+      ctx.preapprovalId = preapprovalId
+      ctx.paymentId = ap?.payment?.id != null ? String(ap.payment.id) : null
+      ctx.chargeStatus = chargeStatus
+      ctx.invoiceStatus = invoiceStatus
 
       // Cobro todavía sin resultado: se pide reintento para volver a mirarlo cuando MP lo resuelva.
       if (!chargeFailed && chargeStatus && ['pending', 'in_process', 'authorized'].includes(chargeStatus)) {
@@ -204,6 +228,7 @@ Deno.serve(async (req) => {
             await mpChargeType(adminClient, paidProf.id, paidProf.subscription_start, paid))
           if (!saved) return json({ ok: false, error: 'No se pudo registrar el cobro' }, 500)
         } else {
+          ctx.unregistered = 'aprobado con cuota en recycling y sin perfil'
           console.error('COBRO SIN REGISTRAR: aprobado con cuota en recycling y sin perfil. preapproval:', preapprovalId, '| payment:', ap?.payment?.id)
         }
       }
@@ -323,6 +348,7 @@ Deno.serve(async (req) => {
     }
 
     const status = subscription.status
+    ctx.subscriptionStatus = status ?? null
     const mpSubscriptionId = subscription.id
     const externalReference = subscription.external_reference
 
@@ -340,6 +366,7 @@ Deno.serve(async (req) => {
     }
     const logUnregisteredCharge = (reason: string) => {
       if (approvedChargePending) {
+        ctx.unregistered = reason
         console.error('COBRO SIN REGISTRAR:', reason, '| preapproval:', preapprovalId, '| payment:', altaPayment?.id ?? '(desconocido)')
       }
     }
@@ -681,7 +708,45 @@ Deno.serve(async (req) => {
     console.error('Error:', err)
     return json({ ok: false, error: (err as Error).message }, 500)
   }
-})
+}
+
+// Guarda el resultado del aviso en mp_webhook_log. Nunca tira ni cambia la respuesta: si falla (por ejemplo, el SQL
+// todavía no se corrió) solo se loguea. Sin datos personales: ids de MP, estados y un motivo corto sin mails.
+async function recordWebhookResult(ctx: any, res: Response): Promise<void> {
+  try {
+    const body: any = await res.clone().json().catch(() => ({}))
+    const http = res.status
+    const rawReason = [body?.status, body?.skipped, body?.error, ctx.unregistered].filter(Boolean).join(' | ')
+    let result: string
+    if (http >= 500) result = 'error'
+    else if (ctx.paymentSaved) result = ctx.paymentNew === false ? 'ya_estaba' : 'registrado'
+    else if (ctx.unregistered) result = 'cobro_sin_registrar'
+    // Aviso con cobro que no terminó guardado ni explicado (ni rechazado ni en recycling): a revisar.
+    else if (ctx.paymentId && http < 400 && ctx.chargeStatus !== 'rejected' && ctx.invoiceStatus !== 'recycling') result = 'cobro_sin_registrar'
+    else result = 'saltado'
+    const reason = (result === 'cobro_sin_registrar' && !ctx.unregistered && ctx.paymentId
+      ? 'cobro en estado ' + (ctx.chargeStatus ?? 'desconocido') + (rawReason ? ' | ' + rawReason : '')
+      : rawReason)
+      .replace(/[^\s@|]+@[^\s@|]+/g, '[mail]').slice(0, 300) || null
+    const client = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SERVICE_ROLE_KEY') ?? '')
+    const { error } = await client.from('mp_webhook_log').insert({
+      event_type: ctx.eventType ?? null,
+      action: ctx.action ?? null,
+      resource_id: ctx.resourceId ?? null,
+      preapproval_id: ctx.preapprovalId ?? null,
+      payment_id: ctx.paymentId ?? null,
+      charge_status: ctx.chargeStatus ?? null,
+      invoice_status: ctx.invoiceStatus ?? null,
+      subscription_status: ctx.subscriptionStatus ?? null,
+      http_status: http,
+      result,
+      reason,
+    })
+    if (error) console.error('mp_webhook_log: no se pudo guardar el resultado del aviso:', error.message)
+  } catch (err) {
+    console.error('mp_webhook_log: excepción al guardar el resultado del aviso:', (err as Error).message)
+  }
+}
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -932,7 +997,7 @@ async function registerMpPayment(
     const netRaw = payment?.transaction_details?.net_received_amount
     const netAmount = netRaw != null && !isNaN(Number(netRaw)) ? Number(netRaw) : null
     const paidAt = arDateFromApproved(payment.date_approved)
-    const { error } = await adminClient
+    const { data: inserted, error } = await adminClient
       .from('payments')
       .upsert({
         athlete_id: athleteId,
@@ -947,10 +1012,18 @@ async function registerMpPayment(
         mp_payment_id: String(payment.id),
         prev_subscription_end: null
       }, { onConflict: 'mp_payment_id', ignoreDuplicates: true })
+      .select('id')
+    const logCtx = WEBHOOK_CTX.get(adminClient)
     if (error) {
       console.error('registerMpPayment: error insertando el pago (no bloquea el alta):', error.message)
       return false
     } else {
+      // Para mp_webhook_log: ignoreDuplicates no devuelve la fila si el pago ya estaba.
+      if (logCtx) {
+        logCtx.paymentSaved = true
+        logCtx.paymentId = String(payment.id)
+        logCtx.paymentNew = Array.isArray(inserted) ? inserted.length > 0 : null
+      }
       console.log('Pago MP registrado:', type, '| payment_id:', payment.id, '| net:', netAmount, '| paid_at:', paidAt)
     }
     return true

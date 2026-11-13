@@ -31,12 +31,15 @@ function table(name) {
       if (db.failUpsert) return { data: null, error: { message: 'falla simulada' } };
       const key = s.opts?.onConflict;
       if (key && rows.some(x => x[key] === s.value[key])) {
-        if (s.opts.ignoreDuplicates) return { data: null, error: null };
+        if (s.opts.ignoreDuplicates) return { data: [], error: null };
         return { data: null, error: { message: 'duplicate key' } };
       }
+      rows.push({ ...s.value }); return { data: [{ id: rows.length }], error: null };
+    }
+    if (s.op === 'insert') {
+      if (name === 'mp_webhook_log' && db.failLog) return { data: null, error: { message: 'tabla inexistente (simulado)' } };
       rows.push({ ...s.value }); return { data: null, error: null };
     }
-    if (s.op === 'insert') { rows.push({ ...s.value }); return { data: null, error: null }; }
     if (s.op === 'update') { rows.filter(match).forEach(x => Object.assign(x, s.value)); return { data: null, error: null }; }
     if (s.op === 'delete') { db[name] = rows.filter(x => !match(x)); return { data: null, error: null }; }
     let out = rows.filter(match);
@@ -102,13 +105,13 @@ const PRE = id => ({ type: 'subscription_preapproval', data: { id } });
 // expect.payments: filas [mp_payment_id, athlete_id, type, net] (sin contar la previa `old`).
 const cases = [
   { name: 'Renovación normal', profiles: [profile('ana')], prior: [old], mp: charge('sub-ana'),
-    steps: [{ event: INV, status: 'renewal' }], expect: { payments: [['pay1', 'u-ana', 'renovacion_automatica', NET]] } },
+    steps: [{ event: INV, status: 'renewal' }], expect: { payments: [['pay1', 'u-ana', 'renovacion_automatica', NET]], log: ['registrado'] } },
   { name: 'Aviso REPETIDO de la renovación: no duplica', profiles: [profile('ana')], prior: [old], mp: charge('sub-ana'),
-    steps: [{ event: INV, status: 'renewal' }, { event: INV, status: 'renewal' }, { event: INV, status: 'renewal' }], expect: { payments: [['pay1', 'u-ana', 'renovacion_automatica', NET]] } },
+    steps: [{ event: INV, status: 'renewal' }, { event: INV, status: 'renewal' }, { event: INV, status: 'renewal' }], expect: { payments: [['pay1', 'u-ana', 'renovacion_automatica', NET]], log: ['registrado', 'ya_estaba', 'ya_estaba'] } },
   { name: 'Alta por cobro aprobado + aviso repetido: un pago, una invitación', profiles: [], pendings: [pending('lucia')], mp: charge('sub-new', 'lucia@example.test'),
     steps: [{ event: INV }, { event: INV, status: 'renewal' }], expect: { payments: [['pay1', 'new-lucia', 'alta_nueva', NET]], calls: ['invita'] } },
   { name: 'Alta por preapproval, después el cobro: queda como alta_nueva', profiles: [], pendings: [pending('lucia')], mp: charge('sub-new'),
-    steps: [{ event: PRE('sub-new') }, { event: INV, status: 'renewal' }], expect: { payments: [['pay1', 'new-lucia', 'alta_nueva', NET]], calls: ['invita'] } },
+    steps: [{ event: PRE('sub-new') }, { event: INV, status: 'renewal' }], expect: { payments: [['pay1', 'new-lucia', 'alta_nueva', NET]], calls: ['invita'], log: ['saltado', 'registrado'] } },
   { name: 'Alta por preapproval, el cobro llega 2 veces, preapproval repetido en el medio', profiles: [], pendings: [pending('lucia')], mp: charge('sub-new'),
     steps: [{ event: PRE('sub-new') }, { event: INV, status: 'renewal' }, { event: PRE('sub-new'), status: 'already_provisioned' }, { event: INV, status: 'renewal' }], expect: { payments: [['pay1', 'new-lucia', 'alta_nueva', NET]], calls: ['invita'] } },
   { name: 'Avisos cruzados: el perfil aparece mientras se procesa el cobro', profiles: [], pendings: [pending('lucia')], mp: charge('sub-lucia'),
@@ -118,13 +121,13 @@ const cases = [
   { name: 'Suscripción distinta a la guardada, mail del pagador = perfil: registra y no revincula', profiles: [profile('ana')], prior: [old], mp: charge('sub-otra', 'ana@example.test'),
     steps: [{ event: INV, status: 'already_provisioned' }, { event: INV, status: 'already_provisioned' }], expect: { payments: [['pay1', 'u-ana', 'renovacion_automatica', NET]], sub: { ana: 'sub-ana' }, calls: [] } },
   { name: 'Sin perfil ni pending: alta manual, no asigna a nadie', profiles: [profile('ana')], mp: charge('sub-otra', 'x@example.test'),
-    steps: [{ event: INV, status: 'manual_required' }], expect: { payments: [], calls: [] } },
+    steps: [{ event: INV, status: 'manual_required' }], expect: { payments: [], calls: [], log: ['cobro_sin_registrar'] } },
   { name: 'Suscripción en dos perfiles: no adivina', profiles: [profile('ana'), profile('otra', { mp_subscription_id: 'sub-ana' })], mp: charge('sub-ana'),
-    steps: [{ event: INV, status: 'already_provisioned' }], expect: { payments: [], calls: [] } },
+    steps: [{ event: INV, status: 'already_provisioned' }], expect: { payments: [], calls: [], log: ['cobro_sin_registrar'] } },
   { name: 'Falla /v1/payments en renovación: 500 y el reintento registra', profiles: [profile('ana')], prior: [old], mp: { ...charge('sub-ana'), paymentHttp: 500 },
     steps: [{ event: INV, http: 500 }, { antes: () => { mp.paymentHttp = 0; }, event: INV, status: 'renewal' }], expect: { payments: [['pay1', 'u-ana', 'renovacion_automatica', NET]] } },
   { name: 'Falla el guardado en renovación: 500 y el reintento registra', profiles: [profile('ana')], prior: [old], mp: charge('sub-ana'), failUpsert: true,
-    steps: [{ event: INV, http: 500 }, { antes: () => { db.failUpsert = false; }, event: INV, status: 'renewal' }], expect: { payments: [['pay1', 'u-ana', 'renovacion_automatica', NET]] } },
+    steps: [{ event: INV, http: 500 }, { antes: () => { db.failUpsert = false; }, event: INV, status: 'renewal' }], expect: { payments: [['pay1', 'u-ana', 'renovacion_automatica', NET]], log: ['error', 'registrado'] } },
   { name: 'Falla el guardado en el alta: 500, el reintento registra sin reinvitar', profiles: [], pendings: [pending('lucia')], mp: charge('sub-new', 'lucia@example.test'), failUpsert: true,
     steps: [{ event: INV, http: 500 }, { antes: () => { db.failUpsert = false; }, event: INV, status: 'renewal' }], expect: { payments: [['pay1', 'new-lucia', 'alta_nueva', NET]], calls: ['invita'] } },
   { name: 'Falla la consulta de la cuota en MP: 502 para reintentar', profiles: [profile('ana')], mp: { ...charge('sub-ana'), invoiceHttp: 500 },
@@ -138,9 +141,13 @@ const cases = [
   { name: 'Cuota en recycling con pago en proceso: la gracia se marca igual que antes', profiles: [profile('ana')], prior: [old], mp: charge('sub-ana', undefined, { status: 'recycling', retry_attempt: 1, payment: { id: 'pay1', status: 'in_process' } }),
     steps: [{ event: INV, status: 'payment_failed_flagged' }], expect: { payments: [], flagged: { ana: true } } },
   { name: 'Cobro rechazado: sin pago y con gracia', profiles: [profile('ana')], prior: [old], mp: charge('sub-ana', undefined, { status: 'recycling', retry_attempt: 1, payment: { id: 'pay1', status: 'rejected' } }),
-    steps: [{ event: INV, status: 'payment_failed_flagged' }], expect: { payments: [], flagged: { ana: true } } },
+    steps: [{ event: INV, status: 'payment_failed_flagged' }], expect: { payments: [], flagged: { ana: true }, log: ['saltado'] } },
   { name: 'Plan desconocido (prueba técnica): 422 y no suma a payments', profiles: [profile('personal')], mp: { ...charge('sub-x', 'personal@example.test'), plan: 'plan-x' },
     steps: [{ event: INV, http: 422 }], expect: { payments: [], sub: { personal: 'sub-personal' } } },
+  { name: 'Cuota procesada sin estado del pago: no guarda y queda como cobro_sin_registrar en el registro', profiles: [profile('ana')], prior: [old], mp: charge('sub-ana', undefined, { payment: { id: 'pay1' } }),
+    steps: [{ event: INV, status: 'already_provisioned' }], expect: { payments: [], log: ['cobro_sin_registrar'] } },
+  { name: 'Falla el guardado del registro: la respuesta a MP y el pago no cambian', profiles: [profile('ana')], prior: [old], mp: charge('sub-ana'), failLog: true,
+    steps: [{ event: INV, status: 'renewal', http: 200 }], expect: { payments: [['pay1', 'u-ana', 'renovacion_automatica', NET]], log: [] } },
   { name: 'Suscripción cancelada sin perfil: no asigna', profiles: [], mp: { ...charge('sub-x', 'x@example.test'), subStatus: 'cancelled' },
     steps: [{ event: INV, status: 'cancelled' }], expect: { payments: [] } },
 ];
@@ -159,7 +166,7 @@ try {
 
   for (const c of cases) {
     const prior = c.prior || [];
-    db = { profiles: c.profiles.map(p => ({ ...p })), pending_subscriptions: (c.pendings || []).map(p => ({ ...p })), payments: prior.map(p => ({ ...p })), site_config: [{ key: 'mp_plan_hybrid', value: 'plan-h' }], failUpsert: !!c.failUpsert };
+    db = { profiles: c.profiles.map(p => ({ ...p })), pending_subscriptions: (c.pendings || []).map(p => ({ ...p })), payments: prior.map(p => ({ ...p })), site_config: [{ key: 'mp_plan_hybrid', value: 'plan-h' }], failUpsert: !!c.failUpsert, failLog: !!c.failLog };
     mp = { invoices: {}, payments: {}, ...structuredClone(c.mp) };
     calls = [];
     const diffs = [];
@@ -182,6 +189,14 @@ try {
       const got3 = !!db.profiles.find(p => p.id === 'u-' + n)?.payment_failed_at;
       if (got3 !== f) diffs.push(`gracia de ${n}: esperado ${f}, obtenido ${got3}`);
     }
+    const logRows = db.mp_webhook_log || [];
+    if (c.expect.log) {
+      const gotLog = logRows.map(r => r.result);
+      if (JSON.stringify(gotLog) !== JSON.stringify(c.expect.log)) diffs.push(`registro: esperado ${JSON.stringify(c.expect.log)}, obtenido ${JSON.stringify(gotLog)}`);
+    }
+    // El registro nunca guarda mails (los casos usan @example.test en perfiles, pendings y pagadores).
+    if (logRows.some(r => JSON.stringify(r).includes('@'))) diffs.push('registro: contiene un mail');
+    if (logRows.length && logRows.some(r => r.payment_id && r.result === 'registrado' && !db.payments.some(p => p.mp_payment_id === r.payment_id))) diffs.push('registro: dice registrado y el pago no está');
     if (diffs.length) { failed++; log(`FALLA  ${c.name}`); diffs.forEach(d => log('         ' + d)); }
     else log(`ok     ${c.name}`);
   }

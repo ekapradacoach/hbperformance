@@ -669,6 +669,13 @@ despliegan a mano en Supabase):
   proceso → 503. Sin perfil identificable o suscripción vinculada a 2 perfiles → log `COBRO SIN REGISTRAR` (no se adivina).
   El 1er cobro queda `alta_nueva` aunque entre por la rama de renovación. Gracia y corte no cambiaron. Antes de cada deploy:
   `node supabase/tests/process-payment-pagos.sim.mjs` y `node supabase/tests/process-payment.sim.mjs`.
+  **Registro de avisos `mp_webhook_log` (2026-11-13):** una fila por aviso procesado (fecha, tipo, acción, id del recurso,
+  suscripción, id del pago, estado del cobro, de la cuota y de la suscripción, respuesta HTTP, `result` y `reason`). `result`:
+  `registrado` / `ya_estaba` / `cobro_sin_registrar` / `saltado` / `error`. Sin mails ni nombres (el motivo se limpia de
+  mails). La escribe un envoltorio de `Deno.serve` después de procesar: no cambia la respuesta a MP y si falla solo se
+  loguea. `registerMpPayment` anota el resultado vía `WEBHOOK_CTX` (WeakMap por cliente de Supabase, uno por aviso). Lectura
+  solo admin (RLS `get_my_role()='admin'`), escritura solo service_role. SQL: `supabase/migrations/20261113_mp_webhook_log.sql`
+  (+ `_ROLLBACK`). Sin vista en el admin: se consulta en el SQL Editor.
   **Anti-suscripciones-duplicadas (2026-09-11):** en la rama `existingProfile`, si el perfil ya tenía OTRA
   `mp_subscription_id` guardada (distinta a la nueva), se cancela la vieja en MP (`PUT /preapproval/{viejo}
   status:cancelled`) antes de pisarla — try/catch, no bloquea el alta. NO busca por email; solo cubre subs
