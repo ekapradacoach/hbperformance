@@ -182,3 +182,4 @@ en el muro para revelar las 4 restantes (`.testi-more`), cambiando a "Ver menos"
 4. Actualizá `CONTEXTO.md` (entrada nueva con fecha y resumen).
 5. Si tocás `process-payment`, corré antes del deploy `supabase/tests/process-payment-pagos.sim.mjs`, `process-payment.sim.mjs`,
    `process-payment-bajas.sim.mjs` y `process-payment-etapa6.sim.mjs`.
+6. Si tocás los cálculos del tablero 💹 Finanzas (bloque `FIN-CALC` de `admin/index.html`), corré `supabase/tests/finanzas-tablero.sim.mjs`.

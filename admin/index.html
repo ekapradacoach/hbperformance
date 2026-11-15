@@ -1487,6 +1487,40 @@
   }
 
   .met-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  /* ================= Finanzas (tablero, etapa 3) ================= */
+  .fin-scope { display: inline-flex; border: 1px solid #333; border-radius: 10px; overflow: hidden; }
+  .fin-scope-btn { background: #1A1A1A; color: var(--text-secondary); border: none; padding: 8px 14px; font-family: var(--font-body); font-weight: 700; font-size: 0.88rem; cursor: pointer; }
+  .fin-scope-btn.active { background: var(--accent); color: #0A0A0A; }
+  .fin-intro { color: var(--text-secondary); font-size: 0.86rem; line-height: 1.5; margin: 4px 0 6px; }
+  .fin-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 16px; }
+  .fin-card { padding: 18px; display: flex; flex-direction: column; }
+  .fin-card .card-label { margin-bottom: 10px; justify-content: space-between; }
+  .fin-card .card-value { font-size: 1.9rem; }
+  .fin-card .card-value.neg { color: #ff7b7b; }
+  .fin-card .card-value.na { color: #666; font-size: 1.5rem; }
+  .fin-q {
+    flex-shrink: 0; width: 26px; height: 26px; border-radius: 50%; border: 1px solid #444; background: #141414;
+    color: var(--accent); font-weight: 800; font-size: 0.85rem; cursor: pointer; padding: 0; line-height: 1;
+  }
+  .fin-q[aria-expanded="true"] { background: var(--accent); color: #0A0A0A; border-color: var(--accent); }
+  .fin-delta { margin-top: 10px; font-size: 0.82rem; font-weight: 700; }
+  .fin-delta.good { color: #66d98a; }
+  .fin-delta.bad { color: #ff7b7b; }
+  .fin-delta.flat, .fin-delta.muted { color: var(--text-secondary); font-weight: 600; }
+  .fin-delta .vs { color: var(--text-secondary); font-weight: 500; }
+  .fin-help { display: none; margin-top: 12px; padding: 12px 14px; background: #121212; border: 1px solid #2f2f2f; border-radius: 10px; font-size: 0.84rem; line-height: 1.5; color: var(--text); }
+  .fin-help.open { display: block; }
+  .fin-help p { margin: 0 0 6px; }
+  .fin-help p:last-child { margin-bottom: 0; }
+  .fin-help b { color: var(--accent); }
+  .fin-cohort td, .fin-cohort th { text-align: center; }
+  .fin-cohort td:first-child, .fin-cohort th:first-child { text-align: left; }
+  .fin-cohort .c-cell { display: inline-block; min-width: 46px; padding: 3px 6px; border-radius: 6px; font-weight: 700; }
+  .fin-notes { margin-top: 26px; }
+  .fin-notes summary { cursor: pointer; color: var(--accent); font-weight: 700; font-size: 0.9rem; }
+  .fin-notes ul { margin: 10px 0 0 18px; color: var(--text-secondary); font-size: 0.84rem; line-height: 1.6; }
+  .fin-sec-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  @media (max-width: 560px) { .fin-cards { grid-template-columns: 1fr 1fr; gap: 10px; } .fin-card.help-open { grid-column: 1 / -1; } .fin-card { padding: 14px; } .fin-card .card-value { font-size: 1.35rem; letter-spacing: -0.5px; } .fin-card .card-label { font-size: 0.78rem; } }
   @media (max-width: 768px) { .met-cards { grid-template-columns: 1fr; } }
 
   .met-bars {
@@ -1717,6 +1751,7 @@
         <a data-view="alumnos"><span class="ico">👥</span> Alumnos</a>
         <a data-view="mensajes"><span class="ico">💬</span> Mensajes<span class="nav-badge hidden" id="msgTabBadge"></span></a>
         <a data-view="metricas"><span class="ico">📈</span> Métricas</a>
+        <a data-view="finanzas"><span class="ico">💹</span> Finanzas</a>
         <a data-view="pagos"><span class="ico">💰</span> Pagos</a>
         <a data-view="gastos"><span class="ico">🧾</span> Gastos</a>
         <a data-view="leads"><span class="ico">🎯</span> Leads<span class="nav-badge hidden" id="leadsTabBadge"></span></a>
@@ -1980,6 +2015,26 @@
       </section>
 
       <!-- =============== VIEW: MÉTRICAS =============== -->
+      <!-- =============== VIEW: FINANZAS (tablero, finanzas etapa 3) =============== -->
+      <section id="view-finanzas" class="view">
+        <div class="met-header">
+          <h2 class="section-title">Finanzas</h2>
+          <div class="pag-head-actions">
+            <div class="fin-scope" role="group" aria-label="Qué alumnos contar">
+              <button type="button" class="fin-scope-btn active" data-scope="grupales">Grupales</button>
+              <button type="button" class="fin-scope-btn" data-scope="todo">Todo</button>
+            </div>
+            <div class="met-month">
+              <label for="finMonth">Mes</label>
+              <input type="month" id="finMonth" class="date-input">
+            </div>
+          </div>
+        </div>
+        <div class="fin-intro" id="finIntro"></div>
+        <div class="leads-warn" id="finWarn" style="display:none;"></div>
+        <div id="finBody"><div class="empty-row">Cargando…</div></div>
+      </section>
+
       <section id="view-metricas" class="view">
         <div class="met-header">
           <h2 class="section-title">Métricas</h2>
@@ -3003,7 +3058,7 @@
     // ============================================================
     // Navegación entre vistas (SPA)
     // ============================================================
-    const VIEW_TITLES = { dashboard: 'Dashboard', planificacion: 'Planificación', alumnos: 'Alumnos', mensajes: 'Mensajes', metricas: 'Métricas', pagos: 'Pagos', gastos: 'Gastos', leads: 'Leads', pruebas: 'Semana de prueba', config: 'Configuración' };
+    const VIEW_TITLES = { dashboard: 'Dashboard', planificacion: 'Planificación', alumnos: 'Alumnos', mensajes: 'Mensajes', metricas: 'Métricas', finanzas: 'Finanzas', pagos: 'Pagos', gastos: 'Gastos', leads: 'Leads', pruebas: 'Semana de prueba', config: 'Configuración' };
     function showView(name) {
       // Al salir de Mensajes, cerrar la suscripción realtime abierta
       if (name !== 'mensajes') unsubscribeRealtime();
@@ -3016,6 +3071,7 @@
       if (name === 'alumnos') loadAlumnos();
       if (name === 'mensajes') loadMensajes();
       if (name === 'metricas') loadMetricas();
+      if (name === 'finanzas') loadFinanzas();
       if (name === 'pagos') loadPagos();
       if (name === 'gastos') loadGastos();
       if (name === 'leads') loadLeads();
@@ -6216,6 +6272,432 @@
     document.getElementById('pagProgram').addEventListener('change', (e) => { pagProgram = e.target.value; renderPagosTable(); });
     document.getElementById('pagMethod').addEventListener('change', (e) => { pagMethod = e.target.value; renderPagosTable(); });
     document.getElementById('btnPagoNew').addEventListener('click', () => openPagoNew(null));
+
+    // ============================================================
+    // FINANZAS — tablero (finanzas etapa 3, 2026-11-15)
+    // Lee payments, subscription_events, profiles (atletas), expenses y precios de site_config.
+    // ============================================================
+    // ==== FIN-CALC-START ==== Cálculos puros (sin DOM ni red). Los prueba supabase/tests/finanzas-tablero.sim.mjs.
+    const FIN_GROUP = ['crossfit', 'hybrid', 'corredores'];
+    const FIN_PRICE_KEY = { crossfit: 'price_crossfit_ars', hybrid: 'price_hybrid_ars', corredores: 'price_corredores_ars' };
+    const FIN_ENTRY = ['alta', 'reactivacion', 'prueba_convertida'];
+    function finPad(n) { return String(n).padStart(2, '0'); }
+    function finShift(y, m, d) { const i = y * 12 + (m - 1) + d; return { y: Math.floor(i / 12), m: (i % 12) + 1 }; }
+    function finAddDays(ds, n) { const d = new Date(ds + 'T12:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+    function finBounds(y, m) {
+      const n = finShift(y, m, 1);
+      const start = `${y}-${finPad(m)}-01`, next = `${n.y}-${finPad(n.m)}-01`;
+      return { start, next, last: finAddDays(next, -1) };
+    }
+    function finArDay(ts) { const t = Date.parse(ts); return isNaN(t) ? '' : new Date(t - 3 * 3600e3).toISOString().slice(0, 10); }
+    // Mismo criterio que "Evolución de alumnos": entra el día del evento; sale el día siguiente al fin de acceso.
+    function finActiveOn(evs, day) {
+      const tr = [];
+      evs.forEach(e => {
+        if (FIN_ENTRY.includes(e.kind)) tr.push({ d: String(e.event_date).slice(0, 10), s: 1, o: 1 });
+        else if (e.kind === 'baja' && !e.voided) tr.push({ d: finAddDays(String(e.access_until || e.event_date).slice(0, 10), 1), s: 0, o: 0 });
+      });
+      tr.sort((a, b) => (a.d < b.d ? -1 : a.d > b.d ? 1 : a.o - b.o));
+      let st = 0;
+      tr.forEach(t => { if (t.d <= day) st = t.s; });
+      return st === 1;
+    }
+    // input: { payments, events, athletes, expenses, prices: {key: value}, today: 'YYYY-MM-DD' }; scope: 'grupales' | 'todo'
+    function finPrepare(input, scope) {
+      const inScope = prog => scope === 'todo' || FIN_GROUP.includes(prog);
+      const pays = (input.payments || []).filter(p => inScope(p.program)).map(p => Object.assign({}, p, { day: String(p.paid_at).slice(0, 10) }));
+      const evs = (input.events || []).filter(e => inScope(e.program));
+      const byAth = {};
+      evs.forEach(e => { if (e.athlete_id) (byAth[e.athlete_id] = byAth[e.athlete_id] || []).push(e); });
+      const aths = {};
+      (input.athletes || []).forEach(a => { aths[a.id] = a; });
+      const trials = (input.athletes || []).filter(a => a.trial_status && a.trial_started_at && inScope(a.program));
+      return { scope, pays, evs, byAth, aths, trials, expenses: input.expenses || [], prices: input.prices || {}, today: input.today };
+    }
+    function finActiveSet(ctx, day) { return Object.keys(ctx.byAth).filter(id => finActiveOn(ctx.byAth[id], day)); }
+    function finNet(p) { return p.net_amount != null ? Number(p.net_amount) || 0 : Number(p.amount) || 0; }
+    function finPrice(ctx, a) {
+      const cp = Number(a && a.custom_price);
+      if (cp > 0) return cp;
+      const k = a && FIN_PRICE_KEY[a.program];
+      const v = k ? Number(ctx.prices[k]) : 0;
+      return v > 0 ? v : 0;
+    }
+    // Números de un mes (null si el mes todavía no empezó).
+    function finMonth(ctx, y, m) {
+      const { start, next, last } = finBounds(y, m);
+      if (start > ctx.today) return null;
+      const ref = last < ctx.today ? last : ctx.today;     // mes en curso: hasta hoy
+      const r = { y, m, start, ref, partial: ref < last };
+      // Ingresos
+      const pays = ctx.pays.filter(p => p.day >= start && p.day < next);
+      r.bruto = pays.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+      r.neto = pays.reduce((s, p) => s + finNet(p), 0);
+      r.comision = pays.filter(p => p.method === 'mp' && p.net_amount != null).reduce((s, p) => s + ((Number(p.amount) || 0) - (Number(p.net_amount) || 0)), 0);
+      r.pagos = pays.length;
+      const payers = new Set(pays.map(p => p.athlete_id || ('pago-' + p.id)));
+      r.pagadores = payers.size;
+      r.ticket = r.pagadores ? r.bruto / r.pagadores : null;
+      r.ticketNeto = r.pagadores ? r.neto / r.pagadores : null;
+      // Alumnos
+      const activos = finActiveSet(ctx, ref);
+      r.activos = activos.length;
+      r.activosInicio = finActiveSet(ctx, finAddDays(start, -1)).length;
+      r.mrr = 0; r.sinPrecio = 0;
+      activos.forEach(id => { const p = finPrice(ctx, ctx.aths[id]); if (p > 0) r.mrr += p; else r.sinPrecio++; });
+      const inM = e => { const d = String(e.event_date).slice(0, 10); return d >= start && d < next; };
+      r.nuevas = ctx.evs.filter(e => e.kind === 'alta' && inM(e)).length;
+      r.vuelven = ctx.evs.filter(e => e.kind === 'reactivacion' && inM(e)).length;
+      r.pruebasConv = ctx.evs.filter(e => e.kind === 'prueba_convertida' && inM(e)).length;
+      r.altas = r.nuevas + r.vuelven + r.pruebasConv;
+      r.bajas = ctx.evs.filter(e => {
+        if (e.kind !== 'baja' || e.voided) return false;
+        const d = String(e.access_until || e.event_date).slice(0, 10);
+        return d >= start && d < next;
+      }).length;
+      r.netoAlumnos = r.altas - r.bajas;
+      r.churn = r.activosInicio ? r.bajas / r.activosInicio : null;
+      // Publicidad y gastos (no se separan por programa: con "Grupales" también se usa el total)
+      const exp = ctx.expenses.filter(x => String(x.month).slice(0, 10) === start);
+      r.publicidad = exp.filter(x => x.category === 'publicidad').reduce((s, x) => s + (Number(x.amount) || 0), 0);
+      r.otros = exp.filter(x => x.category !== 'publicidad').reduce((s, x) => s + (Number(x.amount) || 0), 0);
+      r.nuevosCac = r.nuevas + r.pruebasConv;
+      r.cac = (r.publicidad > 0 && r.nuevosCac > 0) ? r.publicidad / r.nuevosCac : null;
+      const entraron = new Set(ctx.evs.filter(e => e.athlete_id && (e.kind === 'alta' || e.kind === 'prueba_convertida') && inM(e)).map(e => e.athlete_id));
+      r.ingresosNuevos = pays.filter(p => p.athlete_id && entraron.has(p.athlete_id)).reduce((s, p) => s + finNet(p), 0);
+      r.roas = r.publicidad > 0 ? r.ingresosNuevos / r.publicidad : null;
+      // Semana de prueba: mismo criterio que 🧪 Pruebas (pruebas que EMPEZARON en el mes, día de Argentina)
+      const tr = ctx.trials.filter(a => finArDay(a.trial_started_at).slice(0, 7) === start.slice(0, 7));
+      r.trialConv = tr.filter(a => a.trial_status === 'converted').length;
+      r.trialDone = r.trialConv + tr.filter(a => a.trial_status === 'cancelled' || a.trial_status === 'charge_rejected').length;
+      r.trialEnCurso = tr.filter(a => a.trial_status === 'in_trial').length;
+      r.conversion = r.trialDone ? r.trialConv / r.trialDone : null;
+      // Resultado
+      r.resultado = r.neto - r.publicidad - r.otros;
+      return r;
+    }
+    // Rentabilidad del mes: usa la tasa de bajas promedio de los últimos 6 meses (los que tienen dato).
+    function finRent(ctx, y, m, r) {
+      if (!r) return null;
+      const churns = [];
+      for (let k = 0; k < 6; k++) {
+        const s = finShift(y, m, -k);
+        const mm = k === 0 ? r : finMonth(ctx, s.y, s.m);
+        if (mm && mm.churn != null) churns.push(mm.churn);
+      }
+      const out = {};
+      out.churnProm = churns.length ? churns.reduce((a, b) => a + b, 0) / churns.length : null;
+      out.churnMeses = churns.length;
+      out.ltv = (out.churnProm > 0 && r.ticketNeto != null) ? r.ticketNeto / out.churnProm : null;
+      out.ltvCac = (out.ltv != null && r.cac) ? out.ltv / r.cac : null;
+      out.recupero = (r.cac && r.ticketNeto) ? r.cac / r.ticketNeto : null;
+      return out;
+    }
+    // Cohortes: de los que entraron cada mes, qué parte sigue activa al cierre de los meses siguientes.
+    function finCohorts(ctx, y, m, n = 6, cols = 5) {
+      const rows = [];
+      for (let k = n - 1; k >= 0; k--) {
+        const c = finShift(y, m, -k);
+        const { start, next } = finBounds(c.y, c.m);
+        if (start > ctx.today) continue;
+        const ids = Object.keys(ctx.byAth).filter(id => ctx.byAth[id].some(e => FIN_ENTRY.includes(e.kind) && String(e.event_date).slice(0, 10) >= start && String(e.event_date).slice(0, 10) < next));
+        const row = { y: c.y, m: c.m, n: ids.length, pct: [] };
+        for (let j = 1; j <= cols; j++) {
+          const t = finShift(c.y, c.m, j);
+          const b = finBounds(t.y, t.m);
+          if (b.start > ctx.today || !ids.length) { row.pct.push(null); continue; }
+          const day = b.last < ctx.today ? b.last : ctx.today;
+          row.pct.push(ids.filter(id => finActiveOn(ctx.byAth[id], day)).length / ids.length);
+        }
+        rows.push(row);
+      }
+      return rows;
+    }
+    function finDashboard(input, y, m, scope) {
+      const ctx = finPrepare(input, scope);
+      const cur = finMonth(ctx, y, m);
+      const p = finShift(y, m, -1);
+      const prev = finMonth(ctx, p.y, p.m);
+      return {
+        cur, prev,
+        rent: finRent(ctx, y, m, cur),
+        rentPrev: finRent(ctx, p.y, p.m, prev),
+        cohorts: finCohorts(ctx, y, m),
+      };
+    }
+    // Variación contra el mes anterior: { diff, pct, dir } (pct null si el mes anterior es 0 o no hay dato)
+    function finDelta(cur, prev) {
+      if (cur == null || prev == null) return null;
+      const diff = cur - prev;
+      const dir = Math.abs(diff) < 1e-9 ? 0 : (diff > 0 ? 1 : -1);
+      return { diff, pct: prev !== 0 ? (diff / Math.abs(prev)) * 100 : null, dir };
+    }
+    // ==== FIN-CALC-END ====
+
+    const FIN_MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+    const finMoney = n => (n < 0 ? '−$' : '$') + Math.round(Math.abs(n)).toLocaleString('es-AR');
+    const finPct = (n, d = 0) => (n * 100).toLocaleString('es-AR', { maximumFractionDigits: d, minimumFractionDigits: 0 }) + '%';
+    const finNum = (n, d = 1) => n.toLocaleString('es-AR', { maximumFractionDigits: d });
+    // Cada número del tablero: cómo se muestra, si es mejor que suba o que baje, y la ayuda del "?".
+    // help: [qué es, cómo se calcula, si sube, si baja]
+    const FIN_METRICS = {
+      bruto: { label: 'Cobrado (bruto)', fmt: 'money', better: 'up',
+        sub: r => `${r.pagos} pago${r.pagos === 1 ? '' : 's'}`,
+        help: ['Todo lo que cobraste en el mes, antes de que Mercado Pago se quede con su parte.',
+          'Suma de los pagos de 💰 Pagos con fecha de este mes.',
+          'Entraron más pagos, o más caros.', 'Pagaron menos alumnos, o pagaron menos.'] },
+      comision: { label: 'Comisión de Mercado Pago', fmt: 'money', better: 'down',
+        help: ['Lo que se quedó Mercado Pago de tus cobros.',
+          'En los pagos automáticos de MP: lo cobrado menos lo que te llegó. Los pagos cargados a mano no tienen comisión, así que este número puede quedar un poco corto.',
+          'Normalmente porque cobraste más por MP. Si sube mucho más que lo cobrado, conviene revisar.', 'Cobraste menos por MP, o más por transferencia.'] },
+      neto: { label: 'Te quedó (neto)', fmt: 'money', better: 'up',
+        help: ['Lo que realmente te llegó de los cobros del mes.',
+          'Lo cobrado menos la comisión de MP. En los pagos manuales, el monto cargado.',
+          'Bien: entró más plata.', 'Entró menos plata: menos pagos, más baratos o más comisión.'] },
+      mrr: { label: 'Ingreso mensual esperado', fmt: 'money', better: 'up',
+        sub: (r) => r.sinPrecio ? `${r.sinPrecio} activo${r.sinPrecio === 1 ? '' : 's'} sin precio, no suma${r.sinPrecio === 1 ? '' : 'n'}` : '',
+        help: ['Cuánto deberías cobrar por mes con los alumnos activos que tenés, si todos pagan.',
+          'Alumnos activos al cierre del mes × su precio (el personalizado o el de ⚙️ Configuración). Usa el precio de hoy, también para meses pasados. En "Todo", las asesorías solo suman si tienen precio personalizado.',
+          'Tenés más alumnos activos, o subiste precios.', 'Se fueron alumnos, o bajaste precios.'] },
+      ticket: { label: 'Pago promedio por alumno', fmt: 'money', better: 'up',
+        sub: r => `${r.pagadores} alumno${r.pagadores === 1 ? '' : 's'} pagaron`,
+        help: ['Cuánto pagó en promedio cada alumno que pagó este mes.',
+          'Lo cobrado (bruto) ÷ cantidad de alumnos que pagaron.',
+          'Pagos más caros, o alguien pagó dos meses juntos.', 'Más descuentos o precios más bajos.'] },
+      altas: { label: 'Altas', fmt: 'int', better: 'up',
+        sub: r => `${r.nuevas} nuevas · ${r.vuelven} vuelven · ${r.pruebasConv} de la prueba`,
+        help: ['Alumnos que empezaron (o volvieron) este mes.',
+          'Nuevos + los que vuelven después de irse + los que pasaron de la semana de prueba a pagar.',
+          'Bien: entró más gente.', 'Entró menos gente que el mes anterior.'] },
+      bajas: { label: 'Bajas', fmt: 'int', better: 'down',
+        help: ['Alumnos que dejaron de tener acceso este mes.',
+          'Cuenta en el mes en que se le termina el acceso, no en el que avisó. Una semana de prueba que no siguió no es baja.',
+          'Se fue más gente: conviene mirar por qué.', 'Bien: se fue menos gente.'] },
+      netoAlumnos: { label: 'Crecimiento', fmt: 'signed', better: 'up',
+        help: ['Cuánto creció o se achicó el grupo de alumnos.',
+          'Altas − bajas.',
+          'Crecés más rápido.', 'Si es negativo, se fueron más de los que entraron.'] },
+      activos: { label: 'Activos al cierre', fmt: 'int', better: 'up',
+        sub: r => r.partial ? 'a hoy (el mes no terminó)' : 'el último día del mes',
+        help: ['Alumnos con acceso el último día del mes (o hoy, si el mes no terminó).',
+          'Sale del historial de altas y bajas. No cuenta semanas de prueba en curso.',
+          'Tenés más alumnos.', 'Tenés menos alumnos.'] },
+      churn: { label: 'Tasa de bajas', fmt: 'pct1', better: 'down',
+        sub: r => `${r.bajas} de ${r.activosInicio} que había al empezar`,
+        help: ['De cada 100 alumnos que tenías al empezar el mes, cuántos se fueron.',
+          'Bajas del mes ÷ alumnos activos el último día del mes anterior.',
+          'Malo: se va más gente.', 'Bien: se queda más gente. Ojo: con pocos alumnos, una sola baja mueve mucho este número.'] },
+      publicidad: { label: 'Publicidad', fmt: 'money', better: null,
+        help: ['Lo que gastaste en anuncios este mes.',
+          'Suma de "Publicidad" en 🧾 Gastos. No se separa por programa: con "Grupales" también se usa el total.',
+          'Invertiste más: miralo junto con las altas y el costo por alumno nuevo.', 'Invertiste menos.'] },
+      cac: { label: 'Costo por alumno nuevo', fmt: 'money', better: 'down',
+        sub: r => r.publicidad > 0 ? `${r.nuevosCac} nuevo${r.nuevosCac === 1 ? '' : 's'} en el mes` : 'sin publicidad cargada',
+        help: ['Cuánto te costó en publicidad conseguir cada alumno nuevo.',
+          'Publicidad ÷ (alumnos nuevos + pruebas que pasaron a pagar). Los que vuelven no cuentan. Es del total: no se puede saber qué anuncio trajo a cada uno.',
+          'Cada alumno nuevo te sale más caro.', 'Bien: conseguís alumnos más baratos.'] },
+      roas: { label: 'Retorno de la publicidad', fmt: 'x', better: 'up',
+        sub: r => r.publicidad > 0 ? `pagaron ${finMoney(r.ingresosNuevos)} los que entraron` : 'sin publicidad cargada',
+        help: ['Por cada $1 en anuncios, cuánto pagaron este mismo mes los alumnos que entraron este mes.',
+          'Lo que pagaron (neto) los alumnos nuevos del mes ÷ publicidad. Más de 1× quiere decir que su primer pago ya cubrió los anuncios.',
+          'Bien: los anuncios rinden más.', 'Los anuncios rinden menos, o los nuevos todavía no pagaron.'] },
+      conversion: { label: 'Pruebas que pasan a pagar', fmt: 'pct', better: 'up',
+        sub: r => r.trialDone ? `${r.trialConv} de ${r.trialDone} terminadas${r.trialEnCurso ? ` · ${r.trialEnCurso} en curso` : ''}` : (r.trialEnCurso ? `${r.trialEnCurso} en curso` : 'sin pruebas este mes'),
+        help: ['De cada 100 semanas de prueba que empezaron este mes y ya terminaron, cuántas pasaron a pagar.',
+          'Mismo número que 🧪 Pruebas: convertidas ÷ (convertidas + canceladas + cobro rechazado). Las que siguen en curso no cuentan.',
+          'Bien: la prueba convence a más gente.', 'Más gente prueba y no sigue.'] },
+      ltv: { label: 'Valor de un alumno', fmt: 'money', better: 'up', rent: true,
+        sub: (r, x) => x.churnProm > 0 ? `se queda ~${finNum(1 / x.churnProm)} meses` : '',
+        help: ['Cuánto te deja en total, en promedio, un alumno durante todo el tiempo que se queda.',
+          'Lo que te queda por alumno en el mes (neto) ÷ tasa de bajas promedio de los últimos 6 meses. Es una estimación: con poca historia o pocas bajas puede exagerar.',
+          'Cada alumno vale más: pagan más o se quedan más tiempo.', 'Se van más rápido o pagan menos.'] },
+      ltvCac: { label: 'Valor ÷ costo', fmt: 'x', better: 'up', rent: true,
+        help: ['Cuántas veces recuperás lo que te costó conseguir un alumno.',
+          'Valor de un alumno ÷ costo por alumno nuevo.',
+          'Bien. Como referencia, más de 3× es muy bueno.', 'Malo. Por debajo de 1× perdés plata con cada alumno nuevo.'] },
+      recupero: { label: 'Meses para recuperar', fmt: 'months', better: 'down', rent: true,
+        help: ['Cuántos meses tiene que pagar un alumno nuevo para cubrir lo que costó conseguirlo.',
+          'Costo por alumno nuevo ÷ lo que te queda por alumno en el mes (neto).',
+          'Tardás más en recuperar la publicidad.', 'Bien: recuperás más rápido.'] },
+      resultado: { label: 'Resultado del mes', fmt: 'money', better: 'up',
+        sub: r => `neto − ${finMoney(r.publicidad)} publicidad − ${finMoney(r.otros)} otros`,
+        help: ['Lo que te quedó después de los gastos del mes.',
+          'Te quedó (neto) − publicidad − otros gastos de 🧾 Gastos. No incluye nada que no esté cargado ahí. Con "Grupales" se restan todos los gastos.',
+          'Ganaste más.', 'Ganaste menos. Si es negativo (en rojo), gastaste más de lo que entró.'] },
+    };
+    const FIN_SECTIONS = [
+      { title: '💵 Ingresos', keys: ['bruto', 'comision', 'neto', 'mrr', 'ticket'] },
+      { title: '👥 Alumnos', keys: ['altas', 'bajas', 'netoAlumnos', 'activos', 'churn'] },
+      { title: '📣 Publicidad', keys: ['publicidad', 'cac', 'roas', 'conversion'] },
+      { title: '📊 Rentabilidad', keys: ['ltv', 'ltvCac', 'recupero', 'resultado'] },
+    ];
+
+    function finFmt(v, fmt) {
+      if (v == null || !isFinite(v)) return null;
+      switch (fmt) {
+        case 'money': return finMoney(v);
+        case 'int': return String(Math.round(v));
+        case 'signed': return (v > 0 ? '+' : '') + Math.round(v);
+        case 'pct': return finPct(v);
+        case 'pct1': return finPct(v, 1);
+        case 'x': return finNum(v, 1) + '×';
+        case 'months': return finNum(v, 1) + ' meses';
+        default: return String(v);
+      }
+    }
+    // Diferencia absoluta, en la unidad del número
+    function finFmtDiff(diff, fmt) {
+      const s = diff > 0 ? '+' : (diff < 0 ? '−' : '');
+      const a = Math.abs(diff);
+      switch (fmt) {
+        case 'money': return s + '$' + Math.round(a).toLocaleString('es-AR');
+        case 'int': case 'signed': return s + Math.round(a);
+        case 'pct': case 'pct1': return s + finNum(a * 100, 1) + ' puntos';
+        case 'x': return s + finNum(a, 1) + '×';
+        case 'months': return s + finNum(a, 1) + ' meses';
+        default: return s + a;
+      }
+    }
+    function finDeltaHtml(def, cur, prev, prevLabel) {
+      const d = finDelta(cur, prev);
+      if (!d) return `<div class="fin-delta muted">Sin comparación con ${prevLabel}</div>`;
+      if (d.dir === 0) return `<div class="fin-delta flat">= igual que ${prevLabel}</div>`;
+      const diffTxt = finFmtDiff(d.diff, def.fmt);
+      // Diferencia que redondeada da 0 (p. ej. +0,02 meses): se muestra como "casi igual", sin flecha
+      if (!/[1-9]/.test(diffTxt)) return `<div class="fin-delta flat">≈ casi igual que ${prevLabel}</div>`;
+      const cls = def.better ? (((d.dir > 0) === (def.better === 'up')) ? 'good' : 'bad') : 'flat';
+      const arrow = d.dir > 0 ? '▲' : '▼';
+      const ap = d.pct != null ? Math.abs(d.pct) : null;
+      const pct = ap == null ? '' : (ap < 1 ? 'menos de 1% · ' : `${Math.round(ap).toLocaleString('es-AR')}% · `);
+      return `<div class="fin-delta ${cls}">${arrow} ${pct}${diffTxt} <span class="vs">vs ${prevLabel}</span></div>`;
+    }
+    function finHelpHtml(h) {
+      return `<p><b>Qué es:</b> ${esc(h[0])}</p><p><b>Cómo se calcula:</b> ${esc(h[1])}</p><p><b>Si sube:</b> ${esc(h[2])}</p><p><b>Si baja:</b> ${esc(h[3])}</p>`;
+    }
+
+    let finScope = 'grupales';
+    let finData = null;      // { payments, events, athletes, expenses, prices }
+    let finLoadSeq = 0;
+    async function finFetchAll(table, cols, orderCol) {
+      let out = [];
+      for (let from = 0; from < 200000; from += 1000) {
+        const r = await sb.from(table).select(cols).order(orderCol, { ascending: true }).order('id', { ascending: true }).range(from, from + 999);
+        if (r.error) return { error: r.error };
+        out = out.concat(r.data || []);
+        if (!r.data || r.data.length < 1000) break;
+      }
+      return { data: out };
+    }
+    async function loadFinanzas() {
+      const input = document.getElementById('finMonth');
+      if (!input.value) input.value = currentMonthStr();
+      const seq = ++finLoadSeq;
+      document.getElementById('finBody').innerHTML = '<div class="empty-row">Cargando…</div>';
+      const [pays, evs, aths, exps, cfg] = await Promise.all([
+        finFetchAll('payments', 'id, athlete_id, program, amount, net_amount, paid_at, method', 'paid_at'),
+        finFetchAll('subscription_events', 'id, athlete_id, program, kind, event_date, access_until, voided', 'event_date'),
+        sb.from('profiles').select('id, program, custom_price, subscription_status, trial_status, trial_started_at').eq('role', 'athlete'),
+        finFetchAll('expenses', 'id, month, category, amount', 'month'),
+        sb.from('site_config').select('key, value').in('key', Object.values(FIN_PRICE_KEY)),
+      ]);
+      if (seq !== finLoadSeq) return;
+      const warns = [];
+      if (pays.error) warns.push('No se pudieron leer los pagos.');
+      if (evs.error) warns.push('No se pudo leer el historial de altas y bajas (¿falta 20261115_finanzas_eventos.sql?).');
+      if (aths.error) warns.push('No se pudieron leer los alumnos.');
+      if (exps.error) warns.push('No se pudieron leer los gastos (¿falta 20261115_gastos.sql?): publicidad y gastos quedan en $0.');
+      if (cfg.error) warns.push('No se pudieron leer los precios de ⚙️ Configuración: el ingreso esperado queda incompleto.');
+      const warn = document.getElementById('finWarn');
+      warn.textContent = warns.join(' ');
+      warn.style.display = warns.length ? 'block' : 'none';
+      const prices = {};
+      (cfg.data || []).forEach(r => { prices[r.key] = r.value; });
+      finData = { payments: pays.data || [], events: evs.data || [], athletes: aths.data || [], expenses: exps.data || [], prices };
+      renderFinanzas();
+    }
+
+    function renderFinanzas() {
+      if (!finData) return;
+      const [y, m] = document.getElementById('finMonth').value.split('-').map(Number);
+      const today = todayStr();
+      const D = finDashboard(Object.assign({ today }, finData), y, m, finScope);
+      const body = document.getElementById('finBody');
+      const intro = document.getElementById('finIntro');
+      const p = finShift(y, m, -1);
+      const prevLabel = FIN_MONTHS[p.m - 1];
+      intro.innerHTML = (finScope === 'grupales'
+        ? 'Mostrando <b>CrossFit, Hybrid y Corredores</b>. Las asesorías no entran.'
+        : 'Mostrando <b>todo</b>: programas grupales y asesorías (las asesorías solo si sus pagos están cargados).')
+        + ' Tocá <b>?</b> en cualquier número para ver qué es.'
+        + (D.cur && D.cur.partial ? ` <br>⏳ ${FIN_MONTHS[m - 1]} todavía no terminó: los números son hasta hoy y la comparación con ${prevLabel} (completo) puede verse peor de lo que es.` : '');
+      if (!D.cur) { body.innerHTML = '<div class="empty-row">Ese mes todavía no empezó.</div>'; return; }
+
+      const card = (key) => {
+        const def = FIN_METRICS[key];
+        const src = def.rent ? D.rent : D.cur;
+        const srcPrev = def.rent ? D.rentPrev : D.prev;
+        const v = src ? src[key] : null;
+        const vp = srcPrev ? srcPrev[key] : null;
+        const shown = finFmt(v, def.fmt);
+        const cls = shown == null ? 'na' : (v < 0 && (def.fmt === 'money' || def.fmt === 'signed') ? 'neg' : '');
+        const sub = def.sub ? def.sub(D.cur, D.rent || {}) : '';
+        return `<div class="card fin-card">
+          <div class="card-label"><span>${esc(def.label)}</span><button type="button" class="fin-q" aria-expanded="false" aria-controls="finHelp-${key}" title="¿Qué es?">?</button></div>
+          <div class="card-value ${cls}">${shown == null ? 'N/D' : shown}</div>
+          <div class="card-sub">${esc(sub || '')}</div>
+          ${finDeltaHtml(def, v, vp, prevLabel)}
+          <div class="fin-help" id="finHelp-${key}">${finHelpHtml(def.help)}${shown == null ? '<p><b>N/D:</b> no hay datos suficientes para calcularlo este mes (por ejemplo, sin publicidad cargada o sin alumnos al empezar).</p>' : ''}</div>
+        </div>`;
+      };
+
+      let html = FIN_SECTIONS.map(s => `<div class="met-section-title">${s.title}</div>
+        <div class="fin-cards">${s.keys.map(card).join('')}</div>`).join('');
+
+      // Cohortes
+      const cohortHelp = ['De los alumnos que entraron cada mes, qué parte sigue activa uno, dos, tres… meses después.',
+        'Para cada mes de alta, cuántos de esos alumnos tienen acceso al cierre de cada mes siguiente. El mes en curso se mira a hoy.',
+        'Si los números de la derecha son altos, la gente se queda.', 'Si caen rápido, se van pronto: conviene ver qué pasa en los primeros meses.'];
+      const cRows = D.cohorts.filter(c => c.n > 0).map(c => `<tr>
+          <td>${FIN_MONTHS[c.m - 1].slice(0, 3)} ${c.y}</td>
+          <td>${c.n}</td>
+          ${c.pct.map(v => {
+            if (v == null) return '<td><span class="leads-sub">—</span></td>';
+            const a = 0.12 + 0.55 * v;
+            return `<td><span class="c-cell" style="background:rgba(245,168,0,${a.toFixed(2)});color:${v > 0.55 ? '#0A0A0A' : 'var(--text)'}">${finPct(v)}</span></td>`;
+          }).join('')}
+        </tr>`).join('');
+      html += `<div class="met-section-title fin-sec-head"><span>🔁 ¿Cuántos se quedan?</span><button type="button" class="fin-q" aria-expanded="false" aria-controls="finHelp-cohort" title="¿Qué es?">?</button></div>
+        <div class="fin-help" id="finHelp-cohort" style="margin:0 0 12px">${finHelpHtml(cohortHelp)}</div>
+        <div class="table-wrap"><table class="al-table met-table fin-cohort">
+          <thead><tr><th>Entraron en</th><th>Cuántos</th><th>Mes 1</th><th>Mes 2</th><th>Mes 3</th><th>Mes 4</th><th>Mes 5</th></tr></thead>
+          <tbody>${cRows || '<tr><td class="empty-row" colspan="7">Nadie entró en los últimos 6 meses.</td></tr>'}</tbody>
+        </table></div>`;
+
+      html += `<details class="fin-notes"><summary>¿De dónde salen estos números? (límites)</summary><ul>
+        <li>Los pagos se registran desde el 10/09/2026: antes de esa fecha los ingresos dan $0.</li>
+        <li>Las altas y bajas anteriores al 15/11/2026 se reconstruyeron a partir de los pagos: son aproximadas.</li>
+        <li>El ingreso mensual esperado usa los precios de hoy, también para meses pasados.</li>
+        <li>La comisión de MP puede quedar corta: los pagos viejos cargados a mano no la tienen.</li>
+        <li>El costo por alumno nuevo y el retorno de la publicidad son del total: no se sabe qué anuncio trajo a cada alumno.</li>
+        <li>PayPal y las asesorías solo aparecen si sus pagos están cargados en 💰 Pagos. Los gastos no se separan por programa.</li>
+        <li>Con pocos alumnos los porcentajes saltan mucho: por eso al lado de cada % va el número.</li>
+      </ul></details>`;
+      body.innerHTML = html;
+      body.querySelectorAll('.fin-q').forEach(b => b.addEventListener('click', () => {
+        const box = document.getElementById(b.getAttribute('aria-controls'));
+        const open = !box.classList.contains('open');
+        box.classList.toggle('open', open);
+        b.setAttribute('aria-expanded', open ? 'true' : 'false');
+        const cardEl = b.closest('.fin-card');
+        if (cardEl) cardEl.classList.toggle('help-open', open);   // en celular, la tarjeta abierta ocupa todo el ancho
+      }));
+    }
+    document.getElementById('finMonth').addEventListener('change', () => { if (finData) renderFinanzas(); else loadFinanzas(); });
+    document.querySelectorAll('.fin-scope-btn').forEach(b => b.addEventListener('click', () => {
+      finScope = b.dataset.scope;
+      document.querySelectorAll('.fin-scope-btn').forEach(x => x.classList.toggle('active', x === b));
+      renderFinanzas();
+    }));
 
     // ============================================================
     // GASTOS — expenses (finanzas etapa 2, 2026-11-15). Solo admin por RLS.

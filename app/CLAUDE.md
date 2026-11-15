@@ -82,6 +82,13 @@ top-5 a todos — 2026-09-10), y actividad de chats del mes (top-3 canales, barr
 (total neto/bruto, fecha del primero, lista) y, si tiene `mp_subscription_id`, los cobros fallidos de ESA suscripción en
 `mp_webhook_log` (`charge_status='rejected'` o `invoice_status='recycling'`, uno por `payment_id`; el registro existe desde
 el 13/11/2026). Se recarga cada vez que se dibuja la ficha.
+**💹 Finanzas**: vista `#view-finanzas` (finanzas etapa 3, 2026-11-15). Tablero solo lectura: selector de mes, filtro
+Grupales (crossfit/hybrid/corredores por `program` del pago o evento) / Todo; bloques Ingresos (bruto, comisión MP, neto,
+ingreso mensual esperado = activos al cierre × precio, pago promedio), Alumnos (altas, bajas, crecimiento, activos al cierre,
+tasa de bajas), Publicidad (gasto, costo por alumno nuevo, retorno, conversión de la prueba con el criterio de 🧪 Pruebas),
+Rentabilidad (valor de un alumno = neto por alumno ÷ tasa de bajas promedio de 6 meses, valor÷costo, meses para recuperar,
+resultado) y cohortes. Cada tarjeta: variación vs mes anterior (% + diferencia) y ayuda "?". Los cálculos son puros, entre
+`FIN-CALC-START` y `FIN-CALC-END`; los prueba `supabase/tests/finanzas-tablero.sim.mjs` (si se tocan, correrla). Lee de a 1000.
 **🧾 Gastos**: vista `#view-gastos` (finanzas etapa 2, 2026-11-15). Selector de mes; cards total / publicidad / otros con el
 mes anterior; tabla con ✏️ / 🗑️; `#modalGasto` (mes, categoría, concepto, monto). Lee y escribe `expenses`.
 Idem **💰 Pagos**: vista `#view-pagos` (tab nuevo, 2026-09-10). Historial de TODOS los pagos (automáticos MP +
