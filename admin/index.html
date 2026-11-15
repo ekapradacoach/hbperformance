@@ -1232,6 +1232,19 @@
   .sp-recent-item { display: flex; align-items: center; gap: 10px; background: var(--bg-input); border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; font-size: 0.9rem; }
   .sp-recent-item .rdot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
   .sp-muted { color: var(--text-secondary); font-size: 0.9rem; }
+  /* Pagos en la ficha (finanzas etapa 1) */
+  .sp-pay-total { margin-bottom: 10px; }
+  .sp-pay-total b { font-size: 1.15rem; color: var(--accent); }
+  .sp-pay-total .sp-muted { font-size: 0.8rem; }
+  .sp-pay-list { display: flex; flex-direction: column; gap: 6px; max-height: 280px; overflow-y: auto; overflow-x: hidden; }
+  .sp-pay-item { background: var(--bg-input); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; font-size: 0.88rem; }
+  .sp-pay-main { display: flex; justify-content: space-between; gap: 10px; }
+  .sp-pay-amt { font-weight: 700; }
+  .sp-pay-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; }
+  .sp-pay-fails { margin-top: 14px; }
+  .sp-pay-fails-title { color: var(--text-secondary); font-weight: 700; font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 8px; }
+  .sp-pay-fail { display: flex; justify-content: space-between; gap: 10px; font-size: 0.86rem; padding: 6px 12px; border-radius: 8px; background: rgba(231,76,60,0.08); border: 1px solid rgba(231,76,60,0.3); margin-bottom: 6px; }
+  .sp-pay-foot { font-size: 0.78rem; margin-top: 4px; display: block; }
   .sp-actions { display: flex; flex-direction: column; gap: 10px; }
   .sp-actions button { width: 100%; justify-content: center; }
   /* Modal fijar contraseña */
@@ -1410,6 +1423,8 @@
   /* Tab Leads */
   .leads-controls { flex-wrap: wrap; gap: 14px; }
   .leads-alumno-toggle { font-size: 0.88rem; }
+  .gas-acts { white-space: nowrap; }
+  .gas-acts .btn-sm { padding: 4px 8px; }
   .leads-warn { background: rgba(245,168,0,0.08); border: 1px solid rgba(245,168,0,0.35); color: var(--accent); border-radius: 10px; padding: 10px 14px; font-size: 0.85rem; margin: 6px 0 12px; line-height: 1.5; }
   .leads-alumno { display: inline-block; margin-left: 6px; font-size: 0.7rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: rgba(59,190,94,0.15); color: #66d98a; white-space: nowrap; }
   .leads-sub { color: var(--text-secondary); font-size: 0.78rem; }
@@ -1676,6 +1691,7 @@
         <a data-view="mensajes"><span class="ico">💬</span> Mensajes<span class="nav-badge hidden" id="msgTabBadge"></span></a>
         <a data-view="metricas"><span class="ico">📈</span> Métricas</a>
         <a data-view="pagos"><span class="ico">💰</span> Pagos</a>
+        <a data-view="gastos"><span class="ico">🧾</span> Gastos</a>
         <a data-view="leads"><span class="ico">🎯</span> Leads<span class="nav-badge hidden" id="leadsTabBadge"></span></a>
         <a data-view="pruebas"><span class="ico">🧪</span> Pruebas<span class="nav-badge hidden" id="pruebasTabBadge"></span></a>
         <a data-view="config"><span class="ico">⚙️</span> Configuración</a>
@@ -2070,6 +2086,49 @@
         <div class="met-note">Los pagos de Mercado Pago se registran solos cuando entra el cobro. Los de transferencia o suscripciones MP antiguas se cargan a mano con “💵 Registrar pago”. La fecha es la del pago real (no la de carga). Editar/anular solo aplica a los pagos manuales.</div>
       </section>
 
+      <!-- =============== VIEW: GASTOS (finanzas etapa 2, tabla expenses, solo admin) =============== -->
+      <section id="view-gastos" class="view">
+        <div class="met-header">
+          <h2 class="section-title">Gastos</h2>
+          <div class="pag-head-actions">
+            <div class="met-month">
+              <label for="gasMonth">Mes</label>
+              <input type="month" id="gasMonth" class="date-input">
+            </div>
+            <button class="btn-primary" id="btnGastoNew">➕ Cargar gasto</button>
+          </div>
+        </div>
+        <div class="leads-warn" id="gasWarn" style="display:none;"></div>
+
+        <div class="met-cards">
+          <div class="card">
+            <div class="card-label"><span>🧾</span> Gastos del mes</div>
+            <div class="card-value" id="gasTotal">—</div>
+            <div class="card-sub"><span id="gasCount">0</span> gastos cargados</div>
+          </div>
+          <div class="card">
+            <div class="card-label"><span>📣</span> Publicidad</div>
+            <div class="card-value" id="gasAds">—</div>
+            <div class="card-sub" id="gasAdsPrev">Mes anterior: —</div>
+          </div>
+          <div class="card">
+            <div class="card-label"><span>📦</span> Otros gastos</div>
+            <div class="card-value" id="gasOther">—</div>
+            <div class="card-sub" id="gasOtherPrev">Mes anterior: —</div>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table class="al-table met-table">
+            <thead>
+              <tr><th>Categoría</th><th>Concepto</th><th>Monto</th><th>Acciones</th></tr>
+            </thead>
+            <tbody id="gasBody"><tr><td class="loading-row" colspan="4">Cargando…</td></tr></tbody>
+          </table>
+        </div>
+        <div class="met-note">Montos en pesos, por mes (sin día). Publicidad: lo que se pagó en anuncios ese mes (Meta, etc.). Otros: hosting, herramientas, comisiones que no salen de MP, etc. Solo lo ve el admin.</div>
+      </section>
+
       <!-- =============== VIEW: LEADS (pending_subscriptions sin pago) =============== -->
       <section id="view-leads" class="view">
         <div class="met-header">
@@ -2377,6 +2436,41 @@
       <div class="modal-actions">
         <button class="btn-ghost" data-close="modalPago">Cancelar</button>
         <button class="btn-primary" id="pagoSave">Guardar pago</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =============== Modal: Cargar / editar gasto (finanzas etapa 2) =============== -->
+  <div class="modal-backdrop" id="modalGasto">
+    <div class="modal">
+      <div class="modal-head">
+        <h3 id="gastoModalTitle">Cargar gasto</h3>
+        <button class="modal-close" data-close="modalGasto">✕</button>
+      </div>
+      <div class="modal-error" id="gastoError"></div>
+      <input type="hidden" id="gastoId">
+      <div class="field">
+        <label for="gastoMonth">Mes</label>
+        <input type="month" id="gastoMonth" class="date-input">
+      </div>
+      <div class="field">
+        <label for="gastoCategory">Categoría</label>
+        <select id="gastoCategory">
+          <option value="publicidad">Publicidad</option>
+          <option value="otro">Otro</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="gastoConcept">Concepto</label>
+        <input type="text" id="gastoConcept" maxlength="120" placeholder="Ej: Meta Ads CrossFit" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="gastoAmount">Monto (ARS)</label>
+        <input type="number" id="gastoAmount" min="0" step="any" placeholder="Ej: 150000" autocomplete="off">
+      </div>
+      <div class="modal-actions">
+        <button class="btn-ghost" data-close="modalGasto">Cancelar</button>
+        <button class="btn-primary" id="gastoSave">Guardar gasto</button>
       </div>
     </div>
   </div>
@@ -2881,7 +2975,7 @@
     // ============================================================
     // Navegación entre vistas (SPA)
     // ============================================================
-    const VIEW_TITLES = { dashboard: 'Dashboard', planificacion: 'Planificación', alumnos: 'Alumnos', mensajes: 'Mensajes', metricas: 'Métricas', pagos: 'Pagos', leads: 'Leads', pruebas: 'Semana de prueba', config: 'Configuración' };
+    const VIEW_TITLES = { dashboard: 'Dashboard', planificacion: 'Planificación', alumnos: 'Alumnos', mensajes: 'Mensajes', metricas: 'Métricas', pagos: 'Pagos', gastos: 'Gastos', leads: 'Leads', pruebas: 'Semana de prueba', config: 'Configuración' };
     function showView(name) {
       // Al salir de Mensajes, cerrar la suscripción realtime abierta
       if (name !== 'mensajes') unsubscribeRealtime();
@@ -2895,6 +2989,7 @@
       if (name === 'mensajes') loadMensajes();
       if (name === 'metricas') loadMetricas();
       if (name === 'pagos') loadPagos();
+      if (name === 'gastos') loadGastos();
       if (name === 'leads') loadLeads();
       if (name === 'pruebas') loadPruebas();
       if (name === 'config') loadConfig();
@@ -5059,6 +5154,10 @@
           <h4>Últimos días con planificación</h4>
           <div class="sp-recent-list" id="spRecent"><span class="sp-muted">Cargando…</span></div>
         </div>
+        <div class="sp-recent sp-pays">
+          <h4>Pagos</h4>
+          <div id="spPays"><span class="sp-muted">Cargando…</span></div>
+        </div>
         <div class="sp-actions">
           <button class="btn-primary" id="spGoPlan">📅 Ir a planificación</button>
           <button class="btn-ghost" id="spEdit">✏️ Editar</button>
@@ -5079,6 +5178,81 @@
       if (b) b.addEventListener('click', () => darDeBaja(a));
       const d = document.getElementById('spDelete');
       if (d) d.addEventListener('click', () => deleteAthleteProfile(a));
+      loadPanelPayments(a);
+    }
+
+    // ---- Pagos en la ficha (finanzas etapa 1, 2026-11-15): solo lectura ----
+    // Todos sus pagos de `payments` + los cobros fallidos de su suscripción actual en `mp_webhook_log`
+    // (ese registro existe desde el 13/11/2026). Editar o anular sigue siendo desde 💰 Pagos.
+    const WEBHOOK_LOG_DESDE = '13/11/2026';
+    async function loadPanelPayments(a) {
+      const still = () => currentPanelAthlete && currentPanelAthlete.id === a.id && document.getElementById('spPays');
+      const { data: pays, error } = await sb.from('payments')
+        .select('id, paid_at, amount, net_amount, type, method, manual_channel, program')
+        .eq('athlete_id', a.id).order('paid_at', { ascending: false }).order('id', { ascending: false });
+      let fails = null, failsErr = false;
+      if (a.mp_subscription_id) {
+        const { data: logs, error: lErr } = await sb.from('mp_webhook_log')
+          .select('received_at, payment_id, resource_id, charge_status, invoice_status')
+          .eq('preapproval_id', a.mp_subscription_id)
+          .or('charge_status.eq.rejected,invoice_status.eq.recycling')
+          .order('received_at', { ascending: false }).limit(100);
+        if (lErr) failsErr = true;
+        else {
+          // MP manda varios avisos por el mismo cobro: uno por cobro (el más reciente)
+          const seen = new Set(); fails = [];
+          (logs || []).forEach(l => {
+            const k = l.payment_id || ('r:' + (l.resource_id || l.received_at));
+            if (seen.has(k)) return;
+            seen.add(k); fails.push(l);
+          });
+        }
+      }
+      if (!still()) return;
+      const box = document.getElementById('spPays');
+      if (error) { box.innerHTML = '<span class="sp-muted">No se pudieron cargar los pagos.</span>'; return; }
+      const rows = pays || [];
+      let html = '';
+      if (!rows.length) {
+        html += '<span class="sp-muted">Sin pagos registrados.</span>';
+      } else {
+        const net = rows.reduce((s, r) => s + payNet(r), 0);
+        const gross = rows.reduce((s, r) => s + payGross(r), 0);
+        const first = rows[rows.length - 1].paid_at;
+        html += `<div class="sp-pay-total">
+            <div><b>${fmtMoney(net)}</b> <span class="sp-muted">neto</span></div>
+            <div class="sp-muted">${rows.length} pago${rows.length === 1 ? '' : 's'} · bruto ${fmtMoney(gross)} · desde ${fmtDayOnly(first)}</div>
+          </div>
+          <div class="sp-pay-list">` + rows.map(r => `
+            <div class="sp-pay-item">
+              <div class="sp-pay-main">
+                <span>${fmtDayOnly(r.paid_at)}</span>
+                <span class="sp-pay-amt">${fmtMoney(payGross(r))}</span>
+              </div>
+              <div class="sp-pay-sub">
+                <span class="pay-type">${PAY_TYPE_LABEL[r.type] || esc(r.type || '—')}</span>
+                ${payMethodBadge(r)}
+                ${(r.net_amount != null && Number(r.net_amount) !== payGross(r)) ? `<span class="pay-type">neto ${fmtMoney(r.net_amount)}</span>` : ''}
+                ${(r.program && r.program !== a.program) ? `<span class="pay-type">${programLabel(r.program)}</span>` : ''}
+              </div>
+            </div>`).join('') + '</div>';
+      }
+      if (a.mp_subscription_id) {
+        html += `<div class="sp-pay-fails"><div class="sp-pay-fails-title">Cobros fallidos en Mercado Pago</div>`;
+        if (failsErr) {
+          html += '<span class="sp-muted">No se pudieron leer los avisos de MP.</span>';
+        } else if (!fails.length) {
+          html += `<span class="sp-muted">Ninguno registrado desde el ${WEBHOOK_LOG_DESDE}.</span>`;
+        } else {
+          html += fails.map(l => `<div class="sp-pay-fail">
+              <span>${fmtDate(l.received_at)}</span>
+              <span>${l.charge_status === 'rejected' ? 'Rechazado' : 'En reintento'}</span>
+            </div>`).join('')
+            + `<div class="sp-muted sp-pay-foot">De su suscripción actual, desde el ${WEBHOOK_LOG_DESDE}. Un cobro que después entró figura arriba como pago.</div>`;
+        }
+        html += '</div>';
+      }
+      box.innerHTML = html;
     }
 
     // ---- Fijar contraseña temporal (admin, sin depender de links de mail) ----
@@ -6005,6 +6179,150 @@
     document.getElementById('pagProgram').addEventListener('change', (e) => { pagProgram = e.target.value; renderPagosTable(); });
     document.getElementById('pagMethod').addEventListener('change', (e) => { pagMethod = e.target.value; renderPagosTable(); });
     document.getElementById('btnPagoNew').addEventListener('click', () => openPagoNew(null));
+
+    // ============================================================
+    // GASTOS — expenses (finanzas etapa 2, 2026-11-15). Solo admin por RLS.
+    // Un gasto = mes (día 1) + categoría (publicidad / otro) + concepto + monto ARS.
+    // ============================================================
+    let gasRows = null;
+    const GASTO_CAT_LABEL = { publicidad: 'Publicidad', otro: 'Otro' };
+    const GASTOS_SQL_MSG = 'No se pudieron cargar los gastos. ¿Falta correr supabase/migrations/20261115_gastos.sql en Supabase?';
+
+    function gasCurrentMonth() {
+      const input = document.getElementById('gasMonth');
+      if (!input.value) input.value = currentMonthStr();
+      return input.value.split('-').map(Number); // [y, m]
+    }
+    function gasSums(rows) {
+      const s = { total: 0, publicidad: 0, otro: 0 };
+      (rows || []).forEach(r => { const v = Number(r.amount) || 0; s.total += v; s[r.category] = (s[r.category] || 0) + v; });
+      return s;
+    }
+
+    async function loadGastos() {
+      const [y, m] = gasCurrentMonth();
+      const cur = `${y}-${pad2(m)}-01`;
+      const pv = addMonths(y, m, -1);
+      const prev = `${pv.y}-${pad2(pv.m)}-01`;
+      const body = document.getElementById('gasBody');
+      const warn = document.getElementById('gasWarn');
+      body.innerHTML = '<tr><td class="loading-row" colspan="4">Cargando…</td></tr>';
+      const { data, error } = await sb.from('expenses')
+        .select('id, month, category, concept, amount').in('month', [cur, prev])
+        .order('category', { ascending: false }).order('amount', { ascending: false }).order('id');
+      // Si cambiaron de mes mientras cargaba, gana la última carga
+      const [y2, m2] = gasCurrentMonth();
+      if (y2 !== y || m2 !== m) return;
+      if (error) {
+        gasRows = null;
+        warn.textContent = GASTOS_SQL_MSG; warn.style.display = 'block';
+        body.innerHTML = '<tr><td class="empty-row" colspan="4">—</td></tr>';
+        ['gasTotal', 'gasAds', 'gasOther'].forEach(idv => { document.getElementById(idv).textContent = '—'; });
+        document.getElementById('gasCount').textContent = '0';
+        document.getElementById('gasAdsPrev').textContent = 'Mes anterior: —';
+        document.getElementById('gasOtherPrev').textContent = 'Mes anterior: —';
+        return;
+      }
+      warn.style.display = 'none';
+      const all = data || [];
+      gasRows = all.filter(r => String(r.month).slice(0, 10) === cur);
+      const s = gasSums(gasRows);
+      const p = gasSums(all.filter(r => String(r.month).slice(0, 10) === prev));
+      document.getElementById('gasTotal').textContent = fmtMoney(s.total);
+      document.getElementById('gasCount').textContent = String(gasRows.length);
+      document.getElementById('gasAds').textContent = fmtMoney(s.publicidad);
+      document.getElementById('gasOther').textContent = fmtMoney(s.otro);
+      document.getElementById('gasAdsPrev').textContent = 'Mes anterior: ' + fmtMoney(p.publicidad);
+      document.getElementById('gasOtherPrev').textContent = 'Mes anterior: ' + fmtMoney(p.otro);
+      renderGastos();
+    }
+
+    function renderGastos() {
+      const body = document.getElementById('gasBody');
+      if (!gasRows) return;
+      if (!gasRows.length) {
+        body.innerHTML = '<tr><td class="empty-row" colspan="4">No hay gastos cargados en este mes.</td></tr>';
+        return;
+      }
+      body.innerHTML = gasRows.map(r => `<tr data-gid="${esc(r.id)}">
+          <td><span class="pay-method-badge ${r.category === 'publicidad' ? 'pm-mp' : 'pm-vieja'}">${GASTO_CAT_LABEL[r.category] || esc(r.category)}</span></td>
+          <td>${esc(r.concept)}</td>
+          <td>${fmtMoney(r.amount)}</td>
+          <td class="gas-acts">
+            <button class="btn-sm" data-act="edit" title="Editar">✏️</button>
+            <button class="btn-sm danger" data-act="del" title="Borrar">🗑️</button>
+          </td>
+        </tr>`).join('');
+      body.querySelectorAll('tr[data-gid]').forEach(tr => {
+        const r = gasRows.find(x => String(x.id) === String(tr.dataset.gid));
+        if (!r) return;
+        tr.querySelector('[data-act="edit"]').addEventListener('click', () => openGastoModal(r));
+        tr.querySelector('[data-act="del"]').addEventListener('click', () => deleteGasto(r));
+      });
+    }
+
+    function openGastoModal(r) {
+      document.getElementById('gastoModalTitle').textContent = r ? 'Editar gasto' : 'Cargar gasto';
+      document.getElementById('gastoId').value = r ? r.id : '';
+      const [y, m] = gasCurrentMonth();
+      document.getElementById('gastoMonth').value = r ? String(r.month).slice(0, 7) : `${y}-${pad2(m)}`;
+      document.getElementById('gastoCategory').value = r ? r.category : 'publicidad';
+      document.getElementById('gastoConcept').value = r ? r.concept : '';
+      document.getElementById('gastoAmount').value = r ? r.amount : '';
+      document.getElementById('gastoError').classList.remove('show');
+      openModal('modalGasto');
+      setTimeout(() => document.getElementById(r ? 'gastoAmount' : 'gastoConcept').focus(), 50);
+    }
+
+    async function saveGasto() {
+      const id = document.getElementById('gastoId').value;
+      const month = document.getElementById('gastoMonth').value;
+      const category = document.getElementById('gastoCategory').value;
+      const concept = document.getElementById('gastoConcept').value.trim();
+      const amountRaw = document.getElementById('gastoAmount').value;
+      const amount = Number(amountRaw);
+      if (!/^\d{4}-\d{2}$/.test(month)) { modalError('gastoError', 'Elegí el mes.'); return; }
+      if (!GASTO_CAT_LABEL[category]) { modalError('gastoError', 'Elegí la categoría.'); return; }
+      if (!concept) { modalError('gastoError', 'Escribí el concepto.'); return; }
+      if (concept.length > 120) { modalError('gastoError', 'El concepto puede tener hasta 120 caracteres.'); return; }
+      if (amountRaw === '' || isNaN(amount) || amount <= 0) { modalError('gastoError', 'Poné un monto mayor a 0.'); return; }
+      if (amount >= 1e10) { modalError('gastoError', 'El monto es demasiado grande.'); return; }
+      const row = { month: month + '-01', category, concept, amount: Math.round(amount * 100) / 100 };
+
+      const btn = document.getElementById('gastoSave');
+      btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Guardando…';
+      document.getElementById('gastoError').classList.remove('show');
+      try {
+        const res = id
+          ? await sb.from('expenses').update(row).eq('id', id).select('id')
+          : await sb.from('expenses').insert(row).select('id');
+        if (res.error || !res.data || !res.data.length) {
+          modalError('gastoError', res.error ? ('No se pudo guardar: ' + res.error.message) : 'No se pudo guardar (¿permiso?).');
+          return;
+        }
+        closeModal('modalGasto');
+        // Mostrar el mes donde quedó el gasto
+        document.getElementById('gasMonth').value = month;
+        await loadGastos();
+        flash(id ? '✏️ Gasto actualizado.' : '🧾 Gasto cargado.');
+      } catch (err) {
+        modalError('gastoError', 'Error: ' + (err.message || err));
+      } finally {
+        btn.disabled = false; btn.textContent = 'Guardar gasto';
+      }
+    }
+
+    async function deleteGasto(r) {
+      if (!confirm(`¿Borrar el gasto "${r.concept}" (${fmtMoney(r.amount)})?\n\nNo se puede deshacer.`)) return;
+      const { data, error } = await sb.from('expenses').delete().eq('id', r.id).select('id');
+      if (error || !data || !data.length) { alert('No se pudo borrar: ' + (error ? error.message : 'sin permiso o ya no existe.')); await loadGastos(); return; }
+      await loadGastos();
+      flash('🗑️ Gasto borrado.');
+    }
+
+    document.getElementById('gasMonth').addEventListener('change', loadGastos);
+    document.getElementById('btnGastoNew').addEventListener('click', () => openGastoModal(null));
+    document.getElementById('gastoSave').addEventListener('click', saveGasto);
 
     // ============================================================
     // LEADS — pending_subscriptions (dejaron datos en el modal de pago y no pagaron)

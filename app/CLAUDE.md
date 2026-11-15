@@ -78,6 +78,12 @@ y la API cortaba en 1000 filas; mes por día de Argentina. Conteo del
 **selector de programa** + **selector de período** ("Mes seleccionado" / "Histórico (todo)", `#rankPeriod`;
 el encabezado de la columna cambia (mes)↔(histórico)) + toggle **"Ver ranking completo"** que expande del
 top-5 a todos — 2026-09-10), y actividad de chats del mes (top-3 canales, barras). Barras CSS puras, sin librerías.
+**Ficha del alumno → Pagos** (finanzas etapa 1, 2026-11-15, `loadPanelPayments`): solo lectura. Todos sus `payments`
+(total neto/bruto, fecha del primero, lista) y, si tiene `mp_subscription_id`, los cobros fallidos de ESA suscripción en
+`mp_webhook_log` (`charge_status='rejected'` o `invoice_status='recycling'`, uno por `payment_id`; el registro existe desde
+el 13/11/2026). Se recarga cada vez que se dibuja la ficha.
+**🧾 Gastos**: vista `#view-gastos` (finanzas etapa 2, 2026-11-15). Selector de mes; cards total / publicidad / otros con el
+mes anterior; tabla con ✏️ / 🗑️; `#modalGasto` (mes, categoría, concepto, monto). Lee y escribe `expenses`.
 Idem **💰 Pagos**: vista `#view-pagos` (tab nuevo, 2026-09-10). Historial de TODOS los pagos (automáticos MP +
 manuales) de la tabla `payments`, ordenados por `paid_at` (fecha real del pago, no de carga). Selector de mes
 (mismo patrón que Métricas; `paid_at` es DATE → filtro por string 'YYYY-MM-DD', sin desfase UTC). Cards de
@@ -450,6 +456,11 @@ Historial de altas y bajas. id · athlete_id (FK profiles, **on delete set null*
 **La llena el trigger `profiles_subscription_events`** (AFTER INSERT/UPDATE de subscription_status, subscription_end,
 trial_status, subscription_start; solo `role='athlete'`; nunca frena el cambio del perfil). Una prueba cancelada no es baja.
 RLS: solo admin SELECT; nadie escribe desde el navegador. Antes del 2026-11-15 = reconstrucción aproximada desde `payments`.
+
+### expenses   ← (2026-11-15, finanzas etapa 2, `supabase/migrations/20261115_gastos.sql`)
+Gastos del negocio. id · month (date, **siempre día 1**) · category (`publicidad` | `otro`) · concept (1–120) · amount
+(numeric > 0, ARS) · created_at · created_by (default `auth.uid()`). RLS: una policy ALL solo admin (`get_my_role()='admin'`);
+anon sin permisos. La usa la vista 🧾 Gastos del admin.
 
 ### site_config   ← ✅ config editable del sitio (precios, links de pago, WhatsApp). Clave-valor.
 key text (primary key)   — p.ej. price_crossfit_ars, whatsapp_erika, **mp_plan_crossfit** (id del
