@@ -96,6 +96,11 @@
 //   Lo escribe un envoltorio después de procesar: nunca cambia la respuesta a MP y si falla solo se loguea.
 //   SQL: supabase/migrations/20261113_mp_webhook_log.sql.
 //
+// Cambio 2026-11-15 (finanzas, etapa 0a): al recibir la cancelación de una suscripción (fuera de la prueba), además de
+//   cancelled se carga subscription_end a quien no la tenga (next_payment_date → último cobro de MP + 1 mes → ciclos
+//   desde subscription_start → hoy). Una fecha ya cargada no se pisa. Si falla leer o guardar → 500 (MP reintenta).
+//   Log 'Baja desde MP' / 'REVISAR BAJA'. Prueba: node supabase/tests/process-payment-bajas.sim.mjs
+//
 // Secretos: MP_ACCESS_TOKEN, SUPABASE_URL, SERVICE_ROLE_KEY, RESEND_API_KEY, MP_WEBHOOK_SECRET.
 // ============================================================================
 
@@ -377,10 +382,43 @@ async function handleWebhook(req: Request, ctx: any): Promise<Response> {
       if (trialCancel) return await handleTrialCancel(adminClient, trialCancel)
 
       logUnregisteredCharge('suscripción cancelada y sin perfil vinculado')
-      await adminClient
+      // Etapa 0a (finanzas): además del estado, cargar la fecha de fin de acceso a quien no la tenga. Una fecha ya
+      // cargada (baja desde el perfil o desde el admin) no se pisa. Si falla leer o guardar → 500 para que MP reintente
+      // (todo es idempotente: el reintento vuelve a poner cancelled y completa la fecha que falte).
+      const { data: closing, error: closingErr } = await adminClient
+        .from('profiles')
+        .select('id, subscription_start, subscription_end')
+        .eq('mp_subscription_id', mpSubscriptionId)
+      if (closingErr) {
+        console.error('REVISAR BAJA: no se pudo leer el perfil de la suscripción cancelada:', closingErr.message, '| preapproval:', mpSubscriptionId)
+        return json({ ok: false, error: 'No se pudo leer el perfil' }, 500)
+      }
+      const { error: cancelErr } = await adminClient
         .from('profiles')
         .update({ subscription_status: 'cancelled' })
         .eq('mp_subscription_id', mpSubscriptionId)
+      if (cancelErr) {
+        console.error('REVISAR BAJA: no se pudo guardar la cancelación:', cancelErr.message, '| preapproval:', mpSubscriptionId)
+        return json({ ok: false, error: 'No se pudo guardar la cancelación' }, 500)
+      }
+      for (const prof of (closing || [])) {
+        if (prof.subscription_end) continue
+        const end = await cancelledAccessEnd(adminClient, prof, subscription)
+        if (!end.date) {
+          console.error('REVISAR BAJA: no se pudo calcular la fecha de fin:', end.source, '| preapproval:', mpSubscriptionId)
+          return json({ ok: false, error: 'No se pudo calcular la fecha de fin' }, 500)
+        }
+        const { error: endErr } = await adminClient
+          .from('profiles')
+          .update({ subscription_end: end.date })
+          .eq('id', prof.id)
+          .is('subscription_end', null)
+        if (endErr) {
+          console.error('REVISAR BAJA: no se pudo guardar la fecha de fin:', endErr.message, '| preapproval:', mpSubscriptionId)
+          return json({ ok: false, error: 'No se pudo guardar la fecha de fin' }, 500)
+        }
+        console.log('Baja desde MP: acceso hasta', end.date, '| fuente:', end.source, '| preapproval:', mpSubscriptionId)
+      }
       // Una prueba cancelada sin alta ya no va a cobrar: su caso se cierra. No bloquea la cancelación.
       await adminClient
         .from('trial_reviews')
@@ -948,6 +986,42 @@ function arMondayStr(now: Date = new Date()): string {
   const ar = new Date(now.getTime() - 3 * 3600 * 1000)
   ar.setUTCDate(ar.getUTCDate() - (ar.getUTCDay() + 6) % 7)
   return ar.toISOString().slice(0, 10)
+}
+
+// 'YYYY-MM-DD' + n meses, sin desbordar (31/01 + 1 → 28/02 o 29/02).
+function addMonthsStr(ds: string, n: number): string {
+  const [y, m, d] = ds.slice(0, 10).split('-').map(Number)
+  const idx = y * 12 + (m - 1) + n
+  const ny = Math.floor(idx / 12), nm = idx % 12
+  const last = new Date(Date.UTC(ny, nm + 1, 0)).getUTCDate()
+  return `${ny}-${String(nm + 1).padStart(2, '0')}-${String(Math.min(d, last)).padStart(2, '0')}`
+}
+
+// Etapa 0a (finanzas): fecha de fin de acceso de una suscripción cancelada desde MP, para un perfil que no la tiene.
+// 1) next_payment_date de la suscripción (como cancel-subscription); 2) último cobro de MP registrado + 1 mes;
+// 3) ciclos mensuales desde subscription_start (mismo cálculo de respaldo que cancel-subscription); 4) hoy (hora AR).
+// Devuelve { date: null } solo si falla la lectura de `payments` (quien llama responde 500 para que MP reintente).
+async function cancelledAccessEnd(adminClient: any, prof: any, subscription: any): Promise<{ date: string | null, source: string }> {
+  const npd = subscription?.next_payment_date ? String(subscription.next_payment_date).slice(0, 10) : ''
+  if (/^\d{4}-\d{2}-\d{2}$/.test(npd)) return { date: npd, source: 'next_payment_date' }
+  const { data: last, error } = await adminClient
+    .from('payments')
+    .select('paid_at')
+    .eq('athlete_id', prof.id)
+    .eq('method', 'mp')
+    .order('paid_at', { ascending: false })
+    .limit(1)
+  if (error) return { date: null, source: 'error leyendo payments: ' + error.message }
+  const lastPaid = last && last[0]?.paid_at ? String(last[0].paid_at).slice(0, 10) : ''
+  if (/^\d{4}-\d{2}-\d{2}$/.test(lastPaid)) return { date: addMonthsStr(lastPaid, 1), source: 'ultimo_cobro' }
+  const today = arDateFromApproved(null)
+  const start = prof.subscription_start ? String(prof.subscription_start).slice(0, 10) : ''
+  if (/^\d{4}-\d{2}-\d{2}$/.test(start)) {
+    let n = 1, d = addMonthsStr(start, 1)
+    while (d <= today && n < 240) d = addMonthsStr(start, ++n)
+    return { date: d, source: 'ciclos_desde_inicio' }
+  }
+  return { date: today, source: 'hoy' }
 }
 
 // ¿El perfil se había ido? Cancelado sin días pagos vigentes, o cortado por cobro fallido (ese corte deja

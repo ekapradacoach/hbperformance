@@ -174,6 +174,21 @@ for (const [pn, pf] of Object.entries(NON_TRIAL_PROFILES))
   for (const en of ['cobro aprobado', 'cobro rechazado, intento 1', 'preapproval cancelled'])
     diffCases.push({ name: `${pn} · ${en} · reenviado`, profiles: pf(), pendings: [pending('ana', 3)], event: EVENTS[en].event, mp: { ...(EVENTS[en].mp || {}), plan: 'plan-h' }, twice: true });
 
+// Finanzas, etapa 0a (2026-11-15): único cambio buscado respecto de 76c477a, en la cancelación desde MP.
+//   · Falla leer o guardar profiles → la nueva responde 500 (MP reintenta) y no se compara el resto.
+//   · Si no, todo tiene que ser idéntico salvo subscription_end: vacía en la vieja, una fecha en la nueva.
+// Los detalles (qué fecha, de dónde sale) los prueba process-payment-bajas.sim.mjs.
+function intended0a(c, v, n) {
+  if (c.mp?.subStatus !== 'cancelled') return false;
+  if (!c.twice && (c.failOn === 'profiles' || c.failWrite === 'profiles')) return n.r.http === 500;
+  const nn = clone(n);
+  nn.s.profiles.forEach((p, i) => {
+    const o = v.s.profiles[i];
+    if (o && o.subscription_end == null && /^\d{4}-\d{2}-\d{2}$/.test(p.subscription_end || '')) p.subscription_end = null;
+  });
+  return JSON.stringify(v) === JSON.stringify(nn);
+}
+
 // ---- Parte 2: casos de la semana de prueba (versión nueva) ----
 const T = 'sub-luz';
 const trialCases = [
@@ -244,21 +259,23 @@ try {
   console.log = console.warn = console.error = (...a) => { logs.push(a.join(' ')); };
 
   // Parte 1
-  let diffFails = 0;
+  let diffFails = 0, intended = 0;
   for (const c of diffCases) {
-    const out = {};
+    const out = {}, raw = {};
     for (const [tag, h] of [['vieja', oldH], ['nueva', newH]]) {
       fresh(c);
       let r = await send(h, c);
       if (c.twice) { db.failOn = null; db.failWrite = null; r = await send(h, c); }
-      out[tag] = JSON.stringify({ r, s: snapshot() });
+      raw[tag] = { r, s: snapshot() };
+      out[tag] = JSON.stringify(raw[tag]);
     }
+    if (out.vieja !== out.nueva && intended0a(c, raw.vieja, raw.nueva)) { intended++; continue; }
     if (out.vieja !== out.nueva) {
       diffFails++; failed++;
       log(`FALLA  [diferencial] ${c.name}\n         vieja: ${out.vieja.slice(0, 400)}\n         nueva: ${out.nueva.slice(0, 400)}`);
     }
   }
-  log(`Diferencial: ${diffCases.length - diffFails} de ${diffCases.length} escenarios idénticos a ${OLD_REF}`);
+  log(`Diferencial: ${diffCases.length - diffFails - intended} de ${diffCases.length} escenarios idénticos a ${OLD_REF}, ${intended} con el cambio buscado de la etapa 0a de finanzas, ${diffFails} con diferencias no buscadas`);
 
   // Parte 2
   let tFails = 0;

@@ -65,7 +65,11 @@ node supabase/tests/trial-admin.sim.mjs
 node supabase/tests/trial-alerts.sim.mjs
 ```
 
-- [ ] Últimas líneas: `103 de 103`, `52 de 52`, `21 de 21`, `TODO OK`, `49 de 49`, `10 de 10`, `20 de 20`, `42 de 42`, `15 de 15` (números después de la etapa 9).
+```bash
+node supabase/tests/process-payment-bajas.sim.mjs
+```
+
+- [ ] Últimas líneas: `103 de 103`, `52 de 52`, `23 de 23`, `TODO OK`, `49 de 49`, `10 de 10`, `20 de 20`, `42 de 42`, `15 de 15`, `16 de 16` (números después de la etapa 0 de finanzas, 2026-11-15; los pagos pasaron de 21 a 23 el 13/11). En la etapa 6, la línea "Diferencial" tiene que decir `0 con diferencias no buscadas`.
 
 ### A4. Nadie en prueba y nada pendiente
 

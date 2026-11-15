@@ -70,7 +70,10 @@ Realtime): columna izq de canales (Programas = chat grupal por slug; Asesorías 
 `dm_<athlete_id>`), columna der con la conversación. Los mensajes se guardan en `messages.channel`.
 Idem **Métricas**: vista `#view-metricas` (no existe `metricas.html`). Selector de mes + 4 secciones
 (la card de **Ingresos se migró al tab 💰 Pagos** — 2026-09-10): distribución de alumnos por programa (barras CSS),
-evolución 6 meses (altas/bajas/total; bajas = N/D), **ranking de actividad** (block_completions: conteo del
+evolución 6 meses (**desde 2026-11-15 sale de `subscription_events`**: altas = nuevas · vuelven · pruebas convertidas,
+bajas en el mes en que termina el acceso, neto y activos al cierre; ver la tabla más abajo), **ranking de actividad**
+(**función `admin_ranking_actividad(desde, hasta)`** en la base, una fila por alumno; antes bajaba toda `block_completions`
+y la API cortaba en 1000 filas; mes por día de Argentina. Conteo del
 **mes seleccionado**, "Última actividad" **global**; incluye a TODOS los alumnos —0 completions figuran con 0/"—";
 **selector de programa** + **selector de período** ("Mes seleccionado" / "Histórico (todo)", `#rankPeriod`;
 el encabezado de la columna cambia (mes)↔(histórico)) + toggle **"Ver ranking completo"** que expande del
@@ -89,6 +92,9 @@ el venc. vigente) y guarda `prev_subscription_end` (snapshot). Si el atleta est�
 registro (NO recalcula venc.). **Anular** (solo manuales): borra la fila y revierte `subscription_end` a
 `prev_subscription_end` SOLO si nadie lo cambió desde este pago (si cambió, avisa y no toca). Los pagos MP los
 registra `process-payment` solo (ver app/CONTEXTO). Solo admins (RLS `get_my_role()='admin'`).
+**Pagos de alumnos eliminados (2026-11-15, `20261115_pagos_conservar.sql`):** `payments.athlete_id` admite vacío y es
+`ON DELETE SET NULL` (antes CASCADE: "Eliminar" borraba los pagos). La tabla muestra "Alumno eliminado"; anular un pago manual
+así lo borra sin tocar vencimientos.
 Idem **Configuración**: vista `#view-config` (⚙️ en el sidebar). Edita la tabla `site_config`
 (precios por programa, links MP/PayPal, WhatsApp Erika/Gonza). Guardar → `upsert(onConflict:'key')` con
 feedback "✓ Guardado". Las **3 landing de programa** (`crossfit/hybrid/fuerza-corredores.html`) leen
@@ -437,6 +443,14 @@ block_id uuid (FK planning_blocks.id)
 completed_at timestamptz
 comment text
 
+### subscription_events   ← (2026-11-15, finanzas etapa 0b, `supabase/migrations/20261115_finanzas_eventos.sql`)
+Historial de altas y bajas. id · athlete_id (FK profiles, **on delete set null**) · program · kind (`alta` | `reactivacion` |
+`baja` | `baja_anulada` | `prueba_inicio` | `prueba_convertida` | `prueba_cancelada`) · event_date (día AR) · access_until
+(baja / prueba cancelada) · voided (baja anulada porque volvió antes de perder el acceso) · source (`trigger` | `reconstruccion`).
+**La llena el trigger `profiles_subscription_events`** (AFTER INSERT/UPDATE de subscription_status, subscription_end,
+trial_status, subscription_start; solo `role='athlete'`; nunca frena el cambio del perfil). Una prueba cancelada no es baja.
+RLS: solo admin SELECT; nadie escribe desde el navegador. Antes del 2026-11-15 = reconstrucción aproximada desde `payments`.
+
 ### site_config   ← ✅ config editable del sitio (precios, links de pago, WhatsApp). Clave-valor.
 key text (primary key)   — p.ej. price_crossfit_ars, whatsapp_erika, **mp_plan_crossfit** (id del
   preapproval_plan por programa, lo escribe `create-plans`). `mp_link_<prog>` = legacy sin uso.
@@ -695,7 +709,15 @@ NO `create-subscription`), `SUPABASE_URL`, `SERVICE_ROLE_KEY`.
    pantalla `#expiredScreen` "Tu suscripción venció" + "Volver a suscribirme". (El caso activo o
    cancelado-dentro-del-período no se toca.)
 4. (Alternativa server-side) Si MP manda el webhook `subscription_preapproval` con status cancelled,
-   `process-payment` también pone `subscription_status='cancelled'` por `mp_subscription_id`.
+   `process-payment` también pone `subscription_status='cancelled'` por `mp_subscription_id`. **Desde la etapa 0a de
+   finanzas (2026-11-15, código local hasta el deploy)** además carga `subscription_end` a quien no la tenga
+   (`cancelledAccessEnd`: `next_payment_date` → último cobro de MP + 1 mes → ciclos desde `subscription_start` → hoy);
+   una fecha ya cargada no se pisa; si falla leer o guardar responde 500. Simulación: `process-payment-bajas.sim.mjs`.
+5. **"Dar de baja" en el admin (2026-11-15, código local hasta el deploy):** modal `#modalBaja` con fecha de fin de acceso. Si el
+   alumno tiene `mp_subscription_id` y no está `in_trial`, la casilla "Cancelar también en Mercado Pago" viene tildada → 2ª
+   confirmación → Edge Function **`admin-cancel-subscription`** (Verify JWT ON, solo admin; body `{ athlete_id, subscription_end }`):
+   GET + PUT `cancelled` en MP solo si no lo está, y **recién después** `cancelled` + la fecha. Si MP falla, no toca el perfil.
+   Sin la casilla, o manuales: el UPDATE directo de siempre. Simulación: `admin-cancel-subscription.sim.mjs`.
 
 ## Identidad visual
 Misma que la landing:
