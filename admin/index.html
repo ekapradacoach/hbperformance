@@ -349,6 +349,31 @@
     overflow: hidden;
     overflow-x: auto;
   }
+  /* Barra nativa más visible (escritorio) */
+  .table-wrap { scrollbar-color: #F5A800 #2A2A2A; }
+  .table-wrap::-webkit-scrollbar { height: 12px; }
+  .table-wrap::-webkit-scrollbar-track { background: #2A2A2A; }
+  .table-wrap::-webkit-scrollbar-thumb { background: #F5A800; border-radius: 6px; }
+  /* Barra horizontal fija abajo de la pantalla para tablas anchas (2026-11-15).
+     Aparece cuando una tabla se pasa de ancho y su propia barra queda fuera de la pantalla. */
+  .hs-dock {
+    position: fixed; bottom: 0; z-index: 80; display: none; align-items: center; gap: 8px;
+    padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+    background: rgba(13,13,13,0.94); border: 1px solid var(--border); border-bottom: none;
+    border-radius: 12px 12px 0 0; box-shadow: 0 -6px 18px rgba(0,0,0,0.45);
+  }
+  .hs-dock.show { display: flex; }
+  .hs-btn {
+    flex-shrink: 0; width: 34px; height: 30px; border-radius: 8px; border: 1px solid #3a3a3a;
+    background: #1A1A1A; color: var(--accent); font-size: 0.9rem; cursor: pointer; padding: 0;
+  }
+  .hs-btn:disabled { color: #555; cursor: default; }
+  .hs-track { position: relative; flex: 1; height: 14px; border-radius: 7px; background: #2A2A2A; cursor: pointer; touch-action: none; }
+  .hs-thumb {
+    position: absolute; top: -4px; bottom: -4px; left: 0; min-width: 36px; border-radius: 11px;
+    background: var(--accent); cursor: grab; touch-action: none; box-shadow: 0 0 0 2px rgba(0,0,0,0.4);
+  }
+  .hs-thumb:active { cursor: grabbing; }
   table { width: 100%; border-collapse: collapse; min-width: 640px; }
   thead th {
     text-align: left;
@@ -1150,7 +1175,9 @@
   .al-tab:hover:not(.active) { color: var(--text); }
   .al-tab.active { background: rgba(245,168,0,0.14); color: var(--accent); border-color: rgba(245,168,0,0.4); }
 
-  .al-progfilter { margin-bottom: 18px; }
+  .al-progfilter { margin-bottom: 18px; display: flex; align-items: center; flex-wrap: wrap; gap: 10px 14px; }
+  .al-result { color: var(--text-secondary); font-size: 0.9rem; }
+  .al-result b { color: var(--accent); font-size: 1rem; }
   .al-progfilter select {
     background: var(--bg-input);
     border: 1px solid #333;
@@ -1740,7 +1767,7 @@
             <div class="card-sub" id="cardActiveSub"></div>
           </div>
           <div class="card breakdown">
-            <div class="card-label"><span>🏷️</span> Por programa</div>
+            <div class="card-label"><span>🏷️</span> Activos por programa</div>
             <ul class="breakdown-list" id="cardByProgram">
               <li class="empty">—</li>
             </ul>
@@ -1895,6 +1922,7 @@
             <option value="asesoria-erika">Asesoría Erika</option>
             <option value="asesoria-gonza">Asesoría Gonza</option>
           </select>
+          <span class="al-result" id="alResult"></span>
         </div>
 
         <div class="table-wrap">
@@ -4893,6 +4921,15 @@
         return true;
       });
 
+      // Cantidad del resultado: pestaña × programa (× búsqueda, si hay)
+      const AL_TAB_LABEL = { active: 'Activos', inactive: 'Inactivos', all: 'Todos', trial: 'En prueba' };
+      const resEl = document.getElementById('alResult');
+      if (resEl) {
+        const progTxt = alProgramFilter !== 'all' ? ` · ${programLabel(alProgramFilter)}` : ' · Todos los programas';
+        const searchTxt = term ? ` · “${esc(alSearchTerm.trim())}”` : '';
+        resEl.innerHTML = `<b>${rows.length}</b> alumno${rows.length === 1 ? '' : 's'} · ${AL_TAB_LABEL[alStatus] || ''}${progTxt}${searchTxt}`;
+      }
+
       const body = document.getElementById('alBody');
       const moreBtn = document.getElementById('alMore');
       if (!rows.length) {
@@ -7045,7 +7082,9 @@
       const pct = totalN ? Math.round((activeN / totalN) * 100) : 0;
       document.getElementById('cardActiveSub').textContent = totalN ? `${pct}% del total` : 'Sin alumnos aún';
 
-      const { data: byProg } = await sb.from('profiles').select('program').eq('role', 'athlete');
+      // Solo activos (mismo criterio que "Alumnos activos por programa" de Métricas): suma = "Alumnos activos"
+      const { data: byProg } = await sb.from('profiles').select('program')
+        .eq('role', 'athlete').eq('subscription_status', 'active');
       const counts = {};
       (byProg || []).forEach(r => {
         const key = r.program || 'sin programa';
@@ -7369,6 +7408,103 @@
       loadLeads();   // carga silenciosa → contador de leads sin contactar en el sidebar
       loadPruebas(); // carga silenciosa → contador de casos de la prueba para revisar
     }
+
+    // ============================================================
+    // Barra horizontal fija para tablas anchas (2026-11-15)
+    // Si una .table-wrap de la vista activa se pasa de ancho y su barra propia queda fuera de la pantalla,
+    // aparece abajo una barra con ◀ ▶ y un cursor dorado para arrastrar. Sirve para todas las tablas.
+    // ============================================================
+    (function tableScrollDock() {
+      const dock = document.createElement('div');
+      dock.className = 'hs-dock';
+      dock.setAttribute('aria-hidden', 'true');
+      dock.innerHTML = '<button class="hs-btn" type="button" data-dir="-1" title="Ver columnas de la izquierda">◀</button>'
+        + '<div class="hs-track"><div class="hs-thumb"></div></div>'
+        + '<button class="hs-btn" type="button" data-dir="1" title="Ver columnas de la derecha">▶</button>';
+      document.body.appendChild(dock);
+      const track = dock.querySelector('.hs-track');
+      const thumb = dock.querySelector('.hs-thumb');
+      const [btnL, btnR] = dock.querySelectorAll('.hs-btn');
+      let target = null, raf = 0, drag = null;
+
+      function pick() {
+        const vh = window.innerHeight;
+        let best = null, bestVis = 0;
+        document.querySelectorAll('.view.active .table-wrap').forEach(w => {
+          if (!w.offsetParent || w.scrollWidth <= w.clientWidth + 1) return;
+          const r = w.getBoundingClientRect();
+          // Visible en pantalla, con su barra propia (el borde de abajo) fuera de la pantalla
+          if (r.bottom <= vh - 4 || r.top > vh - 90) return;
+          const vis = Math.min(r.bottom, vh) - Math.max(r.top, 0);
+          if (vis > bestVis) { bestVis = vis; best = w; }
+        });
+        return best;
+      }
+      function paint() {
+        raf = 0;
+        if (drag) return;
+        target = pick();
+        if (!target) { dock.classList.remove('show'); return; }
+        const r = target.getBoundingClientRect();
+        dock.style.left = Math.max(r.left, 0) + 'px';
+        dock.style.width = Math.min(r.width, window.innerWidth - Math.max(r.left, 0)) + 'px';
+        dock.classList.add('show');
+        paintThumb();
+      }
+      function paintThumb() {
+        if (!target) return;
+        const tw = track.clientWidth;
+        const ratio = target.clientWidth / target.scrollWidth;
+        const w = Math.max(36, Math.round(tw * ratio));
+        const max = target.scrollWidth - target.clientWidth;
+        const x = max > 0 ? (target.scrollLeft / max) * (tw - w) : 0;
+        thumb.style.width = w + 'px';
+        thumb.style.transform = `translateX(${x}px)`;
+        btnL.disabled = target.scrollLeft <= 0;
+        btnR.disabled = target.scrollLeft >= max - 1;
+      }
+      const schedule = () => { if (!raf) raf = setTimeout(paint, 30); };
+
+      // Arrastrar el cursor (mouse y dedo)
+      thumb.addEventListener('pointerdown', e => {
+        if (!target) return;
+        e.preventDefault(); e.stopPropagation();
+        thumb.setPointerCapture(e.pointerId);
+        drag = { x: e.clientX, start: target.scrollLeft };
+      });
+      thumb.addEventListener('pointermove', e => {
+        if (!drag || !target) return;
+        const tw = track.clientWidth, w = thumb.offsetWidth;
+        const max = target.scrollWidth - target.clientWidth;
+        if (tw - w <= 0) return;
+        target.scrollLeft = drag.start + (e.clientX - drag.x) * (max / (tw - w));
+        paintThumb();
+      });
+      const endDrag = () => { if (drag) { drag = null; schedule(); } };
+      thumb.addEventListener('pointerup', endDrag);
+      thumb.addEventListener('pointercancel', endDrag);
+      // Tocar la barra: salta a ese punto
+      track.addEventListener('pointerdown', e => {
+        if (!target || e.target === thumb) return;
+        const r = track.getBoundingClientRect(), w = thumb.offsetWidth;
+        const max = target.scrollWidth - target.clientWidth;
+        const p = Math.min(1, Math.max(0, (e.clientX - r.left - w / 2) / Math.max(1, r.width - w)));
+        target.scrollLeft = p * max;
+        paintThumb();
+      });
+      [btnL, btnR].forEach(b => b.addEventListener('click', () => {
+        if (!target) return;
+        target.scrollLeft += Number(b.dataset.dir) * Math.round(target.clientWidth * 0.6);
+        paintThumb();
+      }));
+
+      // Recalcular al desplazar (página o tabla), cambiar el tamaño, o cuando cambia el contenido
+      window.addEventListener('scroll', schedule, { passive: true });
+      document.addEventListener('scroll', e => { if (target && e.target === target) paintThumb(); else schedule(); }, { passive: true, capture: true });
+      window.addEventListener('resize', schedule);
+      new MutationObserver(schedule).observe(document.querySelector('.main'), { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style'] });
+      schedule();
+    })();
 
     init();
   </script>
