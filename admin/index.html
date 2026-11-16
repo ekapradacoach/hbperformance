@@ -2091,12 +2091,13 @@
         <div class="table-wrap">
           <table class="al-table met-table">
             <thead>
-              <tr><th>Nombre</th><th>Programa</th><th id="rankCountHead">Bloques completados (mes)</th><th>Última actividad</th></tr>
+              <tr><th>Nombre</th><th>Programa</th><th id="rankCountHead">Bloques completados (mes)</th><th title="Última vez que abrió el portal (se registra desde el 16/11/2026)">Última entrada</th></tr>
             </thead>
             <tbody id="metTop"><tr><td class="loading-row" colspan="4">Cargando…</td></tr></tbody>
           </table>
         </div>
         <button type="button" class="rank-toggle" id="rankToggle" style="display:none;">Ver ranking completo</button>
+        <div class="met-note">“Última entrada” = última vez que abrió el portal, aunque no marque ningún bloque (se registra desde el 16/11/2026: antes de eso figura “—”).</div>
 
         <!-- Sección 5: Actividad en chats -->
         <div class="met-section-title">💬 Actividad en chats (mes seleccionado)</div>
@@ -5935,8 +5936,10 @@
       if (!input.value) input.value = currentMonthStr();
       const [y, m] = input.value.split('-').map(Number);
 
-      const { data: aths, error } = await sb.from('profiles')
-        .select('id, full_name, program, subscription_status, subscription_end, created_at, custom_price').eq('role', 'athlete');
+      const ATH_COLS = 'id, full_name, program, subscription_status, subscription_end, created_at, custom_price';
+      let { data: aths, error } = await sb.from('profiles').select(ATH_COLS + ', last_seen_at').eq('role', 'athlete');
+      // Si todavía no se corrió 20261116_ultima_entrada.sql, la columna no existe: se lee sin ella.
+      if (error) ({ data: aths, error } = await sb.from('profiles').select(ATH_COLS).eq('role', 'athlete'));
       const athletes = error ? [] : (aths || []);
       const athById = {};
       athletes.forEach(a => { athById[a.id] = a; });
@@ -6067,7 +6070,7 @@
       });
       rankRows = Object.keys(athById).map(id => {
         const a = athById[id], g = agg[id] || {};
-        return { id, name: a.full_name || '—', program: a.program, status: a.subscription_status, access: rankHasAccess(a), count: g.monthCount || 0, total: g.totalCount || 0, last: g.lastGlobal || null };
+        return { id, name: a.full_name || '—', program: a.program, status: a.subscription_status, access: rankHasAccess(a), count: g.monthCount || 0, total: g.totalCount || 0, last: g.lastGlobal || null, seen: a.last_seen_at || null };
       });
       renderRankTable();
     }
@@ -6096,7 +6099,7 @@
           : ' <span class="tr-badge tr-cancelled" title="Canceló su suscripción">Cancelado</span>')}</td>
         <td><span class="prog-badge prog-${progKey(t.program)}">${programLabel(t.program)}</span></td>
         <td>${cnt(t)}</td>
-        <td>${t.last ? fmtDate(t.last) : '—'}</td>
+        <td>${t.seen ? fmtDate(t.seen) : '<span class="leads-sub" title="No entró desde que se empezó a registrar (16/11/2026)">—</span>'}</td>
       </tr>`).join('');
       if (toggle) {
         if (rows.length > 5) {

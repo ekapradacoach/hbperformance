@@ -4100,6 +4100,25 @@
       if (error) console.warn('No se pudo marcar shortcut_guide_seen:', error.message);
     });
 
+    // Última entrada al portal (2026-11-16): avisa a la base que el alumno abrió la app, como mucho una vez por día.
+    // La base también filtra por día (registrar_entrada). Nunca frena ni rompe el portal: cualquier error se ignora.
+    function registrarEntrada() {
+      try {
+        if (!ATHLETE || !ATHLETE.id) return;
+        const day = new Date(Date.now() - 3 * 3600e3).toISOString().slice(0, 10);   // día de Argentina
+        const key = 'hb_seen_' + ATHLETE.id;
+        let last = null;
+        try { last = localStorage.getItem(key); } catch (e) { /* sin localStorage: se llama igual */ }
+        if (last === day) return;
+        sb.rpc('registrar_entrada').then(({ error }) => {
+          if (error) { console.warn('registrar_entrada:', error.message); return; }
+          try { localStorage.setItem(key, day); } catch (e) { /* nada */ }
+        }, () => {});
+      } catch (e) { /* nada */ }
+    }
+    // La app instalada puede quedar abierta varios días: al volver a mirarla, se vuelve a chequear el día.
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') registrarEntrada(); });
+
     async function init() {
       const { data: { session } } = await sb.auth.getSession();
       if (!session || !session.user) { window.location.replace('login.html'); return; }
@@ -4113,6 +4132,7 @@
       HYBRID_VARIANT = profile.hybrid_variant || null;
       ACCESS_FROM = profile.access_from ? String(profile.access_from).slice(0, 10) : null;
       progDate = TODAY;
+      registrarEntrada();   // también si después ve la pantalla de vencido: igual entró
 
       // Corte de acceso: cancelada Y con la fecha de fin ya vencida (anterior a hoy) → pantalla de vencido.
       // (Activa, o cancelada-pero-todavía-dentro-del-período, siguen viendo el dashboard normal.)

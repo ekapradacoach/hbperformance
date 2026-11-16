@@ -365,6 +365,10 @@ subscription_start date
 subscription_end date
 subscription_status text ('active' | 'cancelled' | 'pending')
 mp_subscription_id text
+last_seen_at timestamptz   ← (2026-11-16, `supabase/migrations/20261116_ultima_entrada.sql`) última vez que abrió el portal. La escribe SOLO la
+  función `registrar_entrada()` (SECURITY DEFINER, solo auth.uid() con role athlete, máx. 1 vez por día AR); el alumno no puede escribirla
+  directo (lista blanca). `app/dashboard.html` → `registrarEntrada()` al abrir y en `visibilitychange` (localStorage `hb_seen_<id>`).
+  Admin: columna "Última entrada" en Métricas → Alumnos más activos (reemplaza a "Última actividad", que se sacó).
 avatar_url text   ← ⚠️ AGREGAR en Supabase. URL pública de la foto de perfil (bucket `avatars`). NULL = usa iniciales.
 custom_price numeric   ← ⚠️ AGREGAR en Supabase (2026-07-27). Precio manual por atleta. NULL = usa el de site_config. (Aún NO conectado a Métricas.)
 hybrid_variant text   ← ⚠️ AGREGAR en Supabase (2026-07-27). '3' | '4'. Solo aplica si program='hybrid' (qué plan entrena; la planificación vive en program_slug 'hybrid-3'/'hybrid-4').
