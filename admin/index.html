@@ -2082,7 +2082,7 @@
             </select>
           </label>
           <label>Alumnos
-            <select id="rankAccess" title="Activos = alumnos activos + cancelados que todavía no llegaron a su fecha de fin. Sin pendientes.">
+            <select id="rankAccess" title="Activos = solo alumnos activos (sin cancelados ni pendientes)">
               <option value="active">Activos</option>
               <option value="all">Todos</option>
             </select>
@@ -6042,14 +6042,10 @@
     let rankPeriod = 'month';   // 'month' = conteo del mes seleccionado · 'all' = histórico (todo)
     let rankExpanded = false;
     let rankAccess = 'active';  // 'active' = con acceso hoy · 'all' = también los que ya no están
-    // "Activos" = activos (como la pestaña Activos de Alumnos) + cancelados que todavía no llegaron a su fecha de fin.
-    // Quedan afuera los pendientes y los cancelados sin fecha de fin.
+    // "Activos" = solo subscription_status 'active' (igual que la pestaña Activos de Alumnos).
+    // Los cancelados quedan afuera aunque todavía tengan acceso hasta su fecha de fin (decisión de Erika, 2026-11-16).
     function rankHasAccess(a) {
-      if (!a) return false;
-      if (a.subscription_status === 'active') return true;
-      if (a.subscription_status !== 'cancelled') return false;
-      const end = a.subscription_end ? String(a.subscription_end).slice(0, 10) : null;
-      return !!end && end >= todayStr();
+      return !!a && a.subscription_status === 'active';
     }
     async function renderTopActivos(athById, y, m) {
       const body = document.getElementById('metTop');
@@ -6097,7 +6093,7 @@
       body.innerHTML = shown.map(t => `<tr>
         <td>${esc(t.name)}${t.access ? '' : (t.status === 'pending'
           ? ' <span class="tr-badge tr-cancelled" title="Todavía no pagó">Pendiente</span>'
-          : ' <span class="tr-badge tr-cancelled" title="Cancelado: ya pasó su fecha de fin o no tiene fecha">Ya no está</span>')}</td>
+          : ' <span class="tr-badge tr-cancelled" title="Canceló su suscripción">Cancelado</span>')}</td>
         <td><span class="prog-badge prog-${progKey(t.program)}">${programLabel(t.program)}</span></td>
         <td>${cnt(t)}</td>
         <td>${t.last ? fmtDate(t.last) : '—'}</td>
