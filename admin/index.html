@@ -2082,7 +2082,7 @@
             </select>
           </label>
           <label>Alumnos
-            <select id="rankAccess" title="Activos = con acceso hoy al portal (no cancelados, o cancelados que todavía no llegaron a su fecha de fin)">
+            <select id="rankAccess" title="Activos = alumnos activos + cancelados que todavía no llegaron a su fecha de fin. Sin pendientes.">
               <option value="active">Activos</option>
               <option value="all">Todos</option>
             </select>
@@ -6042,11 +6042,14 @@
     let rankPeriod = 'month';   // 'month' = conteo del mes seleccionado · 'all' = histórico (todo)
     let rankExpanded = false;
     let rankAccess = 'active';  // 'active' = con acceso hoy · 'all' = también los que ya no están
-    // Mismo corte que el portal (app/dashboard.html): sin acceso solo si está cancelado y su fecha de fin ya pasó.
+    // "Activos" = activos (como la pestaña Activos de Alumnos) + cancelados que todavía no llegaron a su fecha de fin.
+    // Quedan afuera los pendientes y los cancelados sin fecha de fin.
     function rankHasAccess(a) {
-      if (!a || a.subscription_status !== 'cancelled') return true;
+      if (!a) return false;
+      if (a.subscription_status === 'active') return true;
+      if (a.subscription_status !== 'cancelled') return false;
       const end = a.subscription_end ? String(a.subscription_end).slice(0, 10) : null;
-      return !end || end >= todayStr();
+      return !!end && end >= todayStr();
     }
     async function renderTopActivos(athById, y, m) {
       const body = document.getElementById('metTop');
@@ -6068,7 +6071,7 @@
       });
       rankRows = Object.keys(athById).map(id => {
         const a = athById[id], g = agg[id] || {};
-        return { id, name: a.full_name || '—', program: a.program, access: rankHasAccess(a), count: g.monthCount || 0, total: g.totalCount || 0, last: g.lastGlobal || null };
+        return { id, name: a.full_name || '—', program: a.program, status: a.subscription_status, access: rankHasAccess(a), count: g.monthCount || 0, total: g.totalCount || 0, last: g.lastGlobal || null };
       });
       renderRankTable();
     }
@@ -6092,7 +6095,9 @@
         return;
       }
       body.innerHTML = shown.map(t => `<tr>
-        <td>${esc(t.name)}${t.access ? '' : ' <span class="tr-badge tr-cancelled" title="Cancelado y ya pasó su fecha de fin">Ya no está</span>'}</td>
+        <td>${esc(t.name)}${t.access ? '' : (t.status === 'pending'
+          ? ' <span class="tr-badge tr-cancelled" title="Todavía no pagó">Pendiente</span>'
+          : ' <span class="tr-badge tr-cancelled" title="Cancelado: ya pasó su fecha de fin o no tiene fecha">Ya no está</span>')}</td>
         <td><span class="prog-badge prog-${progKey(t.program)}">${programLabel(t.program)}</span></td>
         <td>${cnt(t)}</td>
         <td>${t.last ? fmtDate(t.last) : '—'}</td>
