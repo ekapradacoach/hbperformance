@@ -1425,7 +1425,7 @@
   .met-header .section-title { margin: 0; }
   .met-month { margin-left: auto; display: flex; align-items: center; gap: 8px; }
   /* Ranking de actividad: selector de programa + toggle "Ver todos" */
-  .rank-controls { display: flex; align-items: center; gap: 8px; margin: 4px 0 12px; }
+  .rank-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; margin: 4px 0 12px; }
   .rank-controls label { color: var(--text-secondary); font-size: 0.88rem; font-weight: 600; display: flex; align-items: center; gap: 8px; }
   .rank-controls select { background: #1A1A1A; border: 1px solid #333; border-radius: 8px; padding: 8px 10px; color: var(--text); font-family: var(--font-body); font-size: 0.9rem; color-scheme: dark; }
   .rank-toggle { display: block; width: 100%; margin-top: 12px; background: transparent; border: 1px dashed #3a3a3a; color: var(--text-secondary); border-radius: 8px; padding: 9px; font-family: var(--font-body); font-weight: 600; font-size: 0.85rem; cursor: pointer; }
@@ -2079,6 +2079,12 @@
             <select id="rankPeriod">
               <option value="month">Mes seleccionado</option>
               <option value="all">Histórico (todo)</option>
+            </select>
+          </label>
+          <label>Alumnos
+            <select id="rankAccess" title="Activos = con acceso hoy al portal (no cancelados, o cancelados que todavía no llegaron a su fecha de fin)">
+              <option value="active">Activos</option>
+              <option value="all">Todos</option>
             </select>
           </label>
         </div>
@@ -5930,7 +5936,7 @@
       const [y, m] = input.value.split('-').map(Number);
 
       const { data: aths, error } = await sb.from('profiles')
-        .select('id, full_name, program, subscription_status, created_at, custom_price').eq('role', 'athlete');
+        .select('id, full_name, program, subscription_status, subscription_end, created_at, custom_price').eq('role', 'athlete');
       const athletes = error ? [] : (aths || []);
       const athById = {};
       athletes.forEach(a => { athById[a.id] = a; });
@@ -6035,6 +6041,13 @@
     let rankProgram = 'all';
     let rankPeriod = 'month';   // 'month' = conteo del mes seleccionado · 'all' = histórico (todo)
     let rankExpanded = false;
+    let rankAccess = 'active';  // 'active' = con acceso hoy · 'all' = también los que ya no están
+    // Mismo corte que el portal (app/dashboard.html): sin acceso solo si está cancelado y su fecha de fin ya pasó.
+    function rankHasAccess(a) {
+      if (!a || a.subscription_status !== 'cancelled') return true;
+      const end = a.subscription_end ? String(a.subscription_end).slice(0, 10) : null;
+      return !end || end >= todayStr();
+    }
     async function renderTopActivos(athById, y, m) {
       const body = document.getElementById('metTop');
       // Etapa 0c de finanzas: el conteo lo hace la base (función admin_ranking_actividad, una fila por alumno).
@@ -6055,7 +6068,7 @@
       });
       rankRows = Object.keys(athById).map(id => {
         const a = athById[id], g = agg[id] || {};
-        return { id, name: a.full_name || '—', program: a.program, count: g.monthCount || 0, total: g.totalCount || 0, last: g.lastGlobal || null };
+        return { id, name: a.full_name || '—', program: a.program, access: rankHasAccess(a), count: g.monthCount || 0, total: g.totalCount || 0, last: g.lastGlobal || null };
       });
       renderRankTable();
     }
@@ -6067,6 +6080,7 @@
       const head = document.getElementById('rankCountHead');
       if (head) head.textContent = (rankPeriod === 'all') ? 'Bloques completados (histórico)' : 'Bloques completados (mes)';
       let rows = (rankProgram === 'all') ? rankRows.slice() : rankRows.filter(r => r.program === rankProgram);
+      if (rankAccess === 'active') rows = rows.filter(r => r.access);
       rows.sort((a, b) =>
         (cnt(b) - cnt(a)) ||
         String(b.last || '').localeCompare(String(a.last || '')) ||   // desempate: más reciente primero
@@ -6078,7 +6092,7 @@
         return;
       }
       body.innerHTML = shown.map(t => `<tr>
-        <td>${esc(t.name)}</td>
+        <td>${esc(t.name)}${t.access ? '' : ' <span class="tr-badge tr-cancelled" title="Cancelado y ya pasó su fecha de fin">Ya no está</span>'}</td>
         <td><span class="prog-badge prog-${progKey(t.program)}">${programLabel(t.program)}</span></td>
         <td>${cnt(t)}</td>
         <td>${t.last ? fmtDate(t.last) : '—'}</td>
@@ -6094,6 +6108,7 @@
     }
     document.getElementById('rankProgram').addEventListener('change', (e) => { rankProgram = e.target.value; renderRankTable(); });
     document.getElementById('rankPeriod').addEventListener('change', (e) => { rankPeriod = e.target.value; renderRankTable(); });
+    document.getElementById('rankAccess').addEventListener('change', (e) => { rankAccess = e.target.value; renderRankTable(); });
     document.getElementById('rankToggle').addEventListener('click', () => { rankExpanded = !rankExpanded; renderRankTable(); });
 
     // ---- Sección 5: actividad en chats ----

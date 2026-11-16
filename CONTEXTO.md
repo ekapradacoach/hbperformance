@@ -1026,6 +1026,12 @@ No toca la semana de prueba ni el portal. Solo la etapa 0a toca `process-payment
 - **Datos:** lee `payments`, `subscription_events` y `expenses` de a 1000 (todas las filas), atletas y precios de `site_config`; avisa en amarillo lo que no pudo leer. Sin SQL nuevo.
 - **Pruebas:** `supabase/tests/finanzas-tablero.sim.mjs` (toma el bloque `FIN-CALC` del admin real): 64 de 64 con un caso calculado a mano (nov y oct, Grupales y Todo, rentabilidad, cohortes, bordes: mes futuro, mes sin datos, sin publicidad, sin precios, enero contra diciembre, prueba en el límite UTC/AR). 12 de 12 roturas a propósito detectadas (una no se detectaba, comisión en pagos manuales, y se sumó un caso). Admin en local con 36 alumnos simulados y más de 1000 pagos: números cruzados con un cálculo aparte, paginado, filtro, ayudas, mes futuro y sin datos, gastos faltantes. Capturas en escritorio (1280 px) y celular (390 px, sin desborde). Sin errores en la consola. No probado contra la base real.
 - Pasos en `supabase/checks/finanzas_etapa3_pruebas.md`.
+- ✅ Commit bec1122 (2026-11-15); Erika lo revisó en el admin.
+
+### 2026-11-16 — Métricas → "Alumnos más activos": selector Activos / Todos (local, sin deploy ni commit)
+- Selector nuevo **Alumnos: Activos / Todos** al lado de Programa y Período. Por defecto **Activos** = con acceso hoy, con el mismo corte que el portal (`app/dashboard.html`): queda afuera solo quien está `cancelled` con `subscription_end` ya pasada. Entran activos, pendientes, cancelados con fecha de hoy en adelante y cancelados sin fecha (el portal también les deja entrar).
+- En **Todos**, los que ya no tienen acceso llevan la marca "Ya no está". Se combina con Programa y Período; "Ver ranking completo" cuenta sobre el filtro. Los controles ahora pasan a otra línea en celular.
+- **Pruebas** (admin en local, 8 alumnos simulados, uno por caso: activa, activa sin fecha, pendiente, cancelada hasta mañana, que termina hoy, sin fecha, vencida ayer, vencida hace un mes): Activos muestra 6 y Todos 8 con las 2 marcas; cruzado con Programa. Capturas en escritorio y celular (390 px, sin desborde de la página). Sin errores en la consola.
 
 ## Mantenimiento / pendientes
 Lo que no bloquea la Fase 2 ni arriesga a los alumnos actuales. Una línea y su prioridad.
